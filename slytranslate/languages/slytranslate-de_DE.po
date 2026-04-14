@@ -1,0 +1,201 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/SlyBase/wordpress-slytranslate/issues\n"
+"POT-Creation-Date: 2026-04-14 00:16+0200\n"
+"PO-Revision-Date: 2026-04-14 00:20+0200\n"
+"Last-Translator: GitHub Copilot <copilot@github.com>\n"
+"Language-Team: Deutsch\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "AI Translation with SlyTranslate"
+msgstr "KI Übersetzung mit SlyTranslate"
+
+msgid "Translate this post, page, or custom content item into another language."
+msgstr "Übersetze diesen Beitrag, diese Seite oder diesen benutzerdefinierten Inhalt in eine andere Sprache."
+
+msgid "Source language"
+msgstr "Ausgangssprache"
+
+msgid "Content type"
+msgstr "Inhaltstyp"
+
+msgid "Target language"
+msgstr "Zielsprache"
+
+msgid "Overwrite existing translation"
+msgstr "Bestehende Übersetzung überschreiben"
+
+msgid "Translate title"
+msgstr "Titel übersetzen"
+
+msgid "If enabled, an existing translation for the selected language will be updated."
+msgstr "Wenn aktiviert, wird eine vorhandene Übersetzung für die ausgewählte Sprache aktualisiert."
+
+msgid "Translate now"
+msgstr "Jetzt übersetzen"
+
+msgid "Refresh translation status"
+msgstr "Übersetzungsstatus aktualisieren"
+
+msgid "Loading available languages..."
+msgstr "Verfügbare Sprachen werden geladen ..."
+
+msgid "Loading translation status..."
+msgstr "Übersetzungsstatus wird geladen ..."
+
+msgid "No target languages are available for this content item."
+msgstr "Für diesen Inhalt sind keine Zielsprachen verfügbar."
+
+msgid "Translation status"
+msgstr "Übersetzungsstatus"
+
+msgid "Available"
+msgstr "Vorhanden"
+
+msgid "Not translated yet"
+msgstr "Noch nicht übersetzt"
+
+msgid "Open translation"
+msgstr "Übersetzung öffnen"
+
+msgid "Save the content before creating a translation."
+msgstr "Speichere den Inhalt, bevor du eine Übersetzung erstellst."
+
+msgid "Save your latest changes before translating so the translation uses the current content."
+msgstr "Speichere deine letzten Änderungen, damit die Übersetzung den aktuellen Inhalt verwendet."
+
+msgid "Translation created successfully."
+msgstr "Übersetzung erfolgreich erstellt."
+
+msgid "Translation updated successfully."
+msgstr "Übersetzung erfolgreich aktualisiert."
+
+msgid "A translation already exists for the selected language. Enable overwrite to update it."
+msgstr "Für die ausgewählte Sprache existiert bereits eine Übersetzung. Aktiviere Überschreiben, um sie zu aktualisieren."
+
+msgid "Translate (SlyTranslate)"
+msgstr "Übersetzen (SlyTranslate)"
+
+msgid "Translate selected text with SlyTranslate"
+msgstr "Ausgewählten Text mit SlyTranslate übersetzen"
+
+msgid "Selected text"
+msgstr "Ausgewählter Text"
+
+msgid "Select text in a paragraph, heading, or another text field first."
+msgstr "Markiere zuerst Text in einem Absatz, einer Überschrift oder einem anderen Textfeld."
+
+msgid "No target languages are available for the selected text."
+msgstr "Für den ausgewählten Text sind keine Zielsprachen verfügbar."
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "The source content is already in the selected language."
+msgstr "Der Quellinhalt liegt bereits in der ausgewählten Sprache vor."
+
+msgid "Latest translation"
+msgstr "Neueste Übersetzung"
+
+msgid "An unexpected error occurred."
+msgstr "Es ist ein unerwarteter Fehler aufgetreten."
+
+msgid "AI Translation"
+msgstr "KI-Übersetzung"
+
+msgid "AI-powered content translation abilities."
+msgstr "KI-gestützte Übersetzungsfähigkeiten für Inhalte."
+
+msgid "Get Languages"
+msgstr "Sprachen abrufen"
+
+msgid "Returns all languages available for translation."
+msgstr "Gibt alle für Übersetzungen verfügbaren Sprachen zurück."
+
+msgid "No supported translation plugin is active."
+msgstr "Es ist kein unterstütztes Übersetzungs-Plugin aktiv."
+
+msgid "Get Translation Status"
+msgstr "Übersetzungsstatus abrufen"
+
+msgid "Returns the translation status for a post, page, or custom post type entry."
+msgstr "Gibt den Übersetzungsstatus für einen Beitrag, eine Seite oder einen benutzerdefinierten Inhaltseintrag zurück."
+
+msgid "Post not found."
+msgstr "Inhalt nicht gefunden."
+
+msgid "You are not allowed to inspect this content item."
+msgstr "Du darfst diesen Inhaltseintrag nicht prüfen."
+
+msgid "Get Untranslated Content"
+msgstr "Nicht übersetzte Inhalte abrufen"
+
+msgid "Lists posts, pages, or custom post types that do not yet have a translation in the requested language."
+msgstr "Listet Beiträge, Seiten oder benutzerdefinierte Inhaltstypen auf, die in der angeforderten Sprache noch keine Übersetzung haben."
+
+msgid "Target language is required."
+msgstr "Die Zielsprache ist erforderlich."
+
+msgid "Translate Text"
+msgstr "Text übersetzen"
+
+msgid "Translates arbitrary text from one language to another using the WordPress AI Client."
+msgstr "Übersetzt beliebigen Text mit dem WordPress AI Client von einer Sprache in eine andere."
+
+msgid "Translate Content"
+msgstr "Inhalt übersetzen"
+
+msgid "Translates a post, page, or custom post type entry and creates or updates the translation."
+msgstr "Übersetzt einen Beitrag, eine Seite oder einen benutzerdefinierten Inhaltseintrag und erstellt oder aktualisiert die Übersetzung."
+
+msgid "Translate Content (Bulk)"
+msgstr "Inhalte stapelweise übersetzen"
+
+msgid "Translates multiple posts, pages, or custom post type entries. Continues on individual failures."
+msgstr "Übersetzt mehrere Beiträge, Seiten oder benutzerdefinierte Inhaltseinträge und läuft bei einzelnen Fehlern weiter."
+
+msgid "You are not allowed to translate this content item."
+msgstr "Du darfst diesen Inhaltseintrag nicht übersetzen."
+
+msgid "The source content is already in the requested target language."
+msgstr "Der Quellinhalt liegt bereits in der angeforderten Zielsprache vor."
+
+msgid "A translation already exists for the requested language."
+msgstr "Für die angeforderte Sprache existiert bereits eine Übersetzung."
+
+msgid "Configure AI Translate"
+msgstr "KI-Übersetzung konfigurieren"
+
+msgid "Read or update AI Translate settings, including prompt template, meta keys, SEO defaults, and auto-translate behavior."
+msgstr "Liest oder aktualisiert die Einstellungen der KI-Übersetzung, einschließlich Prompt-Vorlage, Meta-Keys, SEO-Standards und Auto-Übersetzungsverhalten."
+
+msgid "Whether the post title should be translated."
+msgstr "Legt fest, ob der Beitragstitel übersetzt werden soll."
+
+msgid "Provide either post_ids or a post_type to translate in bulk."
+msgstr "Gib entweder post_ids oder einen post_type für die Stapelübersetzung an."
+
+msgid "The requested post type does not exist."
+msgstr "Der angeforderte Inhaltstyp existiert nicht."
+
+#, php-format
+msgid "The post type \"%s\" is not enabled for translation in Polylang."
+msgstr "Der Inhaltstyp \"%s\" ist in Polylang nicht für Übersetzungen aktiviert."
+
+msgid "Source post not found."
+msgstr "Quellinhalt nicht gefunden."
+
+msgid "Source and target languages must be different."
+msgstr "Quell- und Zielsprache müssen unterschiedlich sein."
+
+#, php-format
+msgid "A translation for language \"%1$s\" already exists (post %2$d)."
+msgstr "Eine Übersetzung für die Sprache \"%1$s\" existiert bereits (Beitrag %2$d)."
+
+msgid "You are not allowed to update the existing translation."
+msgstr "Du darfst die bestehende Übersetzung nicht aktualisieren."

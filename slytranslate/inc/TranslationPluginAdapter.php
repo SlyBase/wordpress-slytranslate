@@ -2,6 +2,8 @@
 
 namespace AI_Translate;
 
+if ( ! defined( 'ABSPATH' ) ) exit;
+
 interface TranslationPluginAdapter {
 
 	/**

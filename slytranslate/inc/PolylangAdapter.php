@@ -2,6 +2,8 @@
 
 namespace AI_Translate;
 
+if ( ! defined( 'ABSPATH' ) ) exit;
+
 class PolylangAdapter implements TranslationPluginAdapter {
 
 	public function is_available(): bool {
@@ -63,7 +65,7 @@ class PolylangAdapter implements TranslationPluginAdapter {
 
 		if ( ! $translation_id ) {
 			add_filter( 'wp_insert_post_data', $author_override, 99 );
-			$translation_id = wp_insert_post( array(
+			$translation_id = wp_insert_post( wp_slash( array(
 				'post_status'       => 'draft',
 				'post_title'        => $post->post_title . " ({$target_lang})",
 				'post_content'      => ' ',
@@ -73,7 +75,7 @@ class PolylangAdapter implements TranslationPluginAdapter {
 				'post_date_gmt'     => $post->post_date_gmt,
 				'post_modified'     => $post->post_modified,
 				'post_modified_gmt' => $post->post_modified_gmt,
-			) );
+			) ) );
 			remove_filter( 'wp_insert_post_data', $author_override, 99 );
 
 			if ( is_wp_error( $translation_id ) ) {
@@ -93,9 +95,9 @@ class PolylangAdapter implements TranslationPluginAdapter {
 		if ( isset( $data['post_excerpt'] ) ) {
 			$update_data['post_excerpt'] = $data['post_excerpt'];
 		}
-		$update_data['post_status'] = $data['post_status'] ?? 'publish';
+		$update_data['post_status'] = $data['post_status'] ?? 'draft';
 
-		wp_update_post( $update_data );
+		wp_update_post( wp_slash( $update_data ) );
 
 		// Copy and process meta.
 		if ( ! empty( $data['meta'] ) && is_array( $data['meta'] ) ) {
@@ -104,30 +106,34 @@ class PolylangAdapter implements TranslationPluginAdapter {
 			}
 		}
 
-		// Copy categories with Polylang term translation.
-		$categories             = get_the_category( $source_post_id );
-		$translated_category_ids = array();
-		foreach ( $categories as $category ) {
-			$translated_id = pll_get_term( $category->term_id, $target_lang );
-			if ( $translated_id ) {
-				$translated_category_ids[] = $translated_id;
+		// Copy taxonomy terms, translating them when Polylang provides a matching target-language term.
+		$taxonomies = get_object_taxonomies( $post->post_type, 'names' );
+		foreach ( $taxonomies as $taxonomy ) {
+			if ( in_array( $taxonomy, array( 'language', 'post_translations' ), true ) ) {
+				continue;
 			}
-		}
-		if ( $translated_category_ids ) {
-			wp_set_post_categories( $translation_id, $translated_category_ids );
-		}
 
-		// Copy tags with Polylang term translation.
-		$tags               = wp_get_post_tags( $source_post_id );
-		$translated_tag_ids = array();
-		foreach ( $tags as $tag ) {
-			$translated_id = pll_get_term( $tag->term_id, $target_lang );
-			if ( $translated_id ) {
-				$translated_tag_ids[] = $translated_id;
+			$term_ids = wp_get_object_terms( $source_post_id, $taxonomy, array( 'fields' => 'ids' ) );
+			if ( is_wp_error( $term_ids ) || empty( $term_ids ) ) {
+				continue;
 			}
-		}
-		if ( $translated_tag_ids ) {
-			wp_set_post_tags( $translation_id, $translated_tag_ids );
+
+			$translated_term_ids = array();
+			foreach ( $term_ids as $term_id ) {
+				$translated_term_id = pll_get_term( $term_id, $target_lang );
+				if ( $translated_term_id ) {
+					$translated_term_ids[] = $translated_term_id;
+					continue;
+				}
+
+				if ( function_exists( 'pll_is_translated_taxonomy' ) && ! pll_is_translated_taxonomy( $taxonomy ) ) {
+					$translated_term_ids[] = $term_id;
+				}
+			}
+
+			if ( ! empty( $translated_term_ids ) ) {
+				wp_set_object_terms( $translation_id, $translated_term_ids, $taxonomy, false );
+			}
 		}
 
 		// Link the translation.

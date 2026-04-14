@@ -1,0 +1,261 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the SlyTranslate - AI Translation Abilities package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/SlyBase/wordpress-slytranslate\n"
+"POT-Creation-Date: 2026-04-14 00:19+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ai-translate-abilities/ai-translate.php:151
+msgid "SlyTranslate AI Translation"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:152
+msgid ""
+"Translate this post, page, or custom content item into another language."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:152
+msgid "Source language"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:153
+msgid "Content type"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:154
+msgid "Target language"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:155
+msgid "Overwrite existing translation"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:156
+msgid ""
+"If enabled, an existing translation for the selected language will be "
+"updated."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:157
+msgid "Translate now"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:158
+msgid "Refresh translation status"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:159
+msgid "Loading available languages..."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:160
+msgid "Loading translation status..."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:161
+msgid "No target languages are available for this content item."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:162
+msgid "Translation status"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:163
+msgid "Available"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:164
+msgid "Not translated yet"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:165
+msgid "Open translation"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:166
+msgid "Save the content before creating a translation."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:167
+msgid ""
+"Save your latest changes before translating so the translation uses the "
+"current content."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:168
+msgid "Translation created successfully."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:169
+msgid "Translation updated successfully."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:170
+msgid ""
+"A translation already exists for the selected language. Enable overwrite to "
+"update it."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:171
+msgid "The source content is already in the selected language."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:172
+msgid "Latest translation"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:173
+msgid "An unexpected error occurred."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:184
+msgid "AI Translation"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:185
+msgid "AI-powered content translation abilities."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:223
+msgid "Get Languages"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:224
+msgid "Returns all languages available for translation."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:252
+#: ai-translate-abilities/ai-translate.php:310
+#: ai-translate-abilities/ai-translate.php:397
+#: ai-translate-abilities/ai-translate.php:616
+#: ai-translate-abilities/ai-translate.php:1659
+msgid "No supported translation plugin is active."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:266
+msgid "Get Translation Status"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:267
+msgid ""
+"Returns the translation status for a post, page, or custom post type entry."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:316
+msgid "Post not found."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:319
+msgid "You are not allowed to inspect this content item."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:351
+msgid "Get Untranslated Content"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:352
+msgid ""
+"Lists posts, pages, or custom post types that do not yet have a translation "
+"in the requested language."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:402
+msgid "Target language is required."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:452
+msgid "Translate Text"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:453
+msgid ""
+"Translates arbitrary text from one language to another using the WordPress "
+"AI Client."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:499
+msgid "Translate Content"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:500
+msgid ""
+"Translates a post, page, or custom post type entry and creates or updates "
+"the translation."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:562
+msgid "Translate Content (Bulk)"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:563
+msgid ""
+"Translates multiple posts, pages, or custom post type entries. Continues on "
+"individual failures."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:638
+#: ai-translate-abilities/ai-translate.php:1668
+msgid "You are not allowed to translate this content item."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:651
+msgid "The source content is already in the requested target language."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:664
+msgid "A translation already exists for the requested language."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:711
+msgid "Configure AI Translate"
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:712
+msgid ""
+"Read or update AI Translate settings, including prompt template, meta keys, "
+"SEO defaults, and auto-translate behavior."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:1513
+msgid "Provide either post_ids or a post_type to translate in bulk."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:1569
+msgid "The requested post type does not exist."
+msgstr ""
+
+#. translators: %s: post type slug.
+#: ai-translate-abilities/ai-translate.php:1577
+#, php-format
+msgid "The post type \"%s\" is not enabled for translation in Polylang."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:1665
+msgid "Source post not found."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:1679
+msgid "Source and target languages must be different."
+msgstr ""
+
+#. translators: 1: language code, 2: post ID.
+#: ai-translate-abilities/ai-translate.php:1688
+#, php-format
+msgid "A translation for language \"%1$s\" already exists (post %2$d)."
+msgstr ""
+
+#: ai-translate-abilities/ai-translate.php:1695
+msgid "You are not allowed to update the existing translation."
+msgstr ""
