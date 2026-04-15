@@ -4,15 +4,16 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-AI translation abilities for WordPress using the AI Client and Abilities API for text and content translation.
+AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
 
 == Description ==
 
-SlyTranslate - AI Translation Abilities provides AI-powered translation as WordPress Abilities, making them available to AI agents, automation tools, and the WordPress REST API.
+SlyTranslate - AI Translation Abilities provides AI-powered translation as WordPress Abilities, making them available to AI agents, automation tools, and the WordPress REST API. Polylang translation is based on AI Translate For Polylang by jamesdlow (https://de.wordpress.org/plugins/ai-translate-for-polylang/).
+
 
 **Abilities provided:**
 
@@ -22,7 +23,7 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * **ai-translate/translate-text** – Translates arbitrary text between languages.
 * **ai-translate/translate-content** – Translates a post, page, or custom post type entry and creates or updates the translation.
 * **ai-translate/translate-content-bulk** – Bulk-translates multiple entries at once (either by explicit IDs or by post type, max 50).
-* **ai-translate/configure** – Read or update plugin settings (prompt template, meta key configuration, SEO defaults, auto-translate toggle, optional context window token override).
+* **ai-translate/configure** – Read or update plugin settings (prompt template, meta key configuration, SEO defaults, auto-translate toggle, model slug, optional context window token override).
 
 **Architecture:**
 
@@ -101,6 +102,11 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 
 == Changelog ==
 
+= 1.1.1 =
+* Block editor: added **Cancel translation** button that appears while a translation is in progress, allowing the request to be aborted without leaving the editor
+* Added `model_slug` setting to `ai-translate/configure` ability — explicitly select which model the AI connector should use for translations (e.g. `gemma3:27b`); leave empty to use the connector default
+* Removed dependency on the third-party AI Services plugin for model detection; model selection is now handled entirely via the `model_slug` setting and the WordPress AI Client
+
 = 1.1.0 =
 * Added site-wide `prompt_addon` field to `ai-translate/configure` ability — a global addition always appended after the prompt template
 * Added optional `additional_prompt` field to `ai-translate/translate-text` and `ai-translate/translate-content` abilities for per-request style instructions
@@ -112,7 +118,7 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 * Fixed block editor sidebar translations ignoring the active connector model selection by passing the detected runtime model as AI Client preference
 
 = 1.0.0 =
-* Complete rewrite for WordPress 7.0 Abilities API, based on AI Translate For Polylang by James Low
+* Complete rewrite for WordPress 7.0 Abilities API, based on AI Translate For Polylang by jamesdlow (https://de.wordpress.org/plugins/ai-translate-for-polylang/)
 * LLM integration via WordPress AI Client (no more direct API key management)
 * 7 abilities registered: get-languages, get-translation-status, get-untranslated, translate-text, translate-content, translate-content-bulk, configure
 * Adapter architecture: TranslationPluginAdapter interface with PolylangAdapter implementation

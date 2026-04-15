@@ -2,8 +2,8 @@
 /*
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
-Description: AI translation abilities for WordPress. Translates posts and text using the WordPress AI Client and Abilities API. Based on AI Translate For Polylang by James Low.
-Version: 1.1.0
+Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
+Version: 1.1.1
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -176,6 +176,7 @@ class AI_Translate {
 				'additionalPromptLabel'     => __( 'Additional instructions (optional)', 'slytranslate' ),
 				'additionalPromptHelp'      => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
 				'translateButton'           => __( 'Translate now', 'slytranslate' ),
+				'cancelTranslationButton'   => __( 'Cancel translation', 'slytranslate' ),
 				'refreshButton'             => __( 'Refresh translation status', 'slytranslate' ),
 				'loadingLanguages'          => __( 'Loading available languages...', 'slytranslate' ),
 				'loadingStatus'             => __( 'Loading translation status...', 'slytranslate' ),
@@ -831,6 +832,7 @@ class AI_Translate {
 					'meta_keys_clear'    => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to clear.' ),
 					'auto_translate_new' => array( 'type' => 'boolean', 'description' => 'Auto-translate new translation posts in Polylang.' ),
 					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.' ),
+					'model_slug' => array( 'type' => 'string', 'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.' ),
 				),
 			),
 			'output_schema'       => array(
@@ -842,8 +844,7 @@ class AI_Translate {
 					'meta_keys_clear'    => array( 'type' => 'string' ),
 					'auto_translate_new' => array( 'type' => 'boolean' ),
 					'context_window_tokens' => array( 'type' => 'integer' ),
-					'detected_service_slug' => array( 'type' => 'string' ),
-					'detected_model_slug' => array( 'type' => 'string' ),
+					'model_slug' => array( 'type' => 'string' ),
 					'detected_seo_plugin' => array( 'type' => 'string' ),
 					'detected_seo_plugin_label' => array( 'type' => 'string' ),
 					'seo_meta_keys_translate' => array(
@@ -904,11 +905,20 @@ class AI_Translate {
 				delete_option( 'ai_translate_context_window_tokens' );
 			}
 		}
+		if ( array_key_exists( 'model_slug', $input ) ) {
+			$model_slug_value = is_string( $input['model_slug'] ) ? sanitize_text_field( $input['model_slug'] ) : '';
+			if ( '' === $model_slug_value ) {
+				delete_option( 'ai_translate_model_slug' );
+			} else {
+				update_option( 'ai_translate_model_slug', $model_slug_value );
+			}
+		}
 
 		// Reset cached meta keys.
 		self::$meta_translate = null;
 		self::$meta_clear     = null;
 		self::$seo_plugin_config = null;
+		self::$translation_runtime_context = null;
 		$runtime_context      = self::get_translation_runtime_context();
 		$seo_plugin_config    = self::get_active_seo_plugin_config();
 
@@ -919,8 +929,7 @@ class AI_Translate {
 			'meta_keys_clear'    => get_option( 'ai_translate_meta_clear', '' ),
 			'auto_translate_new' => get_option( 'ai_translate_new_post', '1' ) === '1',
 			'context_window_tokens' => absint( get_option( 'ai_translate_context_window_tokens', 0 ) ),
-			'detected_service_slug' => $runtime_context['service_slug'],
-			'detected_model_slug' => $runtime_context['model_slug'],
+			'model_slug' => get_option( 'ai_translate_model_slug', '' ),
 			'detected_seo_plugin' => $seo_plugin_config['key'],
 			'detected_seo_plugin_label' => $seo_plugin_config['label'],
 			'seo_meta_keys_translate' => $seo_plugin_config['translate'],
@@ -1191,37 +1200,8 @@ class AI_Translate {
 
 		$runtime_context = array(
 			'service_slug' => '',
-			'model_slug'   => '',
+			'model_slug'   => get_option( 'ai_translate_model_slug', '' ),
 		);
-
-		if ( ! function_exists( 'ai_services' ) ) {
-			self::$translation_runtime_context = $runtime_context;
-			return $runtime_context;
-		}
-
-		try {
-			$service = ai_services()->get_available_service(
-				array(
-					'capabilities' => array( 'text_generation' ),
-				)
-			);
-
-			if ( method_exists( $service, 'get_service_slug' ) ) {
-				$runtime_context['service_slug'] = (string) $service->get_service_slug();
-			}
-
-			$model = $service->get_model(
-				array(
-					'feature'      => 'slytranslate',
-					'capabilities' => array( 'text_generation' ),
-				)
-			);
-
-			if ( method_exists( $model, 'get_model_slug' ) ) {
-				$runtime_context['model_slug'] = (string) $model->get_model_slug();
-			}
-		} catch ( \Throwable $e ) {
-		}
 
 		self::$translation_runtime_context = $runtime_context;
 
@@ -1231,11 +1211,11 @@ class AI_Translate {
 	private static function get_translation_runtime_context_cache_key(): string {
 		$runtime_context = self::get_translation_runtime_context();
 
-		if ( '' === $runtime_context['service_slug'] && '' === $runtime_context['model_slug'] ) {
+		if ( '' === $runtime_context['model_slug'] ) {
 			return '';
 		}
 
-		return $runtime_context['service_slug'] . '::' . $runtime_context['model_slug'];
+		return $runtime_context['model_slug'];
 	}
 
 	private static function get_learned_context_window_tokens(): int {

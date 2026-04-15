@@ -16,6 +16,7 @@
     const Fragment = wp.element.Fragment;
     const useEffect = wp.element.useEffect;
     const useState = wp.element.useState;
+    const useRef = wp.element.useRef;
     const useSelect = wp.data.useSelect;
     const apiFetch = wp.apiFetch;
     const blockEditor = wp.blockEditor || wp.editor || {};
@@ -86,7 +87,7 @@
         return basePath + abilityName;
     }
 
-    function runAbility(abilityName, input) {
+    function runAbility(abilityName, input, signal) {
         const request = {
             path: getRunAbilityPath(abilityName),
             method: 'POST',
@@ -99,6 +100,10 @@
             request.headers = {
                 'X-WP-Nonce': settings.restNonce,
             };
+        }
+
+        if (signal) {
+            request.signal = signal;
         }
 
         return apiFetch(request);
@@ -220,7 +225,7 @@
             request.headers = { 'X-WP-Nonce': settings.restNonce };
         }
 
-        apiFetch(request).catch(function () {});
+        apiFetch(request).catch(function () { });
     }
 
     function resolveSelectionTargetLanguage(languages, sourceLanguage, preferredLanguageCode) {
@@ -279,6 +284,7 @@
         const [hasLoadedData, setHasLoadedData] = useState(false);
         const [errorMessage, setErrorMessage] = useState('');
         const [successState, setSuccessState] = useState(null);
+        const translateAbortControllerRef = useRef(null);
 
         function refreshData() {
             if (!postId) {
@@ -398,6 +404,8 @@
             }
 
             const wasExistingTranslation = hasExistingTranslation;
+            const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            translateAbortControllerRef.current = abortController;
             setIsTranslating(true);
             setErrorMessage('');
             setSuccessState(null);
@@ -409,7 +417,7 @@
                 overwrite: overwrite,
                 translate_title: translateTitle,
                 additional_prompt: additionalPrompt || undefined,
-            })
+            }, abortController ? abortController.signal : undefined)
                 .then(function (response) {
                     storeTargetLanguage(targetLanguage);
                     saveAdditionalPromptPreference(additionalPrompt);
@@ -420,11 +428,21 @@
                     refreshData();
                 })
                 .catch(function (error) {
+                    if (error && (error.name === 'AbortError' || error.code === 'abort_error')) {
+                        return;
+                    }
                     setErrorMessage(getErrorMessage(error));
                 })
                 .finally(function () {
+                    translateAbortControllerRef.current = null;
                     setIsTranslating(false);
                 });
+        }
+
+        function handleCancelTranslate() {
+            if (translateAbortControllerRef.current) {
+                translateAbortControllerRef.current.abort();
+            }
         }
 
         const statusItems = Array.isArray(statusData && statusData.translations) ? statusData.translations : [];
@@ -513,6 +531,11 @@
                     isBusy: isTranslating,
                     style: { width: '100%', justifyContent: 'center' },
                 }, text('translateButton', 'Translate now')),
+                isTranslating ? createElement(Button, {
+                    variant: 'secondary',
+                    onClick: handleCancelTranslate,
+                    style: { width: '100%', justifyContent: 'center' },
+                }, text('cancelTranslationButton', 'Cancel translation')) : null,
                 hasExistingTranslation && !overwrite ? createElement(
                     'div',
                     { style: { marginTop: '10px', marginBottom: '10px' } },
@@ -521,7 +544,7 @@
                 createElement(Button, {
                     variant: 'secondary',
                     onClick: refreshData,
-                    disabled: !postId || isRefreshing,
+                    disabled: !postId || isRefreshing || isTranslating,
                     style: { width: '100%', justifyContent: 'center' },
                 }, text('refreshButton', 'Refresh translation status'))
             ),
