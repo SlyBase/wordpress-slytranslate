@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -63,7 +63,17 @@ API keys are managed centrally in WordPress via Settings > Connectors. This plug
 
 = How do I change the translation prompt? =
 
-Use the `ai-translate/configure` ability via the REST API or any tool that supports WordPress Abilities.
+Use the `ai-translate/configure` ability via the REST API or any tool that supports WordPress Abilities. The `prompt_template` field sets the base instructions including language pair placeholders (`{FROM_CODE}`, `{TO_CODE}`). The `prompt_addon` field adds a site-wide addition that is always appended after the template — useful for global style requirements such as formal language or domain-specific vocabulary.
+
+= How do I add per-request translation instructions? =
+
+The `ai-translate/translate-text` and `ai-translate/translate-content` abilities accept an optional `additional_prompt` field. This text is appended after the prompt template and the site-wide add-on, so it can override or extend the defaults just for that request. In the block editor, the **AI Translate** panel and the selected-text toolbar each provide an **Additional instructions** textarea. The value you enter there is saved per user and pre-filled the next time you open the editor, so you do not need to re-enter recurring style preferences.
+
+= What is the difference between prompt_template, prompt_addon, and additional_prompt? =
+
+* **prompt_template** — the base translation instruction including `{FROM_CODE}` and `{TO_CODE}` placeholders. Managed by `ai-translate/configure`, requires `manage_options` capability.
+* **prompt_addon** — a site-wide addition always appended after the template. Also managed by `ai-translate/configure` and admin-only. Use this for global requirements that apply to every translation on the site.
+* **additional_prompt** (per-request) — an optional field on `translate-text` and `translate-content`. Appended last, after the template and the site-wide add-on. Available to any user who can run translation abilities. In the block editor this is the **Additional instructions** textarea; the last used value is stored per user.
 
 = How do I tune chunking for large posts? =
 
@@ -90,6 +100,16 @@ Yes. The block editor includes an **AI Translate** panel in the document setting
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= 1.1.0 =
+* Added site-wide `prompt_addon` field to `ai-translate/configure` ability — a global addition always appended after the prompt template
+* Added optional `additional_prompt` field to `ai-translate/translate-text` and `ai-translate/translate-content` abilities for per-request style instructions
+* Block editor: new **Additional instructions** textarea in the AI Translate panel (Sidebar) and the selected-text modal (Toolbar), pre-filled with the last used value per user
+* Last used additional prompt is stored in user meta and passed as bootstrap data to the editor, so it persists across posts and page reloads
+* New REST endpoint `ai-translate/user-preference` for saving the user-specific additional prompt
+
+= 1.0.1 =
+* Fixed block editor sidebar translations ignoring the active connector model selection by passing the detected runtime model as AI Client preference
 
 = 1.0.0 =
 * Complete rewrite for WordPress 7.0 Abilities API, based on AI Translate For Polylang by James Low

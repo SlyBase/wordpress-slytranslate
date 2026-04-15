@@ -5,6 +5,7 @@
 
     const registerPlugin = wp.plugins.registerPlugin;
     const PluginDocumentSettingPanel = wp.editPost && wp.editPost.PluginDocumentSettingPanel;
+    const TextareaControl = wp.components.TextareaControl;
     const Button = wp.components.Button;
     const Modal = wp.components.Modal;
     const Notice = wp.components.Notice;
@@ -198,6 +199,30 @@
         return languages[0] ? languages[0].code : 'en';
     }
 
+    // Module-level cache so both Sidebar and Toolbar share the latest value within a page session.
+    let _lastAdditionalPrompt = settings && settings.lastAdditionalPrompt ? settings.lastAdditionalPrompt : '';
+
+    function getLastAdditionalPrompt() {
+        return _lastAdditionalPrompt;
+    }
+
+    function saveAdditionalPromptPreference(additionalPrompt) {
+        _lastAdditionalPrompt = typeof additionalPrompt === 'string' ? additionalPrompt : '';
+
+        const path = getRunAbilityPath('ai-translate/user-preference');
+        const request = {
+            path: path,
+            method: 'POST',
+            data: { input: { additional_prompt: _lastAdditionalPrompt } },
+        };
+
+        if (settings && settings.restNonce) {
+            request.headers = { 'X-WP-Nonce': settings.restNonce };
+        }
+
+        apiFetch(request).catch(function () {});
+    }
+
     function resolveSelectionTargetLanguage(languages, sourceLanguage, preferredLanguageCode) {
         const availableLanguages = getAvailableTargetLanguages(languages, sourceLanguage);
         const preferredTargetLanguage = findMatchingLanguageCode(availableLanguages, preferredLanguageCode);
@@ -248,6 +273,7 @@
         const [targetLanguage, setTargetLanguage] = useState('');
         const [overwrite, setOverwrite] = useState(false);
         const [translateTitle, setTranslateTitle] = useState(true);
+        const [additionalPrompt, setAdditionalPrompt] = useState(getLastAdditionalPrompt);
         const [isRefreshing, setIsRefreshing] = useState(false);
         const [isTranslating, setIsTranslating] = useState(false);
         const [hasLoadedData, setHasLoadedData] = useState(false);
@@ -382,9 +408,11 @@
                 post_status: postContext.postStatus || 'draft',
                 overwrite: overwrite,
                 translate_title: translateTitle,
+                additional_prompt: additionalPrompt || undefined,
             })
                 .then(function (response) {
                     storeTargetLanguage(targetLanguage);
+                    saveAdditionalPromptPreference(additionalPrompt);
                     setSuccessState({
                         message: wasExistingTranslation ? text('translationUpdatedNotice', 'Translation updated successfully.') : text('translationCreatedNotice', 'Translation created successfully.'),
                         editLink: response && response.edit_link ? response.edit_link : '',
@@ -446,6 +474,17 @@
                         onChange: function (value) {
                             setOverwrite(!!value);
                         },
+                    })
+                ),
+                createElement(
+                    'div',
+                    { style: { marginTop: '8px' } },
+                    createElement(TextareaControl, {
+                        label: text('additionalPromptLabel', 'Additional instructions (optional)'),
+                        help: text('additionalPromptHelp', 'Supplements the site-wide translation instructions. Example: Use informal language.'),
+                        value: additionalPrompt,
+                        onChange: setAdditionalPrompt,
+                        rows: 3,
                     })
                 )
             ),
@@ -522,6 +561,7 @@
         const [targetLanguage, setTargetLanguage] = useState('');
         const [errorMessage, setErrorMessage] = useState('');
         const [isTranslating, setIsTranslating] = useState(false);
+        const [additionalPrompt, setAdditionalPrompt] = useState(getLastAdditionalPrompt);
 
         const hasSelection = !!(
             props.value &&
@@ -579,6 +619,7 @@
                 text: selectedText,
                 source_language: sourceLanguage || 'en',
                 target_language: targetLanguage,
+                additional_prompt: additionalPrompt || undefined,
             })
                 .then(function (response) {
                     const translatedText = response && response.translated_text ? response.translated_text : '';
@@ -589,6 +630,7 @@
                     }
 
                     storeTargetLanguage(targetLanguage);
+                    saveAdditionalPromptPreference(additionalPrompt);
                     props.onChange(insert(selectionValue, translatedText, selectionStart, selectionEnd));
                     closeDialog();
                 })
@@ -648,6 +690,13 @@
                         };
                     }),
                 }) : null,
+                createElement(TextareaControl, {
+                    label: text('additionalPromptLabel', 'Additional instructions (optional)'),
+                    help: text('additionalPromptHelp', 'Supplements the site-wide translation instructions. Example: Use informal language.'),
+                    value: additionalPrompt,
+                    onChange: setAdditionalPrompt,
+                    rows: 3,
+                }),
                 selectedText ? createElement(
                     Fragment,
                     null,

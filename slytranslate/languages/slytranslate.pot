@@ -259,3 +259,23 @@ msgstr ""
 #: ai-translate-abilities/ai-translate.php:1695
 msgid "You are not allowed to update the existing translation."
 msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "Optional site-wide addition always appended after the prompt template. Applied to every translation request."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "Optional extra instructions appended after the global prompt template and the site-wide prompt add-on."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "You must be logged in to save preferences."
+msgstr ""
+
+#: slytranslate/assets/editor-plugin.js
+msgid "Additional instructions (optional)"
+msgstr ""
+
+#: slytranslate/assets/editor-plugin.js
+msgid "Supplements the site-wide translation instructions. Example: Use informal language."
+msgstr ""

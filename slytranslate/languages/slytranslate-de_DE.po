@@ -199,3 +199,19 @@ msgstr "Eine Übersetzung für die Sprache \"%1$s\" existiert bereits (Beitrag %
 
 msgid "You are not allowed to update the existing translation."
 msgstr "Du darfst die bestehende Übersetzung nicht aktualisieren."
+
+msgid "Optional site-wide addition always appended after the prompt template. Applied to every translation request."
+msgstr "Optionale siteweite Ergänzung, die immer nach der Prompt-Vorlage angehängt wird. Gilt für jede Übersetzungsanfrage."
+
+msgid "Optional extra instructions appended after the global prompt template and the site-wide prompt add-on."
+msgstr "Optionale zusätzliche Anweisungen, die nach der globalen Prompt-Vorlage und dem siteweiten Prompt-Zusatz angehängt werden."
+
+msgid "You must be logged in to save preferences."
+msgstr "Du musst angemeldet sein, um Einstellungen zu speichern."
+
+msgid "Additional instructions (optional)"
+msgstr "Zusätzliche Anweisungen (optional)"
+
+msgid "Supplements the site-wide translation instructions. Example: Use informal language."
+msgstr "Ergänzt die siteweiten Übersetzungsanweisungen. Beispiel: Verwende eine informelle Sprache."
+msgstr "Du darfst die bestehende Übersetzung nicht aktualisieren."

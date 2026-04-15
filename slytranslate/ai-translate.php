@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress. Translates posts and text using the WordPress AI Client and Abilities API. Based on AI Translate For Polylang by James Low.
-Version: 1.0.0
+Version: 1.1.0
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -156,17 +156,25 @@ class AI_Translate {
 	}
 
 	private static function get_editor_bootstrap_data(): array {
+		$user_id              = get_current_user_id();
+		$last_additional_prompt = $user_id > 0
+			? (string) get_user_meta( $user_id, '_ai_translate_last_additional_prompt', true )
+			: '';
+
 		return array(
 			'abilitiesRunBasePath' => self::get_editor_rest_base_path(),
 			'restNonce'            => wp_create_nonce( 'wp_rest' ),
 			'translationPluginAvailable' => null !== self::get_adapter(),
 			'defaultSourceLanguage' => self::get_editor_default_source_language(),
+			'lastAdditionalPrompt' => $last_additional_prompt,
 			'strings'              => array(
 				'panelTitle'                => __( 'AI Translation with SlyTranslate', 'slytranslate' ),
 				'sourceLanguageLabel'       => __( 'Source language', 'slytranslate' ),
 				'targetLanguageLabel'       => __( 'Target language', 'slytranslate' ),
 				'overwriteLabel'            => __( 'Overwrite existing translation', 'slytranslate' ),
 				'translateTitleLabel'       => __( 'Translate title', 'slytranslate' ),
+				'additionalPromptLabel'     => __( 'Additional instructions (optional)', 'slytranslate' ),
+				'additionalPromptHelp'      => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
 				'translateButton'           => __( 'Translate now', 'slytranslate' ),
 				'refreshButton'             => __( 'Refresh translation status', 'slytranslate' ),
 				'loadingLanguages'          => __( 'Loading available languages...', 'slytranslate' ),
@@ -202,6 +210,17 @@ class AI_Translate {
 		self::register_editor_rest_route( '/ai-translate/translate-text', array( static::class, 'rest_execute_translate_text' ) );
 		self::register_editor_rest_route( '/ai-translate/translate-content', array( static::class, 'rest_execute_translate_content' ) );
 		self::register_editor_rest_route( '/ai-translate/translate-post', array( static::class, 'rest_execute_translate_content' ) );
+
+		// User preference endpoint (save last-used additional prompt per user).
+		register_rest_route(
+			self::EDITOR_REST_NAMESPACE,
+			'/ai-translate/user-preference',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( static::class, 'rest_execute_save_user_preference' ),
+				'permission_callback' => array( static::class, 'rest_can_access_translation_abilities' ),
+			)
+		);
 	}
 
 	private static function register_editor_rest_route( string $route, callable $callback ): void {
@@ -240,6 +259,22 @@ class AI_Translate {
 
 	public static function rest_execute_translate_content( \WP_REST_Request $request ) {
 		return self::execute_translate_content( self::get_editor_rest_input( $request ) );
+	}
+
+	public static function rest_execute_save_user_preference( \WP_REST_Request $request ) {
+		$input             = self::get_editor_rest_input( $request );
+		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] )
+			? sanitize_textarea_field( $input['additional_prompt'] )
+			: '';
+
+		$user_id = get_current_user_id();
+		if ( $user_id < 1 ) {
+			return new \WP_Error( 'not_logged_in', __( 'You must be logged in to save preferences.', 'slytranslate' ) );
+		}
+
+		update_user_meta( $user_id, '_ai_translate_last_additional_prompt', $additional_prompt );
+
+		return array( 'additional_prompt' => $additional_prompt );
 	}
 
 	/* ---------------------------------------------------------------
@@ -522,9 +557,10 @@ class AI_Translate {
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
-					'text'            => array( 'type' => 'string', 'description' => 'The text to translate.', 'minLength' => 1 ),
-					'source_language' => array( 'type' => 'string', 'description' => 'Source language code.' ),
-					'target_language' => array( 'type' => 'string', 'description' => 'Target language code.' ),
+					'text'              => array( 'type' => 'string', 'description' => 'The text to translate.', 'minLength' => 1 ),
+					'source_language'   => array( 'type' => 'string', 'description' => 'Source language code.' ),
+					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.' ),
 				),
 				'required' => array( 'text', 'source_language', 'target_language' ),
 			),
@@ -546,7 +582,8 @@ class AI_Translate {
 	}
 
 	public static function execute_translate_text( $input ) {
-		$translated = self::translate( $input['text'], $input['target_language'], $input['source_language'] );
+		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? $input['additional_prompt'] : '';
+		$translated = self::translate( $input['text'], $input['target_language'], $input['source_language'], $additional_prompt );
 
 		if ( is_wp_error( $translated ) ) {
 			return $translated;
@@ -569,11 +606,12 @@ class AI_Translate {
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
-					'post_id'         => array( 'type' => 'integer', 'description' => 'The source content item ID.' ),
-					'target_language' => array( 'type' => 'string', 'description' => 'Target language code.' ),
-					'post_status'     => array( 'type' => 'string', 'description' => 'Optional post status for the translated item. Defaults to the source status when possible.' ),
-					'translate_title' => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),
-					'overwrite'       => array( 'type' => 'boolean', 'description' => 'Overwrite existing translation.', 'default' => false ),
+					'post_id'           => array( 'type' => 'integer', 'description' => 'The source content item ID.' ),
+					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
+					'post_status'       => array( 'type' => 'string', 'description' => 'Optional post status for the translated item. Defaults to the source status when possible.' ),
+					'translate_title'   => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),
+					'overwrite'         => array( 'type' => 'boolean', 'description' => 'Overwrite existing translation.', 'default' => false ),
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.' ),
 				),
 				'required' => array( 'post_id', 'target_language' ),
 			),
@@ -599,12 +637,14 @@ class AI_Translate {
 	}
 
 	public static function execute_translate_content( $input ) {
+		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? $input['additional_prompt'] : '';
 		$result = self::translate_post(
 			$input['post_id'],
 			$input['target_language'],
 			$input['post_status'] ?? '',
 			$input['overwrite'] ?? false,
-			$input['translate_title'] ?? true
+			$input['translate_title'] ?? true,
+			$additional_prompt
 		);
 
 		if ( is_wp_error( $result ) ) {
@@ -786,6 +826,7 @@ class AI_Translate {
 				'type'       => 'object',
 				'properties' => array(
 					'prompt_template'    => array( 'type' => 'string', 'description' => 'Translation prompt template. Use {FROM_CODE} and {TO_CODE} as placeholders.' ),
+					'prompt_addon'       => array( 'type' => 'string', 'description' => 'Optional site-wide addition always appended after the prompt template. Applied to every translation request.' ),
 					'meta_keys_translate' => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to translate.' ),
 					'meta_keys_clear'    => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to clear.' ),
 					'auto_translate_new' => array( 'type' => 'boolean', 'description' => 'Auto-translate new translation posts in Polylang.' ),
@@ -796,6 +837,7 @@ class AI_Translate {
 				'type'       => 'object',
 				'properties' => array(
 					'prompt_template'    => array( 'type' => 'string' ),
+					'prompt_addon'       => array( 'type' => 'string' ),
 					'meta_keys_translate' => array( 'type' => 'string' ),
 					'meta_keys_clear'    => array( 'type' => 'string' ),
 					'auto_translate_new' => array( 'type' => 'boolean' ),
@@ -837,6 +879,14 @@ class AI_Translate {
 		if ( isset( $input['prompt_template'] ) ) {
 			update_option( 'ai_translate_prompt', sanitize_textarea_field( $input['prompt_template'] ) );
 		}
+		if ( array_key_exists( 'prompt_addon', $input ) ) {
+			$addon_value = is_string( $input['prompt_addon'] ) ? sanitize_textarea_field( $input['prompt_addon'] ) : '';
+			if ( '' === $addon_value ) {
+				delete_option( 'ai_translate_prompt_addon' );
+			} else {
+				update_option( 'ai_translate_prompt_addon', $addon_value );
+			}
+		}
 		if ( isset( $input['meta_keys_translate'] ) ) {
 			update_option( 'ai_translate_meta_translate', sanitize_textarea_field( $input['meta_keys_translate'] ) );
 		}
@@ -864,6 +914,7 @@ class AI_Translate {
 
 		return array(
 			'prompt_template'    => get_option( 'ai_translate_prompt', self::$PROMPT ),
+			'prompt_addon'       => get_option( 'ai_translate_prompt_addon', '' ),
 			'meta_keys_translate' => get_option( 'ai_translate_meta_translate', '' ),
 			'meta_keys_clear'    => get_option( 'ai_translate_meta_clear', '' ),
 			'auto_translate_new' => get_option( 'ai_translate_new_post', '1' ) === '1',
@@ -999,13 +1050,26 @@ class AI_Translate {
 		return is_wp_error( $translation ) ? $original : $translation;
 	}
 
-	public static function prompt( $to, $from = 'en' ) {
-		$template = get_option( 'ai_translate_prompt', self::$PROMPT );
-		return str_replace(
+	public static function prompt( $to, $from = 'en', $additional_prompt = '' ) {
+		$template    = get_option( 'ai_translate_prompt', self::$PROMPT );
+		$base_prompt = str_replace(
 			array( '{FROM_CODE}', '{TO_CODE}' ),
 			array( $from, $to ),
 			$template
 		);
+
+		$parts = array( $base_prompt );
+
+		$global_addon = get_option( 'ai_translate_prompt_addon', '' );
+		if ( is_string( $global_addon ) && '' !== trim( $global_addon ) ) {
+			$parts[] = trim( $global_addon );
+		}
+
+		if ( is_string( $additional_prompt ) && '' !== trim( $additional_prompt ) ) {
+			$parts[] = trim( $additional_prompt );
+		}
+
+		return implode( "\n\n", $parts );
 	}
 
 	/**
@@ -1016,12 +1080,12 @@ class AI_Translate {
 	 * @param string $from Source language code.
 	 * @return string|\WP_Error Translated text or WP_Error on failure.
 	 */
-	public static function translate( $text, $to, $from = 'en' ) {
+	public static function translate( $text, $to, $from = 'en', $additional_prompt = '' ) {
 		if ( ! $text || trim( $text ) === '' ) {
 			return '';
 		}
 
-		$prompt = self::prompt( $to, $from );
+		$prompt = self::prompt( $to, $from, $additional_prompt );
 		return self::translate_with_chunk_limit( $text, $prompt, self::get_translation_chunk_char_limit() );
 	}
 
@@ -1055,10 +1119,16 @@ class AI_Translate {
 	}
 
 	private static function translate_chunk( string $text, string $prompt ) {
-		$result = wp_ai_client_prompt( $text )
+		$runtime_context = self::get_translation_runtime_context();
+		$builder         = wp_ai_client_prompt( $text )
 			->using_system_instruction( $prompt )
-			->using_temperature( 0 )
-			->generate_text();
+			->using_temperature( 0 );
+
+		if ( '' !== $runtime_context['model_slug'] && method_exists( $builder, 'using_model_preference' ) ) {
+			$builder = $builder->using_model_preference( $runtime_context['model_slug'] );
+		}
+
+		$result = $builder->generate_text();
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -1367,30 +1437,30 @@ class AI_Translate {
 		return $chunks;
 	}
 
-	private static function translate_post_content( string $content, string $to, string $from = 'en' ) {
+	private static function translate_post_content( string $content, string $to, string $from = 'en', string $additional_prompt = '' ) {
 		if ( '' === trim( $content ) ) {
 			return '';
 		}
 
 		if ( ! function_exists( 'parse_blocks' ) || ! function_exists( 'serialize_blocks' ) ) {
-			return self::translate( $content, $to, $from );
+			return self::translate( $content, $to, $from, $additional_prompt );
 		}
 
 		$blocks = parse_blocks( $content );
 		if ( ! is_array( $blocks ) || empty( $blocks ) ) {
-			return self::translate( $content, $to, $from );
+			return self::translate( $content, $to, $from, $additional_prompt );
 		}
 
-		return self::translate_block_sections( $blocks, $to, $from );
+		return self::translate_block_sections( $blocks, $to, $from, $additional_prompt );
 	}
 
-	private static function translate_block_sections( array $blocks, string $to, string $from = 'en' ) {
+	private static function translate_block_sections( array $blocks, string $to, string $from = 'en', string $additional_prompt = '' ) {
 		$translated_sections = array();
 		$pending_blocks      = array();
 
 		foreach ( $blocks as $block ) {
 			if ( self::should_skip_block_translation( $block ) ) {
-				$translated_section = self::translate_serialized_blocks( $pending_blocks, $to, $from );
+				$translated_section = self::translate_serialized_blocks( $pending_blocks, $to, $from, $additional_prompt );
 				if ( is_wp_error( $translated_section ) ) {
 					return $translated_section;
 				}
@@ -1407,7 +1477,7 @@ class AI_Translate {
 			$pending_blocks[] = $block;
 		}
 
-		$translated_section = self::translate_serialized_blocks( $pending_blocks, $to, $from );
+		$translated_section = self::translate_serialized_blocks( $pending_blocks, $to, $from, $additional_prompt );
 		if ( is_wp_error( $translated_section ) ) {
 			return $translated_section;
 		}
@@ -1419,7 +1489,7 @@ class AI_Translate {
 		return implode( '', $translated_sections );
 	}
 
-	private static function translate_serialized_blocks( array $blocks, string $to, string $from = 'en' ) {
+	private static function translate_serialized_blocks( array $blocks, string $to, string $from = 'en', string $additional_prompt = '' ) {
 		if ( empty( $blocks ) ) {
 			return '';
 		}
@@ -1429,14 +1499,14 @@ class AI_Translate {
 			return $serialized_blocks;
 		}
 
-		return self::translate( $serialized_blocks, $to, $from );
+		return self::translate( $serialized_blocks, $to, $from, $additional_prompt );
 	}
 
-	private static function translate_parsed_blocks( array $blocks, string $to, string $from = 'en' ) {
+	private static function translate_parsed_blocks( array $blocks, string $to, string $from = 'en', string $additional_prompt = '' ) {
 		$translated_blocks = array();
 
 		foreach ( $blocks as $block ) {
-			$translated_block = self::translate_parsed_block( $block, $to, $from );
+			$translated_block = self::translate_parsed_block( $block, $to, $from, $additional_prompt );
 			if ( is_wp_error( $translated_block ) ) {
 				return $translated_block;
 			}
@@ -1447,13 +1517,13 @@ class AI_Translate {
 		return $translated_blocks;
 	}
 
-	private static function translate_parsed_block( array $block, string $to, string $from = 'en' ) {
+	private static function translate_parsed_block( array $block, string $to, string $from = 'en', string $additional_prompt = '' ) {
 		if ( self::should_skip_block_translation( $block ) ) {
 			return $block;
 		}
 
 		if ( isset( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) && ! empty( $block['innerBlocks'] ) ) {
-			$translated_inner_blocks = self::translate_parsed_blocks( $block['innerBlocks'], $to, $from );
+			$translated_inner_blocks = self::translate_parsed_blocks( $block['innerBlocks'], $to, $from, $additional_prompt );
 			if ( is_wp_error( $translated_inner_blocks ) ) {
 				return $translated_inner_blocks;
 			}
@@ -1467,7 +1537,7 @@ class AI_Translate {
 					continue;
 				}
 
-				$translated_fragment = self::translate( $fragment, $to, $from );
+				$translated_fragment = self::translate( $fragment, $to, $from, $additional_prompt );
 				if ( is_wp_error( $translated_fragment ) ) {
 					return $translated_fragment;
 				}
@@ -1719,19 +1789,19 @@ class AI_Translate {
 		return self::$seo_plugin_config;
 	}
 
-	private static function translate_meta_value( $value, string $to, string $from = 'en' ) {
+	private static function translate_meta_value( $value, string $to, string $from = 'en', string $additional_prompt = '' ) {
 		if ( is_string( $value ) ) {
 			if ( '' === trim( $value ) ) {
 				return $value;
 			}
 
-			return self::translate( $value, $to, $from );
+			return self::translate( $value, $to, $from, $additional_prompt );
 		}
 
 		if ( is_array( $value ) ) {
 			$translated_value = array();
 			foreach ( $value as $key => $item ) {
-				$translated_item = self::translate_meta_value( $item, $to, $from );
+				$translated_item = self::translate_meta_value( $item, $to, $from, $additional_prompt );
 				if ( is_wp_error( $translated_item ) ) {
 					return $translated_item;
 				}
@@ -1745,7 +1815,7 @@ class AI_Translate {
 		return $value;
 	}
 
-	private static function translate_meta_value_for_key( string $meta_key, $value, string $to, string $from = 'en' ) {
+	private static function translate_meta_value_for_key( string $meta_key, $value, string $to, string $from = 'en', string $additional_prompt = '' ) {
 		if ( 'slim_seo' === $meta_key && is_array( $value ) ) {
 			$translated_value = $value;
 
@@ -1754,7 +1824,7 @@ class AI_Translate {
 					continue;
 				}
 
-				$translated_field = self::translate_meta_value( $translated_value[ $field ], $to, $from );
+				$translated_field = self::translate_meta_value( $translated_value[ $field ], $to, $from, $additional_prompt );
 				if ( is_wp_error( $translated_field ) ) {
 					return $translated_field;
 				}
@@ -1765,7 +1835,7 @@ class AI_Translate {
 			return $translated_value;
 		}
 
-		return self::translate_meta_value( $value, $to, $from );
+		return self::translate_meta_value( $value, $to, $from, $additional_prompt );
 	}
 
 	/**
@@ -1778,7 +1848,7 @@ class AI_Translate {
 	 * @param bool   $translate_title Whether to translate the post title.
 	 * @return int|\WP_Error Translated post ID or WP_Error on failure.
 	 */
-	public static function translate_post( $post_id, $to, $status = '', $overwrite = false, $translate_title = true ) {
+	public static function translate_post( $post_id, $to, $status = '', $overwrite = false, $translate_title = true, $additional_prompt = '' ) {
 		$adapter = self::get_adapter();
 		if ( ! $adapter ) {
 			return new \WP_Error( 'no_translation_plugin', __( 'No supported translation plugin is active.', 'slytranslate' ) );
@@ -1824,9 +1894,9 @@ class AI_Translate {
 		$translate_title = ! isset( $translate_title ) || (bool) $translate_title;
 
 		// Translate content.
-		$title   = $translate_title ? self::translate( $post->post_title, $to, $from ) : $post->post_title;
-		$content = self::translate_post_content( $post->post_content, $to, $from );
-		$excerpt = self::translate( $post->post_excerpt, $to, $from );
+		$title   = $translate_title ? self::translate( $post->post_title, $to, $from, $additional_prompt ) : $post->post_title;
+		$content = self::translate_post_content( $post->post_content, $to, $from, $additional_prompt );
+		$excerpt = self::translate( $post->post_excerpt, $to, $from, $additional_prompt );
 
 		if ( is_wp_error( $title ) ) {
 			return $title;
@@ -1846,7 +1916,7 @@ class AI_Translate {
 			if ( in_array( $key, self::meta_clear(), true ) ) {
 				$processed_meta[ $key ] = '';
 			} elseif ( in_array( $key, self::meta_translate(), true ) ) {
-				$translated_meta = self::translate_meta_value_for_key( $key, $value, $to, $from );
+				$translated_meta = self::translate_meta_value_for_key( $key, $value, $to, $from, $additional_prompt );
 				$processed_meta[ $key ] = is_wp_error( $translated_meta ) ? $value : $translated_meta;
 			} else {
 				$processed_meta[ $key ] = $value;
