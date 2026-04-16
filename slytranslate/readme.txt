@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -23,16 +23,18 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * **ai-translate/translate-text** – Translates arbitrary text between languages.
 * **ai-translate/translate-content** – Translates a post, page, or custom post type entry and creates or updates the translation.
 * **ai-translate/translate-content-bulk** – Bulk-translates multiple entries at once (either by explicit IDs or by post type, max 50).
-* **ai-translate/configure** – Read or update plugin settings (prompt template, meta key configuration, SEO defaults, auto-translate toggle, model slug, optional context window token override).
+* **ai-translate/configure** – Read or update plugin settings (prompt template, meta key configuration, SEO defaults, auto-translate toggle, model slug, optional context window token override, direct API URL for OpenAI-compatible endpoints).
 
 **Architecture:**
 
 * Uses the WordPress AI Client (`wp_ai_client_prompt()`) for LLM access — no API keys to configure in this plugin. Set up your preferred AI provider via Settings > Connectors.
 * For local LLMs via Ollama, LM Studio, LocalAI, vLLM, or other OpenAI-compatible endpoints, we recommend **Ultimate AI Connector for Compatible Endpoints**: https://wordpress.org/plugins/ultimate-ai-connector-compatible-endpoints/
-* Long content is translated in chunks. The plugin derives a safe chunk size from the active model, can learn tighter limits from provider errors, and supports a manual context window token override.
+* Optional **Direct API** path (`direct_api_url`): connect directly to any OpenAI-compatible endpoint without the WordPress AI Client, with automatic fallback. Enables `chat_template_kwargs` support for specialized models such as TranslateGemma (auto-detected on configuration save).
+* Long content is translated in chunks. The plugin derives a safe chunk size from the active model, learns tighter limits from provider error messages, retries automatically with a smaller chunk on context-window errors, and supports a manual context window token override.
+* Block content is parsed before translation: code and preformatted blocks are skipped, and consecutive translatable blocks are batched together for efficiency.
 * Translation plugin support via an adapter interface. Currently supports **Polylang**, including posts, pages, custom post types, and associated taxonomies. Additional adapters (WPML, TranslatePress, etc.) can be added.
 * Popular SEO plugins are detected automatically and their key SEO meta fields can be translated or cleared without manual configuration.
-* The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, plus a selected-text action for translating highlighted text inline with SlyTranslate via `ai-translate/translate-text` even without a translation plugin.
+* The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. A selected-text action for translating highlighted text inline via `ai-translate/translate-text` is available even without a translation plugin.
 * All abilities are exposed via the REST API (`/wp-abilities/v1/`) and marked public for MCP Adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`.
 * Polylang auto-translate hooks are preserved for backward compatibility — creating a new translation in Polylang still triggers automatic translation.
 * Plugin labels and descriptions are translation-ready and include a bundled German (`de_DE`) translation.
@@ -84,6 +86,12 @@ Use the `context_window_tokens` field on the `ai-translate/configure` ability to
 
 Yes. For local LLMs or self-hosted inference servers, we recommend **Ultimate AI Connector for Compatible Endpoints**: https://wordpress.org/plugins/ultimate-ai-connector-compatible-endpoints/ Configure your compatible endpoint once in Settings > Connectors, and SlyTranslate can use models exposed by tools such as Ollama, LM Studio, LocalAI, or vLLM through the WordPress AI Client.
 
+For models that require request-level parameters such as `chat_template_kwargs` (e.g. TranslateGemma on llama.cpp), use the `direct_api_url` setting on `ai-translate/configure` to bypass the AI Client and send requests directly to the endpoint.
+
+= Can I use TranslateGemma or other specialized translation models? =
+
+Yes. Set `direct_api_url` via `ai-translate/configure` to the URL of your llama.cpp (or other OpenAI-compatible) server. The plugin will automatically probe for `chat_template_kwargs` support and, when detected, include `source_lang_code` and `target_lang_code` in every translation request so the model can use its native language-routing. A custom Jinja chat template is required on the llama.cpp side to make this work — a ready-to-use template and setup guide are included in the plugin repository.
+
 = Can I translate pages or custom post types? =
 
 Yes. The `translate-content`, `translate-content-bulk`, `get-translation-status`, and `get-untranslated` abilities work with any Polylang-enabled post type, including pages and custom post types.
@@ -101,6 +109,16 @@ Yes. The block editor includes an **AI Translate** panel in the document setting
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= 1.2.0 =
+* **Direct API support**: new `direct_api_url` setting on `ai-translate/configure` — connect directly to any OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM Studio, LocalAI) without the WordPress AI Client in the request path; automatic fallback to the standard AI Client when the direct call fails
+* **TranslateGemma `chat_template_kwargs` auto-detection**: when a Direct API URL is configured, the plugin probes the server for `chat_template_kwargs` support (sends "cat" en → de, checks for "Katze"); when detected, every translation request includes `source_lang_code` / `target_lang_code` for models like TranslateGemma that use Jinja-based language routing
+* **Per-request `model_slug`**: the `translate-text`, `translate-content`, and `translate-content-bulk` abilities now accept an optional `model_slug` field to override the site-wide default on a per-call basis
+* **Block editor model selector**: new model dropdown in the AI Translate sidebar panel and the selected-text translation modal; lists all models registered with the WordPress AI Client, persists the selection in `localStorage`, and shows the effective default as "Auto" label
+* Added TranslateGemma to the known model context-window table (8 192 tokens)
+* Added newer models to context-window detection: o4-mini, o3, gpt-4.5, gpt-4.1, Sonar, Grok
+* Slim SEO: translate only the `title` and `description` fields inside the serialised `slim_seo` meta value instead of overwriting the full array
+* `ai-translate/configure` output now includes effective runtime values: `effective_meta_keys_translate`, `effective_meta_keys_clear`, `effective_context_window_tokens`, `effective_chunk_chars`, `learned_context_window_tokens`, `direct_api_kwargs_supported`
 
 = 1.1.1 =
 * Block editor: added **Cancel translation** button that appears while a translation is in progress, allowing the request to be aborted without leaving the editor

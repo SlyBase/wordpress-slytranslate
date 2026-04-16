@@ -207,6 +207,50 @@
     // Module-level cache so both Sidebar and Toolbar share the latest value within a page session.
     let _lastAdditionalPrompt = settings && settings.lastAdditionalPrompt ? settings.lastAdditionalPrompt : '';
 
+    // Module-level model slug shared between Sidebar and Selection modal.
+    const _availableModels = settings && Array.isArray(settings.models) ? settings.models : [];
+    let _selectedModelSlug = '';
+
+    // Compute the label for the "Auto" option, showing the effective default model.
+    var _autoEffectiveModel = (settings && settings.defaultModelSlug) ? settings.defaultModelSlug : (_availableModels.length > 0 ? _availableModels[0].value : '');
+    var _autoOptionLabel = _autoEffectiveModel ? ('— Auto (' + _autoEffectiveModel + ') —') : '— Auto —';
+
+    function initSelectedModelSlug() {
+        var stored = readStoredModelSlug();
+        if (stored && _availableModels.some(function (m) { return m.value === stored; })) {
+            _selectedModelSlug = stored;
+            return stored;
+        }
+        var defaultSlug = settings && settings.defaultModelSlug ? settings.defaultModelSlug : '';
+        if (defaultSlug && _availableModels.some(function (m) { return m.value === defaultSlug; })) {
+            _selectedModelSlug = defaultSlug;
+            return defaultSlug;
+        }
+        _selectedModelSlug = '';
+        return '';
+    }
+
+    function readStoredModelSlug() {
+        try {
+            return window.localStorage ? window.localStorage.getItem('aiTranslateModelSlug') || '' : '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function storeModelSlug(slug) {
+        _selectedModelSlug = slug || '';
+        try {
+            if (window.localStorage) {
+                if (slug) {
+                    window.localStorage.setItem('aiTranslateModelSlug', slug);
+                } else {
+                    window.localStorage.removeItem('aiTranslateModelSlug');
+                }
+            }
+        } catch (error) { }
+    }
+
     function getLastAdditionalPrompt() {
         return _lastAdditionalPrompt;
     }
@@ -279,6 +323,7 @@
         const [overwrite, setOverwrite] = useState(false);
         const [translateTitle, setTranslateTitle] = useState(true);
         const [additionalPrompt, setAdditionalPrompt] = useState(getLastAdditionalPrompt);
+        const [modelSlug, setModelSlug] = useState(initSelectedModelSlug);
         const [isRefreshing, setIsRefreshing] = useState(false);
         const [isTranslating, setIsTranslating] = useState(false);
         const [hasLoadedData, setHasLoadedData] = useState(false);
@@ -417,6 +462,7 @@
                 overwrite: overwrite,
                 translate_title: translateTitle,
                 additional_prompt: additionalPrompt || undefined,
+                model_slug: modelSlug || undefined,
             }, abortController ? abortController.signal : undefined)
                 .then(function (response) {
                     storeTargetLanguage(targetLanguage);
@@ -443,6 +489,12 @@
             if (translateAbortControllerRef.current) {
                 translateAbortControllerRef.current.abort();
             }
+            var cancelPath = (settings && settings.abilitiesRunBasePath || '/ai-translate/v1/') + 'ai-translate/cancel-translation';
+            var cancelRequest = { path: cancelPath, method: 'POST', data: {} };
+            if (settings && settings.restNonce) {
+                cancelRequest.headers = { 'X-WP-Nonce': settings.restNonce };
+            }
+            apiFetch(cancelRequest).catch(function () { });
         }
 
         const statusItems = Array.isArray(statusData && statusData.translations) ? statusData.translations : [];
@@ -521,6 +573,19 @@
                     }),
                 })
             ) : (!isRefreshing && hasLoadedData && !errorMessage ? createElement(Notice, { status: 'info', isDismissible: false }, text('noLanguages', 'No target languages are available for this content item.')) : null),
+            _availableModels.length > 0 ? createElement(
+                'div',
+                { style: { marginTop: '4px', marginBottom: '20px' } },
+                createElement(SelectControl, {
+                    label: text('modelLabel', 'AI model'),
+                    value: modelSlug,
+                    onChange: function (nextModelSlug) {
+                        setModelSlug(nextModelSlug);
+                        storeModelSlug(nextModelSlug);
+                    },
+                    options: [{ label: _autoOptionLabel, value: '' }].concat(_availableModels),
+                })
+            ) : null,
             createElement(
                 'div',
                 { style: { display: 'grid', rowGap: '10px', marginTop: '4px', marginBottom: '18px' } },
@@ -643,6 +708,7 @@
                 source_language: sourceLanguage || 'en',
                 target_language: targetLanguage,
                 additional_prompt: additionalPrompt || undefined,
+                model_slug: _selectedModelSlug || undefined,
             })
                 .then(function (response) {
                     const translatedText = response && response.translated_text ? response.translated_text : '';

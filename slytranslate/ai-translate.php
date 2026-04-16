@@ -47,10 +47,11 @@ class AI_Translate {
 		'gpt-3.5-turbo' => 16385,
 		'o4-mini'       => 128000,
 		'o3'            => 128000,
-		'mistral-large' => 32768,
-		'mistral-small' => 32768,
-		'sonar'         => 32768,
-		'grok'          => 32768,
+		'mistral-large'   => 32768,
+		'mistral-small'   => 32768,
+		'sonar'           => 32768,
+		'grok'            => 32768,
+		'translategemma'  => 8192,
 	);
 
 	// Cached meta key lists.
@@ -61,6 +62,13 @@ class AI_Translate {
 	private static $adapter;
 	private static $translation_runtime_context;
 	private static $seo_plugin_config;
+
+	// Per-request model slug override (set by editor REST endpoints).
+	private static $model_slug_request_override;
+
+	// Per-request language code context (set during translate() for direct API with chat_template_kwargs).
+	private static $translation_source_lang;
+	private static $translation_target_lang;
 
 	/* ---------------------------------------------------------------
 	 * Adapter
@@ -167,7 +175,10 @@ class AI_Translate {
 			'translationPluginAvailable' => null !== self::get_adapter(),
 			'defaultSourceLanguage' => self::get_editor_default_source_language(),
 			'lastAdditionalPrompt' => $last_additional_prompt,
+			'models'               => self::get_available_models(),
+			'defaultModelSlug'     => get_option( 'ai_translate_model_slug', '' ),
 			'strings'              => array(
+				'modelLabel'                => __( 'AI model', 'slytranslate' ),
 				'panelTitle'                => __( 'AI Translation with SlyTranslate', 'slytranslate' ),
 				'sourceLanguageLabel'       => __( 'Source language', 'slytranslate' ),
 				'targetLanguageLabel'       => __( 'Target language', 'slytranslate' ),
@@ -201,6 +212,37 @@ class AI_Translate {
 		);
 	}
 
+	private static function get_available_models(): array {
+		if ( ! function_exists( 'wp_ai_client_prompt' ) ) {
+			return array();
+		}
+
+		try {
+			$registry         = \WordPress\AiClient\AiClient::defaultRegistry();
+			$requirements     = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements( array(), array() );
+			$provider_results = $registry->findModelsMetadataForSupport( $requirements );
+		} catch ( \Throwable $e ) {
+			return array();
+		}
+
+		$models = array();
+		foreach ( $provider_results as $provider_models ) {
+			$provider_meta = $provider_models->getProvider();
+			$provider_id   = $provider_meta->getId();
+			$provider_name = $provider_meta->getName();
+
+			foreach ( $provider_models->getModels() as $model_meta ) {
+				$model_id = $model_meta->getId();
+				$models[] = array(
+					'value' => $model_id,
+					'label' => $provider_name . ': ' . $model_id,
+				);
+			}
+		}
+
+		return $models;
+	}
+
 	private static function get_editor_rest_base_path(): string {
 		return '/' . self::EDITOR_REST_NAMESPACE . '/';
 	}
@@ -211,6 +253,7 @@ class AI_Translate {
 		self::register_editor_rest_route( '/ai-translate/translate-text', array( static::class, 'rest_execute_translate_text' ) );
 		self::register_editor_rest_route( '/ai-translate/translate-content', array( static::class, 'rest_execute_translate_content' ) );
 		self::register_editor_rest_route( '/ai-translate/translate-post', array( static::class, 'rest_execute_translate_content' ) );
+		self::register_editor_rest_route( '/ai-translate/cancel-translation', array( static::class, 'rest_cancel_translation' ) );
 
 		// User preference endpoint (save last-used additional prompt per user).
 		register_rest_route(
@@ -259,7 +302,13 @@ class AI_Translate {
 	}
 
 	public static function rest_execute_translate_content( \WP_REST_Request $request ) {
+		self::clear_translation_cancelled_flag();
 		return self::execute_translate_content( self::get_editor_rest_input( $request ) );
+	}
+
+	public static function rest_cancel_translation( \WP_REST_Request $request ) {
+		self::set_translation_cancelled_flag();
+		return array( 'cancelled' => true );
 	}
 
 	public static function rest_execute_save_user_preference( \WP_REST_Request $request ) {
@@ -562,6 +611,7 @@ class AI_Translate {
 					'source_language'   => array( 'type' => 'string', 'description' => 'Source language code.' ),
 					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
 					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.' ),
+					'model_slug'        => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation. Overrides the site-wide default.' ),
 				),
 				'required' => array( 'text', 'source_language', 'target_language' ),
 			),
@@ -583,18 +633,26 @@ class AI_Translate {
 	}
 
 	public static function execute_translate_text( $input ) {
-		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? $input['additional_prompt'] : '';
-		$translated = self::translate( $input['text'], $input['target_language'], $input['source_language'], $additional_prompt );
+		self::$model_slug_request_override = isset( $input['model_slug'] ) && is_string( $input['model_slug'] ) && '' !== $input['model_slug']
+			? sanitize_text_field( $input['model_slug'] )
+			: null;
 
-		if ( is_wp_error( $translated ) ) {
-			return $translated;
+		try {
+			$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? $input['additional_prompt'] : '';
+			$translated = self::translate( $input['text'], $input['target_language'], $input['source_language'], $additional_prompt );
+
+			if ( is_wp_error( $translated ) ) {
+				return $translated;
+			}
+
+			return array(
+				'translated_text' => $translated,
+				'source_language' => $input['source_language'],
+				'target_language' => $input['target_language'],
+			);
+		} finally {
+			self::$model_slug_request_override = null;
 		}
-
-		return array(
-			'translated_text' => $translated,
-			'source_language' => $input['source_language'],
-			'target_language' => $input['target_language'],
-		);
 	}
 
 	/* --- translate-content --------------------------------------- */
@@ -613,6 +671,7 @@ class AI_Translate {
 					'translate_title'   => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),
 					'overwrite'         => array( 'type' => 'boolean', 'description' => 'Overwrite existing translation.', 'default' => false ),
 					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.' ),
+					'model_slug'        => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation. Overrides the site-wide default.' ),
 				),
 				'required' => array( 'post_id', 'target_language' ),
 			),
@@ -638,6 +697,11 @@ class AI_Translate {
 	}
 
 	public static function execute_translate_content( $input ) {
+		self::$model_slug_request_override = isset( $input['model_slug'] ) && is_string( $input['model_slug'] ) && '' !== $input['model_slug']
+			? sanitize_text_field( $input['model_slug'] )
+			: null;
+
+		try {
 		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? $input['additional_prompt'] : '';
 		$result = self::translate_post(
 			$input['post_id'],
@@ -663,6 +727,9 @@ class AI_Translate {
 			'post_status'          => $translated_post ? $translated_post->post_status : '',
 			'edit_link'            => $translated_post ? (string) get_edit_post_link( $translated_post->ID, 'raw' ) : '',
 		);
+		} finally {
+			self::$model_slug_request_override = null;
+		}
 	}
 
 	/* --- translate-content-bulk ---------------------------------- */
@@ -688,6 +755,7 @@ class AI_Translate {
 					'post_status'     => array( 'type' => 'string', 'description' => 'Optional post status for the translated items. Defaults to the source status when possible.' ),
 					'translate_title' => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),
 					'overwrite'       => array( 'type' => 'boolean', 'description' => 'Overwrite existing translations.', 'default' => false ),
+					'model_slug'      => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation batch. Overrides the site-wide default.' ),
 				),
 				'required' => array( 'target_language' ),
 			),
@@ -722,6 +790,10 @@ class AI_Translate {
 	}
 
 	public static function execute_translate_posts( $input ) {
+		self::$model_slug_request_override = isset( $input['model_slug'] ) && is_string( $input['model_slug'] ) && '' !== $input['model_slug']
+			? sanitize_text_field( $input['model_slug'] )
+			: null;
+
 		$adapter = self::get_adapter();
 		if ( ! $adapter ) {
 			return new \WP_Error( 'no_translation_plugin', __( 'No supported translation plugin is active.', 'slytranslate' ) );
@@ -807,6 +879,8 @@ class AI_Translate {
 			}
 		}
 
+		self::$model_slug_request_override = null;
+
 		return array(
 			'results'   => $results,
 			'total'     => count( $post_ids ),
@@ -833,6 +907,7 @@ class AI_Translate {
 					'auto_translate_new' => array( 'type' => 'boolean', 'description' => 'Auto-translate new translation posts in Polylang.' ),
 					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.' ),
 					'model_slug' => array( 'type' => 'string', 'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.' ),
+					'direct_api_url' => array( 'type' => 'string', 'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). When set, the plugin sends translation requests directly to this endpoint instead of using the WP AI Client. Works with llama.cpp, ollama, mlx-lm, vLLM, or any OpenAI-compatible server. Leave empty to use the standard AI Client. When saving, the plugin automatically probes whether the server supports chat_template_kwargs for optimized translation.' ),
 				),
 			),
 			'output_schema'       => array(
@@ -845,6 +920,8 @@ class AI_Translate {
 					'auto_translate_new' => array( 'type' => 'boolean' ),
 					'context_window_tokens' => array( 'type' => 'integer' ),
 					'model_slug' => array( 'type' => 'string' ),
+					'direct_api_url' => array( 'type' => 'string' ),
+					'direct_api_kwargs_supported' => array( 'type' => 'boolean', 'description' => 'Auto-detected: whether the server at direct_api_url supports chat_template_kwargs. Re-detected whenever direct_api_url or model_slug is saved.' ),
 					'detected_seo_plugin' => array( 'type' => 'string' ),
 					'detected_seo_plugin_label' => array( 'type' => 'string' ),
 					'seo_meta_keys_translate' => array(
@@ -913,6 +990,30 @@ class AI_Translate {
 				update_option( 'ai_translate_model_slug', $model_slug_value );
 			}
 		}
+		$should_reprobe_kwargs = false;
+		if ( array_key_exists( 'direct_api_url', $input ) ) {
+			$url_value = is_string( $input['direct_api_url'] ) ? esc_url_raw( $input['direct_api_url'] ) : '';
+			if ( '' === $url_value ) {
+				delete_option( 'ai_translate_direct_api_url' );
+				delete_option( 'ai_translate_direct_api_kwargs_detected' );
+			} else {
+				update_option( 'ai_translate_direct_api_url', $url_value );
+				$should_reprobe_kwargs = true;
+			}
+		}
+		if ( array_key_exists( 'model_slug', $input ) ) {
+			$direct_url = get_option( 'ai_translate_direct_api_url', '' );
+			if ( '' !== $direct_url ) {
+				$should_reprobe_kwargs = true;
+			}
+		}
+		if ( $should_reprobe_kwargs ) {
+			$probe_result = self::probe_direct_api_kwargs(
+				get_option( 'ai_translate_direct_api_url', '' ),
+				get_option( 'ai_translate_model_slug', '' )
+			);
+			update_option( 'ai_translate_direct_api_kwargs_detected', $probe_result ? '1' : '0' );
+		}
 
 		// Reset cached meta keys.
 		self::$meta_translate = null;
@@ -930,6 +1031,8 @@ class AI_Translate {
 			'auto_translate_new' => get_option( 'ai_translate_new_post', '1' ) === '1',
 			'context_window_tokens' => absint( get_option( 'ai_translate_context_window_tokens', 0 ) ),
 			'model_slug' => get_option( 'ai_translate_model_slug', '' ),
+			'direct_api_url' => get_option( 'ai_translate_direct_api_url', '' ),
+			'direct_api_kwargs_supported' => get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1',
 			'detected_seo_plugin' => $seo_plugin_config['key'],
 			'detected_seo_plugin_label' => $seo_plugin_config['label'],
 			'seo_meta_keys_translate' => $seo_plugin_config['translate'],
@@ -1082,6 +1185,31 @@ class AI_Translate {
 	}
 
 	/**
+	 * Check whether the current user has requested cancellation.
+	 */
+	private static function is_translation_cancelled(): bool {
+		$user_id = get_current_user_id();
+		if ( $user_id < 1 ) {
+			return false;
+		}
+		return (bool) get_transient( 'ai_translate_cancel_' . $user_id );
+	}
+
+	private static function set_translation_cancelled_flag(): void {
+		$user_id = get_current_user_id();
+		if ( $user_id > 0 ) {
+			set_transient( 'ai_translate_cancel_' . $user_id, 1, 5 * MINUTE_IN_SECONDS );
+		}
+	}
+
+	private static function clear_translation_cancelled_flag(): void {
+		$user_id = get_current_user_id();
+		if ( $user_id > 0 ) {
+			delete_transient( 'ai_translate_cancel_' . $user_id );
+		}
+	}
+
+	/**
 	 * Translate text using the WordPress AI Client.
 	 *
 	 * @param string $text Text to translate.
@@ -1094,8 +1222,16 @@ class AI_Translate {
 			return '';
 		}
 
-		$prompt = self::prompt( $to, $from, $additional_prompt );
-		return self::translate_with_chunk_limit( $text, $prompt, self::get_translation_chunk_char_limit() );
+		self::$translation_source_lang = $from;
+		self::$translation_target_lang = $to;
+
+		try {
+			$prompt = self::prompt( $to, $from, $additional_prompt );
+			return self::translate_with_chunk_limit( $text, $prompt, self::get_translation_chunk_char_limit() );
+		} finally {
+			self::$translation_source_lang = null;
+			self::$translation_target_lang = null;
+		}
 	}
 
 	private static function translate_with_chunk_limit( string $text, string $prompt, int $chunk_char_limit, int $attempt = 0 ) {
@@ -1111,6 +1247,10 @@ class AI_Translate {
 
 		$translated_chunks = array();
 		foreach ( $chunks as $chunk ) {
+			if ( self::is_translation_cancelled() ) {
+				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+			}
+
 			$translated_chunk = self::translate_chunk( $chunk, $prompt );
 			if ( is_wp_error( $translated_chunk ) ) {
 				$adjusted_chunk_char_limit = self::maybe_adjust_chunk_limit_from_error( $translated_chunk, $chunk_char_limit );
@@ -1129,12 +1269,22 @@ class AI_Translate {
 
 	private static function translate_chunk( string $text, string $prompt ) {
 		$runtime_context = self::get_translation_runtime_context();
-		$builder         = wp_ai_client_prompt( $text )
+		$model_slug      = self::$model_slug_request_override ?? $runtime_context['model_slug'];
+
+		$direct_api_url = get_option( 'ai_translate_direct_api_url', '' );
+		if ( is_string( $direct_api_url ) && '' !== $direct_api_url ) {
+			$result = self::translate_chunk_direct_api( $text, $prompt, $model_slug, $direct_api_url );
+			if ( null !== $result ) {
+				return $result;
+			}
+		}
+
+		$builder = wp_ai_client_prompt( $text )
 			->using_system_instruction( $prompt )
 			->using_temperature( 0 );
 
-		if ( '' !== $runtime_context['model_slug'] && method_exists( $builder, 'using_model_preference' ) ) {
-			$builder = $builder->using_model_preference( $runtime_context['model_slug'] );
+		if ( '' !== $model_slug && is_callable( array( $builder, 'using_model_preference' ) ) ) {
+			$builder = $builder->using_model_preference( $model_slug );
 		}
 
 		$result = $builder->generate_text();
@@ -1144,6 +1294,145 @@ class AI_Translate {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Translate a chunk via a direct OpenAI-compatible API call.
+	 *
+	 * Always sends a system instruction with the translation prompt. When the
+	 * direct_api_kwargs option is enabled, additionally sends chat_template_kwargs
+	 * with source_lang_code / target_lang_code (useful for models like TranslateGemma
+	 * that use Jinja templates with language parameters).
+	 *
+	 * Returns null when the request fails so the caller can fall back to the
+	 * standard WP AI Client path.
+	 *
+	 * @param string $text       Text to translate.
+	 * @param string $prompt     System instruction prompt.
+	 * @param string $model_slug Model slug.
+	 * @param string $api_url    Base URL of the API server.
+	 * @return string|\WP_Error|null Translated text, WP_Error on failure, or null to signal fallback.
+	 */
+	private static function translate_chunk_direct_api( string $text, string $prompt, string $model_slug, string $api_url ) {
+		$endpoint = trailingslashit( $api_url ) . 'v1/chat/completions';
+
+		$body = array(
+			'messages'    => array(
+				array(
+					'role'    => 'system',
+					'content' => $prompt,
+				),
+				array(
+					'role'    => 'user',
+					'content' => $text,
+				),
+			),
+			'temperature' => 0,
+		);
+
+		if ( '' !== $model_slug ) {
+			$body['model'] = $model_slug;
+		}
+
+		$kwargs_supported = get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1';
+		if ( $kwargs_supported && self::$translation_source_lang && self::$translation_target_lang ) {
+			$body['chat_template_kwargs'] = array(
+				'source_lang_code' => self::$translation_source_lang,
+				'target_lang_code' => self::$translation_target_lang,
+			);
+		}
+
+		$response = wp_remote_post( $endpoint, array(
+			'headers' => array( 'Content-Type' => 'application/json' ),
+			'body'    => wp_json_encode( $body ),
+			'timeout' => 120,
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return null; // Fall back to standard path.
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			return null; // Fall back to standard path.
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $data ) ) {
+			return null;
+		}
+
+		$content = $data['choices'][0]['message']['content'] ?? null;
+		if ( ! is_string( $content ) ) {
+			return null;
+		}
+
+		return $content;
+	}
+
+	/**
+	 * Probe whether a server supports chat_template_kwargs for translation.
+	 *
+	 * Sends "cat" with chat_template_kwargs {source_lang_code: "en", target_lang_code: "de"}
+	 * and NO system instruction. If the response contains "Katze" (the German translation),
+	 * the server correctly processes kwargs. If it returns a chatty response instead,
+	 * kwargs are being silently ignored.
+	 *
+	 * @param string $api_url    Base URL of the API server.
+	 * @param string $model_slug Model slug (may be empty).
+	 * @return bool True if chat_template_kwargs are supported.
+	 */
+	private static function probe_direct_api_kwargs( string $api_url, string $model_slug ): bool {
+		if ( '' === $api_url ) {
+			return false;
+		}
+
+		$endpoint = trailingslashit( $api_url ) . 'v1/chat/completions';
+
+		$body = array(
+			'messages' => array(
+				array( 'role' => 'user', 'content' => 'cat' ),
+			),
+			'chat_template_kwargs' => array(
+				'source_lang_code' => 'en',
+				'target_lang_code' => 'de',
+			),
+			'temperature' => 0,
+			'max_tokens'  => 20,
+		);
+
+		if ( '' !== $model_slug ) {
+			$body['model'] = $model_slug;
+		}
+
+		$response = wp_remote_post( $endpoint, array(
+			'headers' => array( 'Content-Type' => 'application/json' ),
+			'body'    => wp_json_encode( $body ),
+			'timeout' => 30,
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return false;
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			return false;
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $data ) ) {
+			return false;
+		}
+
+		$content = $data['choices'][0]['message']['content'] ?? '';
+		if ( ! is_string( $content ) ) {
+			return false;
+		}
+
+		// If kwargs work, the model translates "cat" → "Katze" (German).
+		// If kwargs are ignored, the model responds conversationally.
+		return false !== stripos( $content, 'Katze' );
 	}
 
 	private static function get_translation_chunk_char_limit(): int {
@@ -1439,6 +1728,10 @@ class AI_Translate {
 		$pending_blocks      = array();
 
 		foreach ( $blocks as $block ) {
+			if ( self::is_translation_cancelled() ) {
+				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+			}
+
 			if ( self::should_skip_block_translation( $block ) ) {
 				$translated_section = self::translate_serialized_blocks( $pending_blocks, $to, $from, $additional_prompt );
 				if ( is_wp_error( $translated_section ) ) {
@@ -1486,6 +1779,10 @@ class AI_Translate {
 		$translated_blocks = array();
 
 		foreach ( $blocks as $block ) {
+			if ( self::is_translation_cancelled() ) {
+				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+			}
+
 			$translated_block = self::translate_parsed_block( $block, $to, $from, $additional_prompt );
 			if ( is_wp_error( $translated_block ) ) {
 				return $translated_block;
@@ -1875,15 +2172,24 @@ class AI_Translate {
 
 		// Translate content.
 		$title   = $translate_title ? self::translate( $post->post_title, $to, $from, $additional_prompt ) : $post->post_title;
-		$content = self::translate_post_content( $post->post_content, $to, $from, $additional_prompt );
-		$excerpt = self::translate( $post->post_excerpt, $to, $from, $additional_prompt );
-
 		if ( is_wp_error( $title ) ) {
 			return $title;
 		}
+
+		if ( self::is_translation_cancelled() ) {
+			return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+		}
+
+		$content = self::translate_post_content( $post->post_content, $to, $from, $additional_prompt );
 		if ( is_wp_error( $content ) ) {
 			return $content;
 		}
+
+		if ( self::is_translation_cancelled() ) {
+			return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+		}
+
+		$excerpt = self::translate( $post->post_excerpt, $to, $from, $additional_prompt );
 		if ( is_wp_error( $excerpt ) ) {
 			return $excerpt;
 		}

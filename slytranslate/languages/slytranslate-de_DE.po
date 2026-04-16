@@ -214,4 +214,6 @@ msgstr "Zusätzliche Anweisungen (optional)"
 
 msgid "Supplements the site-wide translation instructions. Example: Use informal language."
 msgstr "Ergänzt die siteweiten Übersetzungsanweisungen. Beispiel: Verwende eine informelle Sprache."
-msgstr "Du darfst die bestehende Übersetzung nicht aktualisieren."
+
+msgid "Cancel translation"
+msgstr "Übersetzung abbrechen"
