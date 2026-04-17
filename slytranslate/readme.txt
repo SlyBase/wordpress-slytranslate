@@ -8,7 +8,7 @@ Stable tag: 1.2.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
+AI translation abilities for WordPress using native AI Connectors, the AI Client and Abilities API for automated text and content translation.
 
 == Description ==
 

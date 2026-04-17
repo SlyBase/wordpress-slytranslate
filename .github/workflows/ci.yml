@@ -203,7 +203,14 @@ jobs:
           set -euo pipefail
 
           mkdir -p build
-          zip -r build/slytranslate.zip slytranslate -x '*.DS_Store'
+          zip -r build/slytranslate.zip slytranslate \
+            -x '*.DS_Store' \
+            -x 'slytranslate/composer.json' \
+            -x 'slytranslate/composer.lock' \
+            -x 'slytranslate/phpunit.xml.dist' \
+            -x 'slytranslate/tests/*' \
+            -x 'slytranslate/vendor/*' \
+            -x 'slytranslate/.gitignore'
 
       - name: Inspect ZIP archive
         run: unzip -l build/slytranslate.zip
