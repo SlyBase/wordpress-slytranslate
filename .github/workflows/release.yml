@@ -48,9 +48,8 @@ jobs:
         if: steps.check-release.outputs.exists == 'false'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          mkdir -p temp
-          cp -r slytranslate temp/slytranslate
-          cd temp && zip -r "../slytranslate-${VERSION}.zip" slytranslate/ && cd ..
+          bash .github/scripts/build-plugin-zip.sh "slytranslate-${VERSION}.zip"
+          bash .github/scripts/verify-plugin-zip.sh "slytranslate-${VERSION}.zip"
           ls -la "slytranslate-${VERSION}.zip"
 
       - name: Generate changelog

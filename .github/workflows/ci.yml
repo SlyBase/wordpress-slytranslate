@@ -199,18 +199,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build ZIP archive
-        run: |
-          set -euo pipefail
+        run: bash .github/scripts/build-plugin-zip.sh build/slytranslate.zip
 
-          mkdir -p build
-          zip -r build/slytranslate.zip slytranslate \
-            -x '*.DS_Store' \
-            -x 'slytranslate/composer.json' \
-            -x 'slytranslate/composer.lock' \
-            -x 'slytranslate/phpunit.xml.dist' \
-            -x 'slytranslate/tests/*' \
-            -x 'slytranslate/vendor/*' \
-            -x 'slytranslate/.gitignore'
+      - name: Verify ZIP archive
+        run: bash .github/scripts/verify-plugin-zip.sh build/slytranslate.zip
 
       - name: Inspect ZIP archive
         run: unzip -l build/slytranslate.zip
