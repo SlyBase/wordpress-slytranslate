@@ -1,0 +1,149 @@
+<?php
+
+namespace AI_Translate;
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+class EditorBootstrap {
+
+	private const VERSION              = '1.1.1';
+	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
+	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
+	private const AVAILABLE_MODELS_TRANSIENT = 'ai_translate_available_models';
+
+	public static function enqueue_editor_plugin(): void {
+		wp_enqueue_script(
+			self::EDITOR_SCRIPT_HANDLE,
+			plugins_url( 'assets/editor-plugin.js', dirname( __DIR__ ) . '/ai-translate.php' ),
+			array( 'wp-api-fetch', 'wp-block-editor', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-plugins', 'wp-rich-text' ),
+			self::get_editor_script_version(),
+			true
+		);
+
+		wp_localize_script( self::EDITOR_SCRIPT_HANDLE, 'aiTranslateEditor', self::get_bootstrap_data() );
+
+		if ( function_exists( 'wp_set_script_translations' ) ) {
+			wp_set_script_translations(
+				self::EDITOR_SCRIPT_HANDLE,
+				'slytranslate',
+				plugin_dir_path( dirname( __DIR__ ) . '/ai-translate.php' ) . 'languages'
+			);
+		}
+	}
+
+	public static function get_bootstrap_data(): array {
+		$user_id               = get_current_user_id();
+		$last_additional_prompt = $user_id > 0 ? (string) get_user_meta( $user_id, '_ai_translate_last_additional_prompt', true ) : '';
+
+		return array(
+			'abilitiesRunBasePath'      => self::get_editor_rest_base_path(),
+			'restNonce'                 => wp_create_nonce( 'wp_rest' ),
+			'translationPluginAvailable' => null !== AI_Translate::get_adapter(),
+			'defaultSourceLanguage'     => self::get_editor_default_source_language(),
+			'lastAdditionalPrompt'      => $last_additional_prompt,
+			'models'                    => self::get_available_models(),
+			'defaultModelSlug'          => get_option( 'ai_translate_model_slug', '' ),
+			'strings'                   => array(
+				'modelLabel'                => __( 'AI model', 'slytranslate' ),
+				'panelTitle'                => __( 'AI Translation with SlyTranslate', 'slytranslate' ),
+				'sourceLanguageLabel'       => __( 'Source language', 'slytranslate' ),
+				'targetLanguageLabel'       => __( 'Target language', 'slytranslate' ),
+				'overwriteLabel'            => __( 'Overwrite existing translation', 'slytranslate' ),
+				'translateTitleLabel'       => __( 'Translate title', 'slytranslate' ),
+				'additionalPromptLabel'     => __( 'Additional instructions (optional)', 'slytranslate' ),
+				'additionalPromptHelp'      => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
+				'translateButton'           => __( 'Translate now', 'slytranslate' ),
+				'cancelTranslationButton'   => __( 'Cancel translation', 'slytranslate' ),
+				'refreshButton'             => __( 'Refresh translation status', 'slytranslate' ),
+				'loadingLanguages'          => __( 'Loading available languages...', 'slytranslate' ),
+				'loadingStatus'             => __( 'Loading translation status...', 'slytranslate' ),
+				'noLanguages'               => __( 'No target languages are available for this content item.', 'slytranslate' ),
+				'translationStatusLabel'    => __( 'Translation status', 'slytranslate' ),
+				'translationExists'         => __( 'Available', 'slytranslate' ),
+				'translationMissing'        => __( 'Not translated yet', 'slytranslate' ),
+				'openTranslation'           => __( 'Open translation', 'slytranslate' ),
+				'saveFirstNotice'           => __( 'Save the content before creating a translation.', 'slytranslate' ),
+				'saveChangesNotice'         => __( 'Save your latest changes before translating so the translation uses the current content.', 'slytranslate' ),
+				'translationCreatedNotice'  => __( 'Translation created successfully.', 'slytranslate' ),
+				'translationUpdatedNotice'  => __( 'Translation updated successfully.', 'slytranslate' ),
+				'existingTranslationNotice' => __( 'A translation already exists for the selected language. Enable overwrite to update it.', 'slytranslate' ),
+				'translateSelectionButton'  => __( 'Translate (SlyTranslate)', 'slytranslate' ),
+				'translateSelectionTitle'   => __( 'Translate selected text with SlyTranslate', 'slytranslate' ),
+				'translateSelectionTextLabel' => __( 'Selected text', 'slytranslate' ),
+				'translateSelectionMissingSelection' => __( 'Select text in a paragraph, heading, or another text field first.', 'slytranslate' ),
+				'translateSelectionUnavailable' => __( 'No target languages are available for the selected text.', 'slytranslate' ),
+				'cancelButton'              => __( 'Cancel', 'slytranslate' ),
+				'unknownError'              => __( 'An unexpected error occurred.', 'slytranslate' ),
+			),
+		);
+	}
+
+	public static function get_available_models(): array {
+		$cached_models = get_transient( self::AVAILABLE_MODELS_TRANSIENT );
+		if ( is_array( $cached_models ) ) {
+			return $cached_models;
+		}
+
+		if ( ! function_exists( 'wp_ai_client_prompt' ) ) {
+			return array();
+		}
+
+		try {
+			$registry         = \WordPress\AiClient\AiClient::defaultRegistry();
+			$requirements     = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements( array(), array() );
+			$provider_results = $registry->findModelsMetadataForSupport( $requirements );
+		} catch ( \Throwable $e ) {
+			return array();
+		}
+
+		$models = array();
+		foreach ( $provider_results as $provider_models ) {
+			$provider_meta = $provider_models->getProvider();
+			$provider_name = $provider_meta->getName();
+
+			foreach ( $provider_models->getModels() as $model_meta ) {
+				$model_id = $model_meta->getId();
+				$models[] = array(
+					'value' => $model_id,
+					'label' => $provider_name . ': ' . $model_id,
+				);
+			}
+		}
+
+		set_transient( self::AVAILABLE_MODELS_TRANSIENT, $models, 5 * MINUTE_IN_SECONDS );
+
+		return $models;
+	}
+
+	public static function clear_available_models_cache(): void {
+		delete_transient( self::AVAILABLE_MODELS_TRANSIENT );
+	}
+
+	private static function get_editor_script_version(): string {
+		$script_path  = dirname( __DIR__ ) . '/assets/editor-plugin.js';
+		$script_mtime = file_exists( $script_path ) ? filemtime( $script_path ) : false;
+
+		if ( false === $script_mtime ) {
+			return self::VERSION;
+		}
+
+		return self::VERSION . '.' . (string) $script_mtime;
+	}
+
+	private static function get_editor_default_source_language(): string {
+		$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
+
+		if ( ! is_string( $locale ) || '' === $locale ) {
+			return 'en';
+		}
+
+		$locale         = strtolower( str_replace( '_', '-', $locale ) );
+		$primary_subtag = sanitize_key( strtok( $locale, '-' ) ?: '' );
+
+		return '' !== $primary_subtag ? $primary_subtag : 'en';
+	}
+
+	private static function get_editor_rest_base_path(): string {
+		return '/' . self::EDITOR_REST_NAMESPACE . '/';
+	}
+}

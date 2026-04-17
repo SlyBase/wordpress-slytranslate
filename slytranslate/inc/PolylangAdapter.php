@@ -16,7 +16,11 @@ class PolylangAdapter implements TranslationPluginAdapter {
 		}
 		$slugs = pll_languages_list( array( 'fields' => 'slug' ) );
 		$names = pll_languages_list( array( 'fields' => 'name' ) );
-		return array_combine( $slugs, $names );
+		if ( ! is_array( $slugs ) || ! is_array( $names ) || count( $slugs ) !== count( $names ) ) {
+			return array();
+		}
+
+		return array_combine( $slugs, $names ) ?: array();
 	}
 
 	public function get_post_language( int $post_id ): ?string {

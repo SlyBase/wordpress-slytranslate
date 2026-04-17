@@ -212,8 +212,7 @@
     let _selectedModelSlug = '';
 
     // Compute the label for the "Auto" option, showing the effective default model.
-    var _autoEffectiveModel = (settings && settings.defaultModelSlug) ? settings.defaultModelSlug : (_availableModels.length > 0 ? _availableModels[0].value : '');
-    var _autoOptionLabel = _autoEffectiveModel ? ('— Auto (' + _autoEffectiveModel + ') —') : '— Auto —';
+    var _autoOptionLabel = '— Auto —';
 
     function initSelectedModelSlug() {
         var stored = readStoredModelSlug();

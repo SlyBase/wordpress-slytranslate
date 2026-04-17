@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.0.0\n"
+"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.1.1\n"
 "Report-Msgid-Bugs-To: https://github.com/SlyBase/wordpress-slytranslate/issues\n"
 "POT-Creation-Date: 2026-04-14 00:16+0200\n"
 "PO-Revision-Date: 2026-04-14 00:20+0200\n"

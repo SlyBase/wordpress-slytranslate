@@ -149,7 +149,7 @@ class SeoPluginDetector {
 		);
 	}
 
-	private static function normalize_meta_keys( $meta_keys ): array {
+	public static function normalize_meta_keys( $meta_keys ): array {
 		if ( ! is_array( $meta_keys ) ) {
 			return array();
 		}
