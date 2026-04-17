@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -109,6 +109,11 @@ Yes. The block editor includes an **AI Translate** panel in the document setting
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+= 1.3.2 =
+* Bug fix: in TranslateGemma plain mode (no `chat_template_kwargs`), the system message is no longer prepended to the user turn — this prevented the model from echoing back translation instructions as output text instead of translating the content.
+* Improvement: in TranslateGemma kwargs mode, an optional style guidance hint derived from the `additional_prompt` / `prompt_addon` is now appended after the native "Please translate…" sentence (`Style guidance: …`). Effectiveness is limited by design — TranslateGemma is not an instruction-following model.
+* Editor: the **Additional instructions** field in the AI Translate sidebar panel and the selected-text translation modal now shows a warning when the active model slug contains `translategemma`, explaining that style guidelines are not reliably supported and suggesting Instruct-LLMs (e.g. Gemma 3 IT, Qwen2.5 Instruct) as alternatives.
+
 = 1.3.1 =
 * Security: sanitized AI-generated content before saving to the database — post title is now passed through `sanitize_text_field()`, post content and excerpt through `wp_kses_post()`, and translated meta values through `sanitize_text_field()` in `PolylangAdapter`. Prevents stored XSS if an AI provider returns malicious markup.
 * Security: capped `additional_prompt` to 2000 characters across all three entry points (`translate-text`, `translate-content`, and the user-preference endpoint) to reduce prompt injection attack surface.

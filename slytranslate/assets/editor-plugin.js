@@ -554,7 +554,12 @@
                         value: additionalPrompt,
                         onChange: setAdditionalPrompt,
                         rows: 3,
-                    })
+                    }),
+                    (modelSlug || '').toLowerCase().indexOf('translategemma') !== -1 ? createElement(
+                        Notice,
+                        { status: 'warning', isDismissible: false, style: { marginTop: '8px' } },
+                        text('translateGemmaAdditionalPromptWarning', 'TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs such as Gemma 3 IT or Qwen2.5 Instruct.')
+                    ) : null
                 )
             ),
             availableLanguages.length ? createElement(
@@ -785,6 +790,11 @@
                     onChange: setAdditionalPrompt,
                     rows: 3,
                 }),
+                (_selectedModelSlug || '').toLowerCase().indexOf('translategemma') !== -1 ? createElement(
+                    Notice,
+                    { status: 'warning', isDismissible: false, style: { marginTop: '8px' } },
+                    text('translateGemmaAdditionalPromptWarning', 'TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs such as Gemma 3 IT or Qwen2.5 Instruct.')
+                ) : null,
                 selectedText ? createElement(
                     Fragment,
                     null,
