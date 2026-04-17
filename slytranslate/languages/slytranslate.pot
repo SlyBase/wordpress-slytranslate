@@ -279,3 +279,7 @@ msgstr ""
 #: slytranslate/assets/editor-plugin.js
 msgid "Supplements the site-wide translation instructions. Example: Use informal language."
 msgstr ""
+
+#: slytranslate/assets/editor-plugin.js
+msgid "TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs."
+msgstr ""

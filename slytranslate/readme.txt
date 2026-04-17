@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -109,6 +109,11 @@ Yes. The block editor includes an **AI Translate** panel in the document setting
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+= 1.3.3 =
+* Editor: shortened TranslateGemma warning text on the Additional instructions field — removed the specific model name examples ("Gemma 3 IT or Qwen2.5 Instruct").
+* Editor: moved the TranslateGemma warning from below the Additional instructions textarea to below the AI model dropdown, so it appears directly next to the relevant control.
+* i18n: added German translation for the TranslateGemma warning string in `slytranslate-de_DE.po` and registered the msgid in `slytranslate.pot`.
+
 = 1.3.2 =
 * Bug fix: in TranslateGemma plain mode (no `chat_template_kwargs`), the system message is no longer prepended to the user turn — this prevented the model from echoing back translation instructions as output text instead of translating the content.
 * Improvement: in TranslateGemma kwargs mode, an optional style guidance hint derived from the `additional_prompt` / `prompt_addon` is now appended after the native "Please translate…" sentence (`Style guidance: …`). Effectiveness is limited by design — TranslateGemma is not an instruction-following model.

@@ -554,12 +554,7 @@
                         value: additionalPrompt,
                         onChange: setAdditionalPrompt,
                         rows: 3,
-                    }),
-                    (modelSlug || '').toLowerCase().indexOf('translategemma') !== -1 ? createElement(
-                        Notice,
-                        { status: 'warning', isDismissible: false, style: { marginTop: '8px' } },
-                        text('translateGemmaAdditionalPromptWarning', 'TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs such as Gemma 3 IT or Qwen2.5 Instruct.')
-                    ) : null
+                    })
                 )
             ),
             availableLanguages.length ? createElement(
@@ -589,6 +584,11 @@
                     },
                     options: [{ label: _autoOptionLabel, value: '' }].concat(_availableModels),
                 })
+            ) : null,
+            (modelSlug || '').toLowerCase().indexOf('translategemma') !== -1 ? createElement(
+                Notice,
+                { status: 'warning', isDismissible: false, style: { marginBottom: '12px' } },
+                text('translateGemmaAdditionalPromptWarning', 'TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs.')
             ) : null,
             createElement(
                 'div',
@@ -793,7 +793,7 @@
                 (_selectedModelSlug || '').toLowerCase().indexOf('translategemma') !== -1 ? createElement(
                     Notice,
                     { status: 'warning', isDismissible: false, style: { marginTop: '8px' } },
-                    text('translateGemmaAdditionalPromptWarning', 'TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs such as Gemma 3 IT or Qwen2.5 Instruct.')
+                    text('translateGemmaAdditionalPromptWarning', 'TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs.')
                 ) : null,
                 selectedText ? createElement(
                     Fragment,
