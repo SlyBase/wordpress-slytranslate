@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.2.0
+Version: 1.3.1
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -29,7 +29,7 @@ class AI_Translate {
 	// Default prompt template.
 	public static $PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting and embedded media. Only return the new content.';
 
-	private const VERSION              = '1.1.1';
+	private const VERSION              = '1.3.1';
 	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
 	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 	private const INTERNAL_META_KEYS_TO_SKIP = array(
@@ -202,7 +202,7 @@ class AI_Translate {
 	public static function rest_execute_save_user_preference( \WP_REST_Request $request ) {
 		$input             = self::get_editor_rest_input( $request );
 		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] )
-			? sanitize_textarea_field( $input['additional_prompt'] )
+			? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 )
 			: '';
 
 		$user_id = get_current_user_id();
@@ -526,7 +526,7 @@ class AI_Translate {
 		return self::with_model_slug_override(
 			$input,
 			function () use ( $input ) {
-				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? sanitize_textarea_field( $input['additional_prompt'] ) : '';
+				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
 				$translated = self::translate( $input['text'], $input['target_language'], $input['source_language'], $additional_prompt );
 
 				if ( is_wp_error( $translated ) ) {
@@ -589,7 +589,7 @@ class AI_Translate {
 		return self::with_model_slug_override(
 			$input,
 			function () use ( $input ) {
-				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? sanitize_textarea_field( $input['additional_prompt'] ) : '';
+				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
 				$result = self::translate_post(
 					$input['post_id'],
 					$input['target_language'],

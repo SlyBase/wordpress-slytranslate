@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.2.0
+Stable tag: 1.3.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -109,6 +109,18 @@ Yes. The block editor includes an **AI Translate** panel in the document setting
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+= 1.3.1 =
+* Security: sanitized AI-generated content before saving to the database — post title is now passed through `sanitize_text_field()`, post content and excerpt through `wp_kses_post()`, and translated meta values through `sanitize_text_field()` in `PolylangAdapter`. Prevents stored XSS if an AI provider returns malicious markup.
+* Security: capped `additional_prompt` to 2000 characters across all three entry points (`translate-text`, `translate-content`, and the user-preference endpoint) to reduce prompt injection attack surface.
+* Build: downgraded PHPUnit requirement from `^11.0` to `^10.5` so the test suite runs on PHP 8.1 (the minimum supported version); updated `composer.lock` accordingly.
+* Build: rebuilt `slytranslate-de_DE.mo` from the current `slytranslate-de_DE.po` to bring the tracked binary translation file back in sync.
+
+= 1.3.0 =
+* Security hardening: sanitized `additional_prompt` inputs, blocked internal WordPress meta keys from being copied during translation, validated direct API URLs to http(s) only, capped `context_window_tokens`, and hardened Polylang language mapping.
+* Bug fixes: synchronized version metadata, aligned the `auto_translate_new` default, and cleaned up translation content handling.
+* Performance: cached AI model discovery in the editor bootstrap, reused the direct API URL from runtime context, and reduced direct API probe blocking during configuration saves.
+* Refactoring: removed unused parsed-block translators, deduplicated meta-key normalization, extracted model override and translation-meta helpers, and simplified bulk/content execution flow.
+* Architecture: split editor bootstrap and configuration persistence into dedicated module classes and moved ability registration behind a dedicated registrar.
 
 = 1.2.0 =
 * **Direct API support**: new `direct_api_url` setting on `ai-translate/configure` — connect directly to any OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM Studio, LocalAI) without the WordPress AI Client in the request path; automatic fallback to the standard AI Client when the direct call fails

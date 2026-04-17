@@ -91,13 +91,13 @@ class PolylangAdapter implements TranslationPluginAdapter {
 
 		$update_data = array( 'ID' => $translation_id );
 		if ( isset( $data['post_title'] ) ) {
-			$update_data['post_title'] = $data['post_title'];
+			$update_data['post_title'] = sanitize_text_field( $data['post_title'] );
 		}
 		if ( isset( $data['post_content'] ) ) {
-			$update_data['post_content'] = $data['post_content'];
+			$update_data['post_content'] = wp_kses_post( $data['post_content'] );
 		}
 		if ( isset( $data['post_excerpt'] ) ) {
-			$update_data['post_excerpt'] = $data['post_excerpt'];
+			$update_data['post_excerpt'] = wp_kses_post( $data['post_excerpt'] );
 		}
 		$update_data['post_status'] = $data['post_status'] ?? 'draft';
 
@@ -106,7 +106,7 @@ class PolylangAdapter implements TranslationPluginAdapter {
 		// Copy and process meta.
 		if ( ! empty( $data['meta'] ) && is_array( $data['meta'] ) ) {
 			foreach ( $data['meta'] as $key => $value ) {
-				update_post_meta( $translation_id, $key, $value );
+				update_post_meta( $translation_id, $key, is_string( $value ) ? sanitize_text_field( $value ) : $value );
 			}
 		}
 
