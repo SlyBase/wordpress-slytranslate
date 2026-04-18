@@ -113,6 +113,7 @@ Supported SEO integrations include:
 - Uses the WordPress AI Client instead of storing provider-specific API keys in this plugin
 - Optional direct API path (`direct_api_url`) bypasses the AI Client for models that require full control over the request body (e.g. `chat_template_kwargs`); standard models still fall back automatically, while TranslateGemma fails closed when direct API or kwargs support are unavailable
 - Validates translated output before saving: rejects empty or chatty responses, implausibly long title-like output, and structure drift such as missing HTML, Gutenberg comments, URLs, or code fences
+- Editor REST endpoints require a structured `input` payload, and translation-status responses only include target-post details when the current user can access that translation
 - Translates long content in chunks; derives safe chunk sizes from the active model, learns tighter limits from provider error messages, and retries automatically with a smaller chunk on context-window errors
 - Block content is parsed before translation: code blocks are skipped and consecutive translatable blocks are batched together for efficiency
 - Exposes abilities over REST at `/wp-abilities/v1/`

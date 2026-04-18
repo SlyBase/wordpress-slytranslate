@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\MetaTranslationService;
 use Brain\Monkey\Functions;
 
 /**
@@ -15,11 +16,11 @@ class SeoMetaRuntimeResolutionTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 
-		$this->setStaticProperty( AI_Translate::class, 'meta_translate', null );
-		$this->setStaticProperty( AI_Translate::class, 'meta_clear', null );
-		$this->setStaticProperty( AI_Translate::class, 'resolved_meta_key_config', array() );
+		$this->setStaticProperty( MetaTranslationService::class, 'meta_translate', null );
+		$this->setStaticProperty( MetaTranslationService::class, 'meta_clear', null );
+		$this->setStaticProperty( MetaTranslationService::class, 'resolved_meta_key_config', array() );
 		$this->setStaticProperty(
-			AI_Translate::class,
+			MetaTranslationService::class,
 			'seo_plugin_config',
 			array(
 				'key'       => 'the-seo-framework',

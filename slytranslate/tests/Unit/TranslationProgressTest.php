@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\TranslationProgressTracker;
+use AI_Translate\TranslationRuntime;
 use Brain\Monkey\Functions;
 
 class TranslationProgressTest extends TestCase {
 
 	protected function tearDown(): void {
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', null );
-		$this->setStaticProperty( AI_Translate::class, 'translation_progress_context', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'context', null );
+		$this->setStaticProperty( TranslationProgressTracker::class, 'context', null );
 
 		parent::tearDown();
 	}
@@ -83,8 +85,8 @@ class TranslationProgressTest extends TestCase {
 		);
 
 		$this->setStaticProperty(
-			AI_Translate::class,
-			'translation_progress_context',
+			TranslationProgressTracker::class,
+			'context',
 			array(
 				'phase'                    => '',
 				'total_steps'              => $chunk_count,

@@ -42,6 +42,41 @@ class EditorRestRegistrationTest extends TestCase {
 				$routes_by_path[ $route ]['args']['permission_callback']
 			);
 		}
+
+		$this->assertSame( array(), $routes_by_path['/ai-translate/get-languages']['args']['args'] );
+		$this->assertSame( array(), $routes_by_path['/ai-translate/translation-progress']['args']['args'] );
+		$this->assertSame( array(), $routes_by_path['/ai-translate/cancel-translation']['args']['args'] );
+
+		$input_routes = array(
+			'/ai-translate/get-translation-status',
+			'/ai-translate/translate-text',
+			'/ai-translate/translate-content',
+			'/ai-translate/translate-post',
+			'/ai-translate/user-preference',
+		);
+
+		foreach ( $input_routes as $route ) {
+			$this->assertArrayHasKey( 'input', $routes_by_path[ $route ]['args']['args'] );
+			$this->assertTrue( $routes_by_path[ $route ]['args']['args']['input']['required'] );
+			$this->assertIsCallable( $routes_by_path[ $route ]['args']['args']['input']['validate_callback'] );
+		}
+	}
+
+	public function test_translate_text_route_rejects_non_array_input_payloads(): void {
+		$registered_routes = $this->capture_registered_routes();
+		$route_definition  = array_values(
+			array_filter(
+				$registered_routes,
+				static function ( array $definition ): bool {
+					return '/ai-translate/translate-text' === $definition['route'];
+				}
+			)
+		)[0];
+
+		$validate_callback = $route_definition['args']['args']['input']['validate_callback'];
+
+		$this->assertFalse( $validate_callback( 'not-an-array' ) );
+		$this->assertTrue( $validate_callback( array( 'text' => 'Hello', 'source_language' => 'en', 'target_language' => 'de' ) ) );
 	}
 
 	public function test_rest_can_access_translation_abilities_follows_supported_capability_matrix(): void {

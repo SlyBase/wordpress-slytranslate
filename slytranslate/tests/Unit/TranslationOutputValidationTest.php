@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\TranslationRuntime;
+use AI_Translate\TranslationValidator;
 use Brain\Monkey\Functions;
 
 class TranslationOutputValidationTest extends TestCase {
 
 	protected function tearDown(): void {
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', null );
-		$this->setStaticProperty( AI_Translate::class, 'last_translation_transport_diagnostics', null );
-		$this->setStaticProperty( AI_Translate::class, 'model_slug_request_override', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'context', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'last_diagnostics', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_slug_override', null );
 
 		parent::tearDown();
 	}
@@ -46,11 +48,21 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertNull( $result );
 	}
 
+	public function test_extracted_translation_validator_is_callable_directly(): void {
+		$source_text = 'WordPress AI - MCP setup and auto translation';
+		$translated  = "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure";
+
+		$result = TranslationValidator::validate( $source_text, $translated );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
 	public function test_translate_chunk_retries_once_for_standard_models_after_invalid_output(): void {
 		$call_count = 0;
 		$prompts    = array();
 
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', array(
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
 			'model_slug'     => 'gpt-4o',
 			'direct_api_url' => '',

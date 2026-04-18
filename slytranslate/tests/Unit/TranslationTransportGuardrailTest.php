@@ -5,22 +5,23 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\TranslationRuntime;
 use Brain\Monkey\Functions;
 
 class TranslationTransportGuardrailTest extends TestCase {
 
 	protected function tearDown(): void {
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', null );
-		$this->setStaticProperty( AI_Translate::class, 'translation_source_lang', null );
-		$this->setStaticProperty( AI_Translate::class, 'translation_target_lang', null );
-		$this->setStaticProperty( AI_Translate::class, 'model_slug_request_override', null );
-		$this->setStaticProperty( AI_Translate::class, 'last_translation_transport_diagnostics', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'context', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_slug_override', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'last_diagnostics', null );
 
 		parent::tearDown();
 	}
 
 	public function test_translategemma_requires_direct_api_when_no_direct_url_is_configured(): void {
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', array(
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
 			'model_slug'     => 'translategemma-4b-it.Q4_K_M',
 			'direct_api_url' => '',
@@ -41,7 +42,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'translategemma_requires_direct_api', $result->get_error_code() );
 
-		$diagnostics = $this->getStaticProperty( AI_Translate::class, 'last_translation_transport_diagnostics' );
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'blocked', $diagnostics['transport'] );
 		$this->assertSame( 'direct_api_required', $diagnostics['failure_reason'] );
 	}
@@ -49,7 +50,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 	public function test_translategemma_requires_kwargs_when_live_probe_fails(): void {
 		$updated_options = array();
 
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', array(
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
 			'model_slug'     => 'translategemma-4b-it.Q4_K_M',
 			'direct_api_url' => 'http://llama.local:8080',
@@ -79,19 +80,19 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertSame( '0', $updated_options['ai_translate_direct_api_kwargs_detected'] ?? null );
 		$this->assertIsInt( $updated_options['ai_translate_direct_api_kwargs_last_probed_at'] ?? null );
 
-		$diagnostics = $this->getStaticProperty( AI_Translate::class, 'last_translation_transport_diagnostics' );
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'blocked', $diagnostics['transport'] );
 		$this->assertSame( 'kwargs_required', $diagnostics['failure_reason'] );
 	}
 
 	public function test_translategemma_does_not_fallback_to_wp_ai_client_when_direct_api_fails(): void {
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', array(
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
 			'model_slug'     => 'translategemma-4b-it.Q4_K_M',
 			'direct_api_url' => 'http://llama.local:8080',
 		) );
-		$this->setStaticProperty( AI_Translate::class, 'translation_source_lang', 'en' );
-		$this->setStaticProperty( AI_Translate::class, 'translation_target_lang', 'de' );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 
 		Functions\when( 'get_option' )->alias(
 			static function ( $option, $default = false ) {
@@ -114,7 +115,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'translategemma_direct_api_failed', $result->get_error_code() );
 
-		$diagnostics = $this->getStaticProperty( AI_Translate::class, 'last_translation_transport_diagnostics' );
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'direct_api_failed', $diagnostics['transport'] );
 		$this->assertSame( 'direct_api_failed', $diagnostics['failure_reason'] );
 	}
@@ -122,8 +123,8 @@ class TranslationTransportGuardrailTest extends TestCase {
 	public function test_translategemma_kwargs_request_omits_system_message(): void {
 		$captured_body = array();
 
-		$this->setStaticProperty( AI_Translate::class, 'translation_source_lang', 'en' );
-		$this->setStaticProperty( AI_Translate::class, 'translation_target_lang', 'de' );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 		$this->mockSuccessfulDirectApiResponse( $captured_body );
 
 		$result = $this->invokeStatic(
@@ -154,8 +155,8 @@ class TranslationTransportGuardrailTest extends TestCase {
 	public function test_non_translategemma_kwargs_request_keeps_system_message(): void {
 		$captured_body = array();
 
-		$this->setStaticProperty( AI_Translate::class, 'translation_source_lang', 'en' );
-		$this->setStaticProperty( AI_Translate::class, 'translation_target_lang', 'de' );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 		$this->mockSuccessfulDirectApiResponse( $captured_body );
 
 		$result = $this->invokeStatic(
@@ -181,7 +182,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 	}
 
 	public function test_non_translategemma_still_falls_back_to_wp_ai_client(): void {
-		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', array(
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
 			'model_slug'     => 'gemma-3-4b-it',
 			'direct_api_url' => 'http://llama.local:8080',
@@ -229,9 +230,124 @@ class TranslationTransportGuardrailTest extends TestCase {
 
 		$this->assertSame( 'Hallo Welt', $result );
 
-		$diagnostics = $this->getStaticProperty( AI_Translate::class, 'last_translation_transport_diagnostics' );
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
 		$this->assertTrue( $diagnostics['fallback_allowed'] );
+	}
+
+	public function test_non_translategemma_direct_api_response_is_validated_and_retried(): void {
+		$calls      = array();
+		$call_count = 0;
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'gemma-3-4b-it',
+			'direct_api_url' => 'http://llama.local:8080',
+		) );
+
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+
+				return $default;
+			}
+		);
+		Functions\when( 'wp_ai_client_prompt' )->alias(
+			static function () {
+				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached when direct API retries succeed.' );
+			}
+		);
+		Functions\when( 'wp_remote_post' )->alias(
+			static function ( string $endpoint, array $args ) use ( &$call_count, &$calls ) {
+				++$call_count;
+				$decoded_body = json_decode( $args['body'] ?? '', true );
+				$calls[]      = is_array( $decoded_body ) ? $decoded_body : array();
+
+				$content = 1 === $call_count
+					? "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure"
+					: 'Hallo Welt';
+
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => wp_json_encode(
+						array(
+							'choices' => array(
+								array(
+									'message' => array(
+										'content' => $content,
+									),
+								),
+							),
+						)
+					),
+				);
+			}
+		);
+
+		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertSame( 'Hallo Welt', $result );
+		$this->assertCount( 2, $calls );
+		$this->assertSame( 'Prompt', $calls[0]['messages'][0]['content'] ?? null );
+		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $calls[1]['messages'][0]['content'] ?? '' );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'direct_api', $diagnostics['transport'] );
+		$this->assertSame( '', $diagnostics['failure_reason'] );
+	}
+
+	public function test_translategemma_invalid_direct_api_output_fails_closed(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'translategemma-4b-it.Q4_K_M',
+			'direct_api_url' => 'http://llama.local:8080',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '1';
+				}
+
+				return $default;
+			}
+		);
+		Functions\when( 'wp_ai_client_prompt' )->alias(
+			static function () {
+				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached after invalid TranslateGemma direct API output.' );
+			}
+		);
+		Functions\when( 'wp_remote_post' )->alias(
+			static function (): array {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => wp_json_encode(
+						array(
+							'choices' => array(
+								array(
+									'message' => array(
+										'content' => "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure",
+									),
+								),
+							),
+						)
+					),
+				);
+			}
+		);
+
+		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'direct_api', $diagnostics['transport'] );
+		$this->assertSame( 'invalid_translation_assistant_reply', $diagnostics['failure_reason'] );
 	}
 
 	private function mockSuccessfulDirectApiResponse( array &$captured_body, string $translated_text = 'Hallo Welt' ): void {

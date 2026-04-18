@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\TextSplitter;
 
 /**
  * Tests for the text-splitting methods used to break long content into
@@ -133,5 +134,14 @@ class TextSplittingTest extends TestCase {
 		foreach ( $result as $chunk ) {
 			$this->assertLessThanOrEqual( $max, mb_strlen( $chunk, 'UTF-8' ) );
 		}
+	}
+
+	public function test_extracted_text_splitter_matches_wrapper_output(): void {
+		$text = implode( "\n\n", array_fill( 0, 8, str_repeat( 'Paragraph content. ', 40 ) ) );
+
+		$this->assertSame(
+			$this->invokeStatic( AI_Translate::class, 'split_text_for_translation', [ $text, 1200 ] ),
+			TextSplitter::split_text_for_translation( $text, 1200 )
+		);
 	}
 }
