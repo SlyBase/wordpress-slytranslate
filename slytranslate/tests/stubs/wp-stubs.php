@@ -16,6 +16,9 @@ declare(strict_types=1);
 function add_action( ...$args ): void {}
 function add_filter( ...$args ): void {}
 function do_action( ...$args ): void {}
+function register_rest_route( ...$args ): void {}
+function wp_register_ability( ...$args ): void {}
+function wp_register_ability_category( ...$args ): void {}
 
 // -----------------------------------------------------------------------
 // Pure-PHP equivalents of WP utility functions

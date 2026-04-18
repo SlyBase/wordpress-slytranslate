@@ -87,6 +87,32 @@ if ( ! class_exists( 'WP_Post' ) ) {
 }
 
 // ---------------------------------------------------------------------------
+// Minimal REST API stub classes
+// ---------------------------------------------------------------------------
+if ( ! class_exists( 'WP_REST_Server' ) ) {
+	class WP_REST_Server {
+		public const CREATABLE = 'POST';
+	}
+}
+
+if ( ! class_exists( 'WP_REST_Request' ) ) {
+	class WP_REST_Request {
+		/** @var array<string, mixed> */
+		private array $params = [];
+
+		public function __construct( string $method = 'GET', string $route = '' ) {}
+
+		public function get_param( string $key ): mixed {
+			return $this->params[ $key ] ?? null;
+		}
+
+		public function set_param( string $key, mixed $value ): void {
+			$this->params[ $key ] = $value;
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // WordPress function stubs — required AFTER autoload so Patchwork can patch
 // them per test via Brain Monkey.
 // ---------------------------------------------------------------------------
