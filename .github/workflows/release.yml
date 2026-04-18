@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Get version
         id: version
@@ -27,7 +27,7 @@ jobs:
           else
             VERSION="${GITHUB_REF_NAME#v}"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Creating release for version: $VERSION"
 
       - name: Check if release already exists
@@ -38,10 +38,10 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.version.outputs.version }}")
 
           if [ "$RESPONSE" = "200" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release v${{ steps.version.outputs.version }} already exists, skipping"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create plugin ZIP
@@ -57,7 +57,7 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          awk "/= $VERSION =/{flag=1; next} /= [0-9]/{flag=0} flag" slytranslate/readme.txt > changelog.txt
+          awk -v ver="$VERSION" '$0 == "= " ver " =" { flag=1; next } flag && /^= / { exit } flag' slytranslate/readme.txt > changelog.txt
           if [ ! -s changelog.txt ]; then
             echo "Release version $VERSION" > changelog.txt
             echo "" >> changelog.txt
@@ -67,7 +67,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check-release.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: slytranslate v${{ steps.version.outputs.version }}
@@ -75,8 +75,7 @@ jobs:
           draft: false
           prerelease: false
           files: slytranslate-${{ steps.version.outputs.version }}.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.SLYBASE_ACTIONS }}
+          token: ${{ secrets.SLYBASE_ACTIONS }}
 
       - name: Release Summary
         if: steps.check-release.outputs.exists == 'false'
