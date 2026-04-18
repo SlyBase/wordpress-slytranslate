@@ -188,6 +188,8 @@ SlyTranslate validates translation output before saving it. The plugin rejects e
 
 This repository contains the plugin source in the `slytranslate` directory. The WordPress.org-style plugin readme remains in `slytranslate/readme.txt`, while this file is intended for GitHub visitors.
 
+If you update a `.po` file under `slytranslate/languages/`, rebuild the matching `.mo` file with `msgfmt` before committing. CI recompiles each tracked PO file and byte-compares the generated MO output against the committed MO artifact.
+
 ## License
 
 MIT
