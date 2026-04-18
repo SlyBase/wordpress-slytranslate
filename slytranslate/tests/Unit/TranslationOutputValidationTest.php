@@ -48,6 +48,29 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertNull( $result );
 	}
 
+	public function test_placeholder_content_skips_html_tag_count_check(): void {
+		// Stripped content (block comments replaced with SLYWPC placeholders) may lose
+		// inline HTML tags like <strong>/<code> via small translation models without it
+		// being a real structural failure – the block structure is verified externally
+		// via placeholder restoration.
+		$source_text = '<!--SLYWPC0--><p>Some text with <strong>bold</strong> and <code>code</code>.</p><!--SLYWPC1-->';
+		$translated  = '<!--SLYWPC0--><p>Etwas Text mit fett und Code.</p><!--SLYWPC1-->';
+
+		$result = TranslationValidator::validate( $source_text, $translated );
+
+		$this->assertNull( $result );
+	}
+
+	public function test_placeholder_content_still_checks_url_integrity(): void {
+		$source_text = '<!--SLYWPC0--><p>Visit <a href="https://example.com">here</a>.</p><!--SLYWPC1-->';
+		$translated  = '<!--SLYWPC0--><p>Besuchen Sie hier.</p><!--SLYWPC1-->';
+
+		$result = TranslationValidator::validate( $source_text, $translated );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_structure_drift', $result->get_error_code() );
+	}
+
 	public function test_extracted_translation_validator_is_callable_directly(): void {
 		$source_text = 'WordPress AI - MCP setup and auto translation';
 		$translated  = "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure";

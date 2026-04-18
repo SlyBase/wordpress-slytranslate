@@ -143,6 +143,17 @@ class TranslationValidator {
 			return true;
 		}
 
+		// When the source contains block-comment placeholders (<!--SLYWPC…-->), the content
+		// was pre-processed by ContentTranslator::translate_with_block_comment_preservation().
+		// Block structure is verified externally via placeholder restoration; skipping the
+		// HTML tag count check here avoids false positives from small models that legitimately
+		// drop or simplify inline formatting tags (e.g. <strong>, <code>) while correctly
+		// translating the text content.
+		$source_has_placeholders = 1 === preg_match( '/<!--SLYWPC\d+-->/i', $source_text );
+		if ( $source_has_placeholders ) {
+			return false;
+		}
+
 		$source_html_tag_count     = self::count_pattern_matches( '/<\/?[a-z][^>]*>/iu', $source_text );
 		$translated_html_tag_count = self::count_pattern_matches( '/<\/?[a-z][^>]*>/iu', $translated_text );
 		if ( $source_html_tag_count >= 2 && $translated_html_tag_count < (int) ceil( $source_html_tag_count * 0.6 ) ) {

@@ -130,6 +130,10 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 * SEO: runtime SEO meta resolution now merges the active SEO profile with supported source-post meta keys, so legacy Genesis `_genesis_title` and `_genesis_description` fields are translated even when another SEO plugin is currently active.
 * TranslateGemma: in direct API kwargs mode, translation requests no longer send the system prompt, preventing llama.cpp templates from echoing prompt or style-guidance text at the start of translated chunks.
 * Editor: moved the "Refresh translation status" button below the translation-status list in the block editor sidebar.
+* Translation: block-aware chunking now groups complete Gutenberg blocks into size-bounded chunks instead of splitting serialized content at character boundaries, preventing structural-drift validation errors on posts with complex blocks (e.g. `kevinbatdorf/code-block-pro`).
+* Translation: Gutenberg block comments (`<!-- wp:… -->`) are replaced with neutral placeholders before being sent to the translation model and restored afterward, preventing small models (e.g. TranslateGemma 4B) from dropping inner block structure markers such as `<!-- wp:list-item -->`.
+* Translation: blocks without translatable text content (e.g. `core/image` with empty alt text, `core/separator`) are now passed through unchanged instead of being sent to the model, eliminating spurious URL-loss validation errors.
+* Guardrails: the structure-drift validator skips the HTML tag count check when the source content contains block-comment placeholders (`<!--SLYWPC…-->`), since block structure is verified externally via placeholder restoration; URL and code-fence integrity checks remain active.
 
 = 1.4.0 =
 * Editor: added a real-time translation progress bar to the AI Translate sidebar panel, including phase labels and content chunk tracking.

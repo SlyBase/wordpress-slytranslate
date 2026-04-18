@@ -191,6 +191,44 @@ class TextSplitter {
 		return is_string( $text_content ) && '' !== trim( $text_content );
 	}
 
+	/**
+	 * Group translatable blocks into size-bounded groups that each fit within
+	 * $chunk_char_limit, without ever splitting an individual block across groups.
+	 *
+	 * A single block that exceeds $chunk_char_limit on its own forms a group by itself;
+	 * the downstream translation layer handles oversized single-block inputs the same
+	 * way it always has.
+	 *
+	 * @param array[] $blocks           Parsed Gutenberg blocks (translatable only).
+	 * @param int     $chunk_char_limit Maximum serialized characters per group.
+	 * @return array[]                  Array of block groups (each group is an array of blocks).
+	 */
+	public static function group_blocks_for_translation( array $blocks, int $chunk_char_limit ): array {
+		$chunk_char_limit = max( self::MIN_TRANSLATION_CHARS, $chunk_char_limit );
+		$groups           = array();
+		$current_group    = array();
+		$current_size     = 0;
+
+		foreach ( $blocks as $block ) {
+			$block_size = self::text_length( serialize_blocks( array( $block ) ) );
+
+			if ( ! empty( $current_group ) && $current_size + $block_size > $chunk_char_limit ) {
+				$groups[]      = $current_group;
+				$current_group = array();
+				$current_size  = 0;
+			}
+
+			$current_group[] = $block;
+			$current_size   += $block_size;
+		}
+
+		if ( ! empty( $current_group ) ) {
+			$groups[] = $current_group;
+		}
+
+		return $groups;
+	}
+
 	private static function count_translation_chunks( string $text, int $chunk_char_limit ): int {
 		return count( self::split_text_for_translation( $text, $chunk_char_limit ) );
 	}
@@ -200,12 +238,7 @@ class TextSplitter {
 			return 0;
 		}
 
-		$serialized_blocks = serialize_blocks( $blocks );
-		if ( '' === trim( $serialized_blocks ) ) {
-			return 0;
-		}
-
-		return self::count_translation_chunks( $serialized_blocks, $chunk_char_limit );
+		return count( self::group_blocks_for_translation( $blocks, $chunk_char_limit ) );
 	}
 
 	private static function text_length( string $text ): int {
