@@ -37,4 +37,14 @@ abstract class TestCase extends PHPUnitTestCase {
 		$reflection = new \ReflectionMethod( $class, $method );
 		return $reflection->invoke( null, ...$args );
 	}
+
+	protected function setStaticProperty( string $class, string $property, mixed $value ): void {
+		$reflection = new \ReflectionProperty( $class, $property );
+		$reflection->setValue( null, $value );
+	}
+
+	protected function getStaticProperty( string $class, string $property ): mixed {
+		$reflection = new \ReflectionProperty( $class, $property );
+		return $reflection->getValue();
+	}
 }

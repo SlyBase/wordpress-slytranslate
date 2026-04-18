@@ -82,9 +82,13 @@
         return fallback;
     }
 
+    function getEditorRestPath(route) {
+        const basePath = settings && settings.abilitiesRunBasePath ? settings.abilitiesRunBasePath : '/ai-translate/v1/';
+        return basePath + route;
+    }
+
     function getRunAbilityPath(abilityName) {
-        const basePath = settings && settings.abilitiesRunBasePath ? settings.abilitiesRunBasePath : '/wp-abilities/v1/run/';
-        return basePath + abilityName;
+        return getEditorRestPath(abilityName);
     }
 
     function runAbility(abilityName, input, signal) {
@@ -115,6 +119,74 @@
         }
 
         return text('unknownError', 'An unexpected error occurred.');
+    }
+
+    function normalizeTranslationProgress(progress) {
+        if (!progress || typeof progress !== 'object') {
+            return null;
+        }
+
+        const phase = typeof progress.phase === 'string' ? progress.phase : '';
+        if (!phase) {
+            return null;
+        }
+
+        return {
+            phase: phase,
+            currentChunk: Math.max(0, parseInt(progress.current_chunk, 10) || 0),
+            totalChunks: Math.max(0, parseInt(progress.total_chunks, 10) || 0),
+            percent: Math.max(0, Math.min(100, parseInt(progress.percent, 10) || 0)),
+        };
+    }
+
+    function pollTranslationProgress() {
+        const request = {
+            path: getEditorRestPath('ai-translate/translation-progress'),
+            method: 'POST',
+            data: {},
+        };
+
+        if (settings && settings.restNonce) {
+            request.headers = {
+                'X-WP-Nonce': settings.restNonce,
+            };
+        }
+
+        return apiFetch(request).then(normalizeTranslationProgress);
+    }
+
+    function formatText(template, replacements) {
+        return Object.keys(replacements).reduce(function (result, key) {
+            return result.split('{' + key + '}').join(String(replacements[key]));
+        }, template);
+    }
+
+    function getTranslationProgressLabel(translationProgress) {
+        if (!translationProgress || !translationProgress.phase) {
+            return '';
+        }
+
+        switch (translationProgress.phase) {
+            case 'title':
+                return text('progressTitle', 'Translating title...');
+            case 'content':
+                return formatText(
+                    text('progressContent', 'Translating content ({current}/{total})...'),
+                    {
+                        current: translationProgress.currentChunk,
+                        total: translationProgress.totalChunks,
+                    }
+                );
+            case 'excerpt':
+                return text('progressExcerpt', 'Translating excerpt...');
+            case 'meta':
+                return text('progressMeta', 'Translating metadata...');
+            case 'saving':
+            case 'done':
+                return text('progressSaving', 'Saving translation...');
+            default:
+                return text('loadingStatus', 'Loading translation status...');
+        }
     }
 
     function indexTranslations(translations) {
@@ -325,10 +397,36 @@
         const [modelSlug, setModelSlug] = useState(initSelectedModelSlug);
         const [isRefreshing, setIsRefreshing] = useState(false);
         const [isTranslating, setIsTranslating] = useState(false);
+        const [translationProgress, setTranslationProgress] = useState(null);
         const [hasLoadedData, setHasLoadedData] = useState(false);
         const [errorMessage, setErrorMessage] = useState('');
         const [successState, setSuccessState] = useState(null);
         const translateAbortControllerRef = useRef(null);
+        const progressPollingIntervalRef = useRef(null);
+
+        function stopTranslationProgressPolling() {
+            if (progressPollingIntervalRef.current) {
+                window.clearInterval(progressPollingIntervalRef.current);
+                progressPollingIntervalRef.current = null;
+            }
+        }
+
+        function requestTranslationProgress() {
+            pollTranslationProgress()
+                .then(function (progress) {
+                    setTranslationProgress(progress);
+                })
+                .catch(function () {
+                });
+        }
+
+        function startTranslationProgressPolling() {
+            stopTranslationProgressPolling();
+            requestTranslationProgress();
+            progressPollingIntervalRef.current = window.setInterval(function () {
+                requestTranslationProgress();
+            }, 1000);
+        }
 
         function refreshData() {
             if (!postId) {
@@ -389,8 +487,16 @@
             setSuccessState(null);
             setTargetLanguage('');
             setHasLoadedData(false);
+            setTranslationProgress(null);
+            stopTranslationProgressPolling();
             refreshData();
         }, [postId]);
+
+        useEffect(function () {
+            return function () {
+                stopTranslationProgressPolling();
+            };
+        }, []);
 
         const translationIndex = indexTranslations(statusData && statusData.translations ? statusData.translations : []);
         const sourceLanguage = statusData && statusData.source_language ? statusData.source_language : '';
@@ -451,8 +557,10 @@
             const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
             translateAbortControllerRef.current = abortController;
             setIsTranslating(true);
+            setTranslationProgress(null);
             setErrorMessage('');
             setSuccessState(null);
+            startTranslationProgressPolling();
 
             runAbility('ai-translate/translate-content', {
                 post_id: postId,
@@ -480,6 +588,8 @@
                 })
                 .finally(function () {
                     translateAbortControllerRef.current = null;
+                    stopTranslationProgressPolling();
+                    setTranslationProgress(null);
                     setIsTranslating(false);
                 });
         }
@@ -488,7 +598,7 @@
             if (translateAbortControllerRef.current) {
                 translateAbortControllerRef.current.abort();
             }
-            var cancelPath = (settings && settings.abilitiesRunBasePath || '/ai-translate/v1/') + 'ai-translate/cancel-translation';
+            var cancelPath = getEditorRestPath('ai-translate/cancel-translation');
             var cancelRequest = { path: cancelPath, method: 'POST', data: {} };
             if (settings && settings.restNonce) {
                 cancelRequest.headers = { 'X-WP-Nonce': settings.restNonce };
@@ -595,16 +705,39 @@
                 { style: { display: 'grid', rowGap: '10px', marginTop: '4px', marginBottom: '18px' } },
                 createElement(Button, {
                     variant: 'primary',
-                    onClick: handleTranslate,
-                    disabled: !canTranslate,
+                    onClick: isTranslating ? handleCancelTranslate : handleTranslate,
+                    disabled: isTranslating ? false : !canTranslate,
                     isBusy: isTranslating,
                     style: { width: '100%', justifyContent: 'center' },
-                }, text('translateButton', 'Translate now')),
-                isTranslating ? createElement(Button, {
-                    variant: 'secondary',
-                    onClick: handleCancelTranslate,
-                    style: { width: '100%', justifyContent: 'center' },
-                }, text('cancelTranslationButton', 'Cancel translation')) : null,
+                }, isTranslating ? text('cancelTranslationButton', 'Cancel translation') : text('translateButton', 'Translate now')),
+                isTranslating && translationProgress ? createElement(
+                    'div',
+                    { style: { display: 'grid', rowGap: '8px' } },
+                    createElement(
+                        'div',
+                        {
+                            style: {
+                                height: '8px',
+                                borderRadius: '999px',
+                                overflow: 'hidden',
+                                background: '#dcdcde',
+                            },
+                        },
+                        createElement('div', {
+                            style: {
+                                width: translationProgress.percent + '%',
+                                height: '100%',
+                                background: 'linear-gradient(90deg, #3858e9 0%, #1d4ed8 100%)',
+                                transition: 'width 0.3s ease',
+                            },
+                        })
+                    ),
+                    createElement(
+                        'div',
+                        { style: { fontSize: '12px', color: '#50575e' } },
+                        getTranslationProgressLabel(translationProgress)
+                    )
+                ) : null,
                 hasExistingTranslation && !overwrite ? createElement(
                     'div',
                     { style: { marginTop: '10px', marginBottom: '10px' } },

@@ -57,6 +57,7 @@ class ConfigurationService {
 			if ( '' === $validated_direct_api_url ) {
 				delete_option( 'ai_translate_direct_api_url' );
 				delete_option( 'ai_translate_direct_api_kwargs_detected' );
+				delete_option( 'ai_translate_direct_api_kwargs_last_probed_at' );
 			} else {
 				update_option( 'ai_translate_direct_api_url', $validated_direct_api_url );
 				$should_reprobe_kwargs = true;
@@ -76,6 +77,7 @@ class ConfigurationService {
 				get_option( 'ai_translate_model_slug', '' )
 			);
 			update_option( 'ai_translate_direct_api_kwargs_detected', $probe_result ? '1' : '0' );
+			update_option( 'ai_translate_direct_api_kwargs_last_probed_at', time(), false );
 		}
 
 		return null;

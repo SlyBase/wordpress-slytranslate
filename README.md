@@ -12,6 +12,7 @@ SlyTranslate exposes translation workflows as reusable WordPress abilities, so t
 - Inspect translation status and untranslated content
 - Translate SEO title and description fields for major SEO plugins
 - Use a block-editor sidebar for content translation workflows, including a model selector
+- Real-time translation progress bar with phase and chunk tracking in the editor sidebar
 - Translate selected text inline in the editor, even without a translation plugin
 - Connect directly to any OpenAI-compatible endpoint for models that need `chat_template_kwargs` (e.g. TranslateGemma)
 - Expose abilities over REST and MCP-friendly discovery
@@ -32,16 +33,18 @@ It uses the WordPress AI Client for model access, so connector setup happens cen
 | `ai-translate/translate-text` | Translate arbitrary text between languages; accepts optional `model_slug` per request |
 | `ai-translate/translate-content` | Create or update a translated content item; accepts optional `model_slug` per request |
 | `ai-translate/translate-content-bulk` | Bulk-translate multiple content items; accepts optional `model_slug` per request |
-| `ai-translate/configure` | Read or update plugin settings (prompt, model, direct API URL, context window, SEO meta keys) |
+| `ai-translate/configure` | Read or update plugin settings (prompt, model, direct API URL, context window, SEO meta keys, direct API diagnostics) |
 
 ## Editor Experience
 
 SlyTranslate adds two editor-facing workflows:
 
-- An AI Translate document panel for content translation when a translation plugin is active
+- An AI Translate document panel for content translation when a translation plugin is active, including a live progress bar and a Translate now / Cancel translation toggle during active jobs
 - A Translate with SlyTranslate action for highlighted text inside supported rich-text fields
 
 Both workflows include a model dropdown that lists all models registered with the WordPress AI Client. The selection persists in `localStorage` and defaults to the site-wide connector model.
+
+During full-content translations, the sidebar polls a lightweight REST endpoint and shows the current phase plus chunk progress for long content, so editors can see whether the plugin is translating the title, content, excerpt, metadata, or saving the translated post.
 
 The selected-text workflow is independent from Polylang and uses `ai-translate/translate-text`, which makes it useful even on sites that only want inline text translation.
 
@@ -74,9 +77,11 @@ When a direct URL is configured:
 
 - Translation requests go directly to that endpoint, bypassing the WordPress AI Client
 - The plugin auto-detects whether the server supports `chat_template_kwargs` and enables them automatically when available
-- If the direct call fails, the plugin falls back to the standard WordPress AI Client path
+- Standard instruct/chat models fall back to the WordPress AI Client path if the direct call fails
+- TranslateGemma is treated fail-safe: if `chat_template_kwargs` support cannot be confirmed or the direct call fails, SlyTranslate returns an error instead of silently falling back
+- Translation output is validated before it is accepted: empty results, assistant-style essays, implausibly long short-text responses, and major structure loss are rejected; standard models get one stricter retry before the request fails
 
-The direct API path is optional. All standard connectors continue to work without it.
+The direct API path is optional. All standard connectors continue to work without it. TranslateGemma is the exception: for reliable translation it needs both `direct_api_url` and working `chat_template_kwargs` support.
 
 ## Translation Plugin Support
 
@@ -103,7 +108,8 @@ Supported SEO integrations include:
 ## Architecture Notes
 
 - Uses the WordPress AI Client instead of storing provider-specific API keys in this plugin
-- Optional direct API path (`direct_api_url`) bypasses the AI Client for models that require full control over the request body (e.g. `chat_template_kwargs`); falls back automatically to the AI Client on failure
+- Optional direct API path (`direct_api_url`) bypasses the AI Client for models that require full control over the request body (e.g. `chat_template_kwargs`); standard models still fall back automatically, while TranslateGemma fails closed when direct API or kwargs support are unavailable
+- Validates translated output before saving: rejects empty or chatty responses, implausibly long title-like output, and structure drift such as missing HTML, Gutenberg comments, URLs, or code fences
 - Translates long content in chunks; derives safe chunk sizes from the active model, learns tighter limits from provider error messages, and retries automatically with a smaller chunk on context-window errors
 - Block content is parsed before translation: code blocks are skipped and consecutive translatable blocks are batched together for efficiency
 - Exposes abilities over REST at `/wp-abilities/v1/`
@@ -168,7 +174,15 @@ They are handled by the connector configured in Settings > Connectors, not by Sl
 
 ### Can I use TranslateGemma or other specialized translation models?
 
-Yes. Set `direct_api_url` via `ai-translate/configure` to the URL of your llama.cpp server running TranslateGemma. The plugin will automatically detect `chat_template_kwargs` support and use the model's native language-routing for every request. A custom Jinja chat template is required on the llama.cpp side — see `translategemma-llama-cpp-guide.md` in this repository.
+Yes. Set `direct_api_url` via `ai-translate/configure` to the URL of your llama.cpp server running TranslateGemma. The plugin automatically probes for `chat_template_kwargs` support, re-probes when TranslateGemma is selected and kwargs are missing, and uses the model's native language-routing for every request once confirmed.
+
+TranslateGemma now fails closed: if no direct API URL is configured, if kwargs support cannot be confirmed, or if the direct API request fails, SlyTranslate returns an error instead of silently falling back to the generic WordPress AI Client path. The `ai-translate/configure` response exposes `direct_api_kwargs_last_probed_at`, `translategemma_runtime_ready`, and `translategemma_runtime_status` for diagnostics.
+
+A custom Jinja chat template is still required on the llama.cpp side — see `translategemma-llama-cpp-guide.md` in this repository.
+
+### What happens if a model returns a chat answer instead of a translation?
+
+SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
 
 ## Development
 

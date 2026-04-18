@@ -1,9 +1,9 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.1.1\n"
+"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.4.0\n"
 "Report-Msgid-Bugs-To: https://github.com/SlyBase/wordpress-slytranslate/issues\n"
-"POT-Creation-Date: 2026-04-14 00:16+0200\n"
-"PO-Revision-Date: 2026-04-14 00:20+0200\n"
+"POT-Creation-Date: 2026-04-18 00:30+0200\n"
+"PO-Revision-Date: 2026-04-18 00:30+0200\n"
 "Last-Translator: GitHub Copilot <copilot@github.com>\n"
 "Language-Team: Deutsch\n"
 "Language: de_DE\n"
@@ -217,6 +217,45 @@ msgstr "Ergänzt die siteweiten Übersetzungsanweisungen. Beispiel: Verwende ein
 
 msgid "Cancel translation"
 msgstr "Übersetzung abbrechen"
+
+msgid "Translating title..."
+msgstr "Titel wird übersetzt ..."
+
+msgid "Translating content ({current}/{total})..."
+msgstr "Inhalt wird übersetzt ({current}/{total}) ..."
+
+msgid "Translating excerpt..."
+msgstr "Auszug wird übersetzt ..."
+
+msgid "Translating metadata..."
+msgstr "Metadaten werden übersetzt ..."
+
+msgid "Saving translation..."
+msgstr "Übersetzung wird gespeichert ..."
+
+msgid "TranslateGemma requires a direct API endpoint. Configure direct_api_url for your llama.cpp server or switch to an instruct model."
+msgstr "TranslateGemma benötigt einen direkten API-Endpunkt. Konfiguriere direct_api_url für deinen llama.cpp-Server oder wechsle zu einem Instruct-Modell."
+
+msgid "TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model."
+msgstr "TranslateGemma benötigt chat_template_kwargs-Unterstützung auf dem konfigurierten direkten API-Endpunkt. Speichere die Direct-API-Einstellungen erneut, sobald der Server erreichbar ist, oder wechsle zu einem Instruct-Modell."
+
+msgid "TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations."
+msgstr "Die direkte API-Anfrage für TranslateGemma ist fehlgeschlagen. SlyTranslate ist nicht auf den WordPress AI Client zurückgefallen, weil TranslateGemma für zuverlässige Übersetzungen chat_template_kwargs benötigt."
+
+msgid "The model returned an empty translation result."
+msgstr "Das Modell hat ein leeres Übersetzungsergebnis zurückgegeben."
+
+msgid "The translated output did not contain usable text."
+msgstr "Die übersetzte Ausgabe enthielt keinen brauchbaren Text."
+
+msgid "The model returned explanatory assistant text instead of a clean translation."
+msgstr "Das Modell hat erläuternden Assistenten-Text statt einer sauberen Übersetzung zurückgegeben."
+
+msgid "The translated output is implausibly long for the source text and looks like a generated explanation rather than a translation."
+msgstr "Die übersetzte Ausgabe ist im Verhältnis zum Quelltext unplausibel lang und wirkt eher wie eine generierte Erklärung als wie eine Übersetzung."
+
+msgid "The translated output lost required structure such as HTML, Gutenberg block comments, URLs, or code fences."
+msgstr "Die übersetzte Ausgabe hat erforderliche Struktur wie HTML, Gutenberg-Blockkommentare, URLs oder Code-Fences verloren."
 
 msgid "TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs."
 msgstr "TranslateGemma befolgt Stil-Vorgaben nicht zuverlässig. Für Ton, Anrede und Sprachregister empfehlen sich Instruct-LLMs."

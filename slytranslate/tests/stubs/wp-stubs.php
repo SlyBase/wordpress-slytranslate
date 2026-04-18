@@ -58,6 +58,30 @@ function wp_parse_url( $url, $component = -1 ) {
 return parse_url( $url, $component );
 }
 
+function __( $text, $domain = null ): string {
+return (string) $text;
+}
+
+function trailingslashit( $value ): string {
+return rtrim( (string) $value, "/\\" ) . '/';
+}
+
+function wp_json_encode( $value, int $flags = 0, int $depth = 512 ) {
+return json_encode( $value, $flags, $depth );
+}
+
+function wp_remote_post( $url, $args = [] ) {
+return new WP_Error( 'wp_remote_post_not_mocked', 'wp_remote_post was not mocked in this test.' );
+}
+
+function wp_remote_retrieve_response_code( $response ): int {
+return isset( $response['response']['code'] ) ? (int) $response['response']['code'] : 0;
+}
+
+function wp_remote_retrieve_body( $response ): string {
+return isset( $response['body'] ) ? (string) $response['body'] : '';
+}
+
 // -----------------------------------------------------------------------
 // Functions with configurable defaults (overridable per-test via Brain Monkey)
 // -----------------------------------------------------------------------

@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class EditorBootstrap {
 
-	private const VERSION              = '1.1.1';
+	private const VERSION              = '1.4.0';
 	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
 	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 	private const AVAILABLE_MODELS_TRANSIENT = 'ai_translate_available_models';
@@ -54,6 +54,11 @@ class EditorBootstrap {
 				'additionalPromptHelp'      => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
 				'translateButton'           => __( 'Translate now', 'slytranslate' ),
 				'cancelTranslationButton'   => __( 'Cancel translation', 'slytranslate' ),
+				'progressTitle'             => __( 'Translating title...', 'slytranslate' ),
+				'progressContent'           => __( 'Translating content ({current}/{total})...', 'slytranslate' ),
+				'progressExcerpt'           => __( 'Translating excerpt...', 'slytranslate' ),
+				'progressMeta'              => __( 'Translating metadata...', 'slytranslate' ),
+				'progressSaving'            => __( 'Saving translation...', 'slytranslate' ),
 				'refreshButton'             => __( 'Refresh translation status', 'slytranslate' ),
 				'loadingLanguages'          => __( 'Loading available languages...', 'slytranslate' ),
 				'loadingStatus'             => __( 'Loading translation status...', 'slytranslate' ),

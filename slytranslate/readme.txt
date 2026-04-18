@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.3.3
+Stable tag: 1.4.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -23,18 +23,19 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * **ai-translate/translate-text** – Translates arbitrary text between languages.
 * **ai-translate/translate-content** – Translates a post, page, or custom post type entry and creates or updates the translation.
 * **ai-translate/translate-content-bulk** – Bulk-translates multiple entries at once (either by explicit IDs or by post type, max 50).
-* **ai-translate/configure** – Read or update plugin settings (prompt template, meta key configuration, SEO defaults, auto-translate toggle, model slug, optional context window token override, direct API URL for OpenAI-compatible endpoints).
+* **ai-translate/configure** – Read or update plugin settings (prompt template, meta key configuration, SEO defaults, auto-translate toggle, model slug, optional context window token override, direct API URL for OpenAI-compatible endpoints, and direct API diagnostics).
 
 **Architecture:**
 
 * Uses the WordPress AI Client (`wp_ai_client_prompt()`) for LLM access — no API keys to configure in this plugin. Set up your preferred AI provider via Settings > Connectors.
 * For local LLMs via Ollama, LM Studio, LocalAI, vLLM, or other OpenAI-compatible endpoints, we recommend **Ultimate AI Connector for Compatible Endpoints**: https://wordpress.org/plugins/ultimate-ai-connector-compatible-endpoints/
-* Optional **Direct API** path (`direct_api_url`): connect directly to any OpenAI-compatible endpoint without the WordPress AI Client, with automatic fallback. Enables `chat_template_kwargs` support for specialized models such as TranslateGemma (auto-detected on configuration save).
+* Optional **Direct API** path (`direct_api_url`): connect directly to any OpenAI-compatible endpoint without the WordPress AI Client. Standard instruct/chat models still fall back automatically when the direct call fails. TranslateGemma is handled fail-safe instead: if no direct API URL is configured, if `chat_template_kwargs` support cannot be confirmed, or if the direct call fails, SlyTranslate returns an error instead of silently falling back. The `ai-translate/configure` response includes probe diagnostics such as the last kwargs probe timestamp and the TranslateGemma runtime status.
 * Long content is translated in chunks. The plugin derives a safe chunk size from the active model, learns tighter limits from provider error messages, retries automatically with a smaller chunk on context-window errors, and supports a manual context window token override.
+* Translated outputs are validated before they are accepted. SlyTranslate rejects empty/chatty assistant-style answers, implausibly long title-like responses, and structure drift such as missing HTML tags, Gutenberg block comments, URLs, or code fences. For standard instruct/chat models, the plugin retries once with stricter output instructions before failing.
 * Block content is parsed before translation: code and preformatted blocks are skipped, and consecutive translatable blocks are batched together for efficiency.
 * Translation plugin support via an adapter interface. Currently supports **Polylang**, including posts, pages, custom post types, and associated taxonomies. Additional adapters (WPML, TranslatePress, etc.) can be added.
 * Popular SEO plugins are detected automatically and their key SEO meta fields can be translated or cleared without manual configuration.
-* The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. A selected-text action for translating highlighted text inline via `ai-translate/translate-text` is available even without a translation plugin.
+* The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. During active content translations, the panel shows a live progress bar with phase and chunk tracking, and the main action button toggles from **Translate now** to **Cancel translation**. A selected-text action for translating highlighted text inline via `ai-translate/translate-text` is available even without a translation plugin.
 * All abilities are exposed via the REST API (`/wp-abilities/v1/`) and marked public for MCP Adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`.
 * Polylang auto-translate hooks are preserved for backward compatibility — creating a new translation in Polylang still triggers automatic translation.
 * Plugin labels and descriptions are translation-ready and include a bundled German (`de_DE`) translation.
@@ -90,7 +91,15 @@ For models that require request-level parameters such as `chat_template_kwargs` 
 
 = Can I use TranslateGemma or other specialized translation models? =
 
-Yes. Set `direct_api_url` via `ai-translate/configure` to the URL of your llama.cpp (or other OpenAI-compatible) server. The plugin will automatically probe for `chat_template_kwargs` support and, when detected, include `source_lang_code` and `target_lang_code` in every translation request so the model can use its native language-routing. A custom Jinja chat template is required on the llama.cpp side to make this work — a ready-to-use template and setup guide are included in the plugin repository.
+Yes. Set `direct_api_url` via `ai-translate/configure` to the URL of your llama.cpp (or other OpenAI-compatible) server. The plugin automatically probes for `chat_template_kwargs` support, re-probes when TranslateGemma is selected and kwargs are still missing, and then includes `source_lang_code` and `target_lang_code` in every translation request so the model can use its native language-routing.
+
+TranslateGemma is now handled fail-safe: if no direct API URL is configured, if kwargs support cannot be confirmed, or if the direct API request fails, SlyTranslate returns an error instead of silently falling back to the generic WordPress AI Client path. The `ai-translate/configure` response exposes diagnostics such as `direct_api_kwargs_last_probed_at`, `translategemma_runtime_ready`, and `translategemma_runtime_status`.
+
+A custom Jinja chat template is required on the llama.cpp side to make this work — a ready-to-use template and setup guide are included in the plugin repository.
+
+= What happens if a model returns a chat answer instead of a translation? =
+
+SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
 
 = Can I translate pages or custom post types? =
 
@@ -102,13 +111,22 @@ The plugin auto-detects supported SEO plugins such as Yoast SEO, Rank Math, All 
 
 = Can I trigger translation from the block editor? =
 
-Yes. The block editor includes an **AI Translate** panel in the document settings sidebar when a translation plugin is active. It loads translation status and can create or update translations directly from the editor. When you highlight text inside supported rich-text fields, you also get a **Translate with SlyTranslate** action for inline translation of just that selection via `ai-translate/translate-text`, even without a translation plugin.
+Yes. The block editor includes an **AI Translate** panel in the document settings sidebar when a translation plugin is active. It loads translation status, can create or update translations directly from the editor, and shows a live progress bar while a translation is running. During that time, the main action button switches to **Cancel translation** so you can stop the current job without leaving the editor. When you highlight text inside supported rich-text fields, you also get a **Translate with SlyTranslate** action for inline translation of just that selection via `ai-translate/translate-text`, even without a translation plugin.
 
 = Does this work without Polylang? =
 
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= 1.4.0 =
+* Editor: added a real-time translation progress bar to the AI Translate sidebar panel, including phase labels and content chunk tracking.
+* Editor: the main translation button now toggles to **Cancel translation** while a translation is running, replacing the separate cancel button.
+* API: added server-side translation progress tracking via WordPress transients and a polling REST endpoint for the editor sidebar.
+* TranslateGemma: fail closed when no `direct_api_url` is configured, when `chat_template_kwargs` support cannot be confirmed, or when the direct API request fails — no more silent fallback to the generic AI Client path.
+* Diagnostics: `ai-translate/configure` now exposes the last kwargs probe timestamp plus a TranslateGemma runtime readiness/status indicator.
+* Guardrails: validates translated output before saving and rejects empty/chat-style responses, implausibly long short-text outputs, and structure loss in Gutenberg/HTML content.
+
 = 1.3.3 =
 * Editor: shortened TranslateGemma warning text on the Additional instructions field — removed the specific model name examples ("Gemma 3 IT or Qwen2.5 Instruct").
 * Editor: moved the TranslateGemma warning from below the Additional instructions textarea to below the AI model dropdown, so it appears directly next to the relevant control.

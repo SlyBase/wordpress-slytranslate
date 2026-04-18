@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.1.1\n"
+"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.4.0\n"
 "Report-Msgid-Bugs-To: https://github.com/SlyBase/wordpress-slytranslate\n"
-"POT-Creation-Date: 2026-04-14 00:19+0200\n"
+"POT-Creation-Date: 2026-04-18 00:30+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -278,6 +278,62 @@ msgstr ""
 
 #: slytranslate/assets/editor-plugin.js
 msgid "Supplements the site-wide translation instructions. Example: Use informal language."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php
+msgid "Translating title..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php
+msgid "Translating content ({current}/{total})..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php
+msgid "Translating excerpt..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php
+msgid "Translating metadata..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php
+msgid "Saving translation..."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "TranslateGemma requires a direct API endpoint. Configure direct_api_url for your llama.cpp server or switch to an instruct model."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "The model returned an empty translation result."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "The translated output did not contain usable text."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "The model returned explanatory assistant text instead of a clean translation."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "The translated output is implausibly long for the source text and looks like a generated explanation rather than a translation."
+msgstr ""
+
+#: slytranslate/ai-translate.php
+msgid "The translated output lost required structure such as HTML, Gutenberg block comments, URLs, or code fences."
+msgstr ""
+
+#: slytranslate/assets/editor-plugin.js
+msgid "Cancel translation"
 msgstr ""
 
 #: slytranslate/assets/editor-plugin.js

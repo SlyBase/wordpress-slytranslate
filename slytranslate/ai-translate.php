@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.3.3
+Version: 1.4.0
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -29,7 +29,7 @@ class AI_Translate {
 	// Default prompt template.
 	public static $PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting and embedded media. Only return the new content.';
 
-	private const VERSION              = '1.3.3';
+	private const VERSION              = '1.4.0';
 	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
 	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 	private const INTERNAL_META_KEYS_TO_SKIP = array(
@@ -47,6 +47,7 @@ class AI_Translate {
 	private const MIN_TRANSLATION_CHARS         = 1200;
 	private const MAX_TRANSLATION_CHARS         = 8000;
 	private const SAFE_CHARS_PER_CONTEXT_TOKEN  = 0.5;
+	private const MAX_SHORT_TEXT_RESPONSE_RATIO = 4;
 	private const KNOWN_MODEL_CONTEXT_WINDOWS   = array(
 		'claude'        => 200000,
 		'gemini-2.5'    => 1000000,
@@ -73,6 +74,7 @@ class AI_Translate {
 	// Adapter instance.
 	private static $adapter;
 	private static $translation_runtime_context;
+	private static $translation_progress_context;
 	private static $seo_plugin_config;
 
 	// Per-request model slug override (set by editor REST endpoints).
@@ -81,6 +83,7 @@ class AI_Translate {
 	// Per-request language code context (set during translate() for direct API with chat_template_kwargs).
 	private static $translation_source_lang;
 	private static $translation_target_lang;
+	private static $last_translation_transport_diagnostics;
 
 	/* ---------------------------------------------------------------
 	 * Adapter
@@ -138,6 +141,7 @@ class AI_Translate {
 	public static function register_editor_rest_routes() {
 		self::register_editor_rest_route( '/ai-translate/get-languages', array( static::class, 'rest_execute_get_languages' ) );
 		self::register_editor_rest_route( '/ai-translate/get-translation-status', array( static::class, 'rest_execute_get_translation_status' ) );
+		self::register_editor_rest_route( '/ai-translate/translation-progress', array( static::class, 'rest_execute_get_translation_progress' ) );
 		self::register_editor_rest_route( '/ai-translate/translate-text', array( static::class, 'rest_execute_translate_text' ) );
 		self::register_editor_rest_route( '/ai-translate/translate-content', array( static::class, 'rest_execute_translate_content' ) );
 		self::register_editor_rest_route( '/ai-translate/translate-post', array( static::class, 'rest_execute_translate_content' ) );
@@ -185,12 +189,17 @@ class AI_Translate {
 		return self::execute_get_translation_status( self::get_editor_rest_input( $request ) );
 	}
 
+	public static function rest_execute_get_translation_progress( \WP_REST_Request $request ) {
+		return self::get_translation_progress();
+	}
+
 	public static function rest_execute_translate_text( \WP_REST_Request $request ) {
 		return self::execute_translate_text( self::get_editor_rest_input( $request ) );
 	}
 
 	public static function rest_execute_translate_content( \WP_REST_Request $request ) {
 		self::clear_translation_cancelled_flag();
+		self::clear_translation_progress();
 		return self::execute_translate_content( self::get_editor_rest_input( $request ) );
 	}
 
@@ -809,6 +818,9 @@ class AI_Translate {
 					'model_slug' => array( 'type' => 'string' ),
 					'direct_api_url' => array( 'type' => 'string' ),
 					'direct_api_kwargs_supported' => array( 'type' => 'boolean', 'description' => 'Auto-detected: whether the server at direct_api_url supports chat_template_kwargs. Re-detected whenever direct_api_url or model_slug is saved.' ),
+					'direct_api_kwargs_last_probed_at' => array( 'type' => 'integer', 'description' => 'Unix timestamp of the last chat_template_kwargs capability probe for direct_api_url.' ),
+					'translategemma_runtime_ready' => array( 'type' => 'boolean', 'description' => 'Whether the current TranslateGemma configuration is ready for safe translation execution.' ),
+					'translategemma_runtime_status' => array( 'type' => 'string', 'description' => 'Diagnostic status for TranslateGemma runtime safety: not-selected, ready, direct-api-required, or kwargs-required.' ),
 					'detected_seo_plugin' => array( 'type' => 'string' ),
 					'detected_seo_plugin_label' => array( 'type' => 'string' ),
 					'seo_meta_keys_translate' => array(
@@ -852,9 +864,11 @@ class AI_Translate {
 		self::$meta_clear     = null;
 		self::$seo_plugin_config = null;
 		self::$translation_runtime_context = null;
+		self::$last_translation_transport_diagnostics = null;
 		EditorBootstrap::clear_available_models_cache();
 		self::get_translation_runtime_context();
 		$seo_plugin_config    = self::get_active_seo_plugin_config();
+		$translategemma_status = self::get_translategemma_runtime_status();
 
 		return array(
 			'prompt_template'    => get_option( 'ai_translate_prompt', self::$PROMPT ),
@@ -866,6 +880,9 @@ class AI_Translate {
 			'model_slug' => get_option( 'ai_translate_model_slug', '' ),
 			'direct_api_url' => get_option( 'ai_translate_direct_api_url', '' ),
 			'direct_api_kwargs_supported' => get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1',
+			'direct_api_kwargs_last_probed_at' => absint( get_option( 'ai_translate_direct_api_kwargs_last_probed_at', 0 ) ),
+			'translategemma_runtime_ready' => $translategemma_status['ready'],
+			'translategemma_runtime_status' => $translategemma_status['status'],
 			'detected_seo_plugin' => $seo_plugin_config['key'],
 			'detected_seo_plugin_label' => $seo_plugin_config['label'],
 			'seo_meta_keys_translate' => $seo_plugin_config['translate'],
@@ -1042,6 +1059,267 @@ class AI_Translate {
 		}
 	}
 
+	private static function get_translation_progress_transient_key(): ?string {
+		$user_id = get_current_user_id();
+		if ( $user_id < 1 ) {
+			return null;
+		}
+
+		return 'ai_translate_progress_' . $user_id;
+	}
+
+	private static function get_default_translation_progress(): array {
+		return array(
+			'phase'         => '',
+			'current_chunk' => 0,
+			'total_chunks'  => 0,
+			'percent'       => 0,
+		);
+	}
+
+	private static function get_translation_progress(): array {
+		$transient_key = self::get_translation_progress_transient_key();
+		if ( null === $transient_key ) {
+			return self::get_default_translation_progress();
+		}
+
+		$progress = get_transient( $transient_key );
+		if ( ! is_array( $progress ) ) {
+			return self::get_default_translation_progress();
+		}
+
+		return array(
+			'phase'         => isset( $progress['phase'] ) && is_string( $progress['phase'] ) ? $progress['phase'] : '',
+			'current_chunk' => absint( $progress['current_chunk'] ?? 0 ),
+			'total_chunks'  => absint( $progress['total_chunks'] ?? 0 ),
+			'percent'       => min( 100, max( 0, absint( $progress['percent'] ?? 0 ) ) ),
+		);
+	}
+
+	private static function set_translation_progress( string $phase, int $current_chunk = 0, int $total_chunks = 0 ): void {
+		$transient_key = self::get_translation_progress_transient_key();
+		if ( null === $transient_key ) {
+			return;
+		}
+
+		$current_chunk = max( 0, $current_chunk );
+		$total_chunks  = max( 0, $total_chunks );
+
+		if ( $total_chunks > 0 ) {
+			$current_chunk = min( $current_chunk, $total_chunks );
+		} else {
+			$current_chunk = 0;
+		}
+
+		set_transient(
+			$transient_key,
+			array(
+				'phase'         => $phase,
+				'current_chunk' => $current_chunk,
+				'total_chunks'  => $total_chunks,
+				'percent'       => self::calculate_translation_progress_percent( $phase ),
+			),
+			5 * MINUTE_IN_SECONDS
+		);
+	}
+
+	private static function clear_translation_progress(): void {
+		$transient_key = self::get_translation_progress_transient_key();
+		if ( null !== $transient_key ) {
+			delete_transient( $transient_key );
+		}
+
+		self::clear_translation_progress_context();
+	}
+
+	private static function calculate_translation_progress_percent( string $phase ): int {
+		if ( 'done' === $phase ) {
+			return 100;
+		}
+
+		if ( ! is_array( self::$translation_progress_context ) ) {
+			return 0;
+		}
+
+		$total_steps     = max( 1, absint( self::$translation_progress_context['total_steps'] ?? 0 ) );
+		$completed_steps = min( $total_steps, absint( self::$translation_progress_context['completed_steps'] ?? 0 ) );
+
+		return (int) round( ( $completed_steps / $total_steps ) * 100 );
+	}
+
+	private static function initialize_translation_progress_context( bool $translate_title, string $content ): void {
+		$content_total_chunks = self::count_content_translation_chunks( $content, self::get_translation_chunk_char_limit() );
+		$total_steps          = ( $translate_title ? 1 : 0 ) + $content_total_chunks + 3;
+
+		self::$translation_progress_context = array(
+			'phase'                  => '',
+			'total_steps'            => max( 1, $total_steps ),
+			'completed_steps'        => 0,
+			'content_total_chunks'   => $content_total_chunks,
+			'content_completed_chunks' => 0,
+		);
+	}
+
+	private static function clear_translation_progress_context(): void {
+		self::$translation_progress_context = null;
+	}
+
+	private static function has_content_translation_progress(): bool {
+		return is_array( self::$translation_progress_context ) && absint( self::$translation_progress_context['content_total_chunks'] ?? 0 ) > 0;
+	}
+
+	private static function mark_translation_phase( string $phase ): void {
+		$current_chunk = 0;
+		$total_chunks  = 0;
+
+		if ( is_array( self::$translation_progress_context ) ) {
+			self::$translation_progress_context['phase'] = $phase;
+
+			if ( 'content' === $phase ) {
+				$current_chunk = absint( self::$translation_progress_context['content_completed_chunks'] ?? 0 );
+				$total_chunks  = absint( self::$translation_progress_context['content_total_chunks'] ?? 0 );
+			}
+		}
+
+		self::set_translation_progress( $phase, $current_chunk, $total_chunks );
+	}
+
+	private static function advance_translation_progress_steps( int $steps = 1 ): void {
+		if ( ! is_array( self::$translation_progress_context ) || $steps < 1 ) {
+			return;
+		}
+
+		$total_steps = max( 1, absint( self::$translation_progress_context['total_steps'] ?? 0 ) );
+		self::$translation_progress_context['completed_steps'] = min(
+			$total_steps,
+			absint( self::$translation_progress_context['completed_steps'] ?? 0 ) + $steps
+		);
+	}
+
+	private static function advance_content_translation_progress(): int {
+		if ( ! is_array( self::$translation_progress_context ) || 'content' !== ( self::$translation_progress_context['phase'] ?? '' ) ) {
+			return 0;
+		}
+
+		$content_total_chunks = absint( self::$translation_progress_context['content_total_chunks'] ?? 0 );
+		if ( $content_total_chunks < 1 ) {
+			return 0;
+		}
+
+		self::$translation_progress_context['content_completed_chunks'] = min(
+			$content_total_chunks,
+			absint( self::$translation_progress_context['content_completed_chunks'] ?? 0 ) + 1
+		);
+		self::advance_translation_progress_steps();
+		self::set_translation_progress(
+			'content',
+			absint( self::$translation_progress_context['content_completed_chunks'] ?? 0 ),
+			$content_total_chunks
+		);
+
+		return 1;
+	}
+
+	private static function rewind_content_translation_progress( int $completed_chunks ): void {
+		if ( $completed_chunks < 1 || ! is_array( self::$translation_progress_context ) || 'content' !== ( self::$translation_progress_context['phase'] ?? '' ) ) {
+			return;
+		}
+
+		self::$translation_progress_context['content_completed_chunks'] = max(
+			0,
+			absint( self::$translation_progress_context['content_completed_chunks'] ?? 0 ) - $completed_chunks
+		);
+		self::$translation_progress_context['completed_steps'] = max(
+			0,
+			absint( self::$translation_progress_context['completed_steps'] ?? 0 ) - $completed_chunks
+		);
+		self::set_translation_progress(
+			'content',
+			absint( self::$translation_progress_context['content_completed_chunks'] ?? 0 ),
+			absint( self::$translation_progress_context['content_total_chunks'] ?? 0 )
+		);
+	}
+
+	private static function synchronize_content_translation_chunks( int $chunk_count, ?int $previous_chunk_count = null ): void {
+		if ( ! is_array( self::$translation_progress_context ) || 'content' !== ( self::$translation_progress_context['phase'] ?? '' ) ) {
+			return;
+		}
+
+		$chunk_count = max( 0, $chunk_count );
+
+		if ( null === $previous_chunk_count ) {
+			if ( 0 === absint( self::$translation_progress_context['content_total_chunks'] ?? 0 ) ) {
+				self::$translation_progress_context['content_total_chunks'] = $chunk_count;
+				self::$translation_progress_context['total_steps']          = max( 1, absint( self::$translation_progress_context['total_steps'] ?? 0 ) + $chunk_count );
+			}
+
+			return;
+		}
+
+		$delta = $chunk_count - max( 0, $previous_chunk_count );
+		if ( 0 === $delta ) {
+			return;
+		}
+
+		self::$translation_progress_context['content_total_chunks'] = max(
+			absint( self::$translation_progress_context['content_completed_chunks'] ?? 0 ),
+			absint( self::$translation_progress_context['content_total_chunks'] ?? 0 ) + $delta
+		);
+		self::$translation_progress_context['total_steps'] = max(
+			absint( self::$translation_progress_context['completed_steps'] ?? 0 ) + 1,
+			absint( self::$translation_progress_context['total_steps'] ?? 0 ) + $delta
+		);
+	}
+
+	private static function count_translation_chunks( string $text, int $chunk_char_limit ): int {
+		return count( self::split_text_for_translation( $text, $chunk_char_limit ) );
+	}
+
+	private static function count_serialized_block_chunks( array $blocks, int $chunk_char_limit ): int {
+		if ( empty( $blocks ) ) {
+			return 0;
+		}
+
+		$serialized_blocks = serialize_blocks( $blocks );
+		if ( '' === trim( $serialized_blocks ) ) {
+			return 0;
+		}
+
+		return self::count_translation_chunks( $serialized_blocks, $chunk_char_limit );
+	}
+
+	private static function count_content_translation_chunks( string $content, int $chunk_char_limit ): int {
+		if ( '' === trim( $content ) ) {
+			return 0;
+		}
+
+		if ( ! function_exists( 'parse_blocks' ) || ! function_exists( 'serialize_blocks' ) ) {
+			return self::count_translation_chunks( $content, $chunk_char_limit );
+		}
+
+		$blocks = parse_blocks( $content );
+		if ( ! is_array( $blocks ) || empty( $blocks ) ) {
+			return self::count_translation_chunks( $content, $chunk_char_limit );
+		}
+
+		$pending_blocks = array();
+		$total_chunks   = 0;
+
+		foreach ( $blocks as $block ) {
+			if ( self::should_skip_block_translation( $block ) ) {
+				$total_chunks  += self::count_serialized_block_chunks( $pending_blocks, $chunk_char_limit );
+				$pending_blocks = array();
+				continue;
+			}
+
+			$pending_blocks[] = $block;
+		}
+
+		$total_chunks += self::count_serialized_block_chunks( $pending_blocks, $chunk_char_limit );
+
+		return $total_chunks;
+	}
+
 	/**
 	 * Translate text using the WordPress AI Client.
 	 *
@@ -1057,6 +1335,7 @@ class AI_Translate {
 
 		self::$translation_source_lang = $from;
 		self::$translation_target_lang = $to;
+		self::$last_translation_transport_diagnostics = null;
 
 		try {
 			$prompt = self::prompt( $to, $from, $additional_prompt );
@@ -1064,21 +1343,21 @@ class AI_Translate {
 		} finally {
 			self::$translation_source_lang = null;
 			self::$translation_target_lang = null;
+			self::$last_translation_transport_diagnostics = null;
 		}
 	}
 
-	private static function translate_with_chunk_limit( string $text, string $prompt, int $chunk_char_limit, int $attempt = 0 ) {
+	private static function translate_with_chunk_limit( string $text, string $prompt, int $chunk_char_limit, int $attempt = 0, ?int $previous_chunk_count = null ) {
 		$chunks = self::split_text_for_translation( $text, $chunk_char_limit );
 
 		if ( empty( $chunks ) ) {
 			return '';
 		}
 
-		if ( 1 === count( $chunks ) ) {
-			return self::translate_chunk( $chunks[0], $prompt );
-		}
+		self::synchronize_content_translation_chunks( count( $chunks ), $previous_chunk_count );
 
 		$translated_chunks = array();
+		$completed_chunks  = 0;
 		foreach ( $chunks as $chunk ) {
 			if ( self::is_translation_cancelled() ) {
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
@@ -1088,13 +1367,15 @@ class AI_Translate {
 			if ( is_wp_error( $translated_chunk ) ) {
 				$adjusted_chunk_char_limit = self::maybe_adjust_chunk_limit_from_error( $translated_chunk, $chunk_char_limit );
 				if ( $adjusted_chunk_char_limit > 0 && $attempt < 2 ) {
-					return self::translate_with_chunk_limit( $text, $prompt, $adjusted_chunk_char_limit, $attempt + 1 );
+					self::rewind_content_translation_progress( $completed_chunks );
+					return self::translate_with_chunk_limit( $text, $prompt, $adjusted_chunk_char_limit, $attempt + 1, count( $chunks ) );
 				}
 
 				return $translated_chunk;
 			}
 
 			$translated_chunks[] = $translated_chunk;
+			$completed_chunks   += self::advance_content_translation_progress();
 		}
 
 		return implode( '', $translated_chunks );
@@ -1113,15 +1394,79 @@ class AI_Translate {
 		}
 	}
 
-	private static function translate_chunk( string $text, string $prompt ) {
+	private static function translate_chunk( string $text, string $prompt, int $validation_attempt = 0 ) {
 		$runtime_context = self::get_translation_runtime_context();
 		$model_slug      = self::$model_slug_request_override ?? $runtime_context['model_slug'];
+		$requires_strict_direct_api = self::model_requires_strict_direct_api( $model_slug );
+		$direct_api_url            = $runtime_context['direct_api_url'];
+		$kwargs_supported          = self::direct_api_kwargs_supported();
 
-		$direct_api_url = $runtime_context['direct_api_url'];
+		if ( $requires_strict_direct_api && is_string( $direct_api_url ) && '' !== $direct_api_url && ! $kwargs_supported ) {
+			$kwargs_supported = self::refresh_direct_api_kwargs_detection( $direct_api_url, $model_slug );
+		}
+
+		if ( $requires_strict_direct_api ) {
+			if ( ! is_string( $direct_api_url ) || '' === $direct_api_url ) {
+				self::record_translation_transport_diagnostics( array(
+					'transport'         => 'blocked',
+					'model_slug'        => $model_slug,
+					'direct_api_url'    => '',
+					'kwargs_supported'  => false,
+					'fallback_allowed'  => false,
+					'failure_reason'    => 'direct_api_required',
+				) );
+
+				return new \WP_Error(
+					'translategemma_requires_direct_api',
+					__( 'TranslateGemma requires a direct API endpoint. Configure direct_api_url for your llama.cpp server or switch to an instruct model.', 'slytranslate' )
+				);
+			}
+
+			if ( ! $kwargs_supported ) {
+				self::record_translation_transport_diagnostics( array(
+					'transport'         => 'blocked',
+					'model_slug'        => $model_slug,
+					'direct_api_url'    => $direct_api_url,
+					'kwargs_supported'  => false,
+					'fallback_allowed'  => false,
+					'failure_reason'    => 'kwargs_required',
+				) );
+
+				return new \WP_Error(
+					'translategemma_requires_kwargs',
+					__( 'TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model.', 'slytranslate' )
+				);
+			}
+		}
+
 		if ( is_string( $direct_api_url ) && '' !== $direct_api_url ) {
-			$result = self::translate_chunk_direct_api( $text, $prompt, $model_slug, $direct_api_url );
+			$result = self::translate_chunk_direct_api( $text, $prompt, $model_slug, $direct_api_url, $kwargs_supported );
 			if ( null !== $result ) {
+				self::record_translation_transport_diagnostics( array(
+					'transport'         => 'direct_api',
+					'model_slug'        => $model_slug,
+					'direct_api_url'    => $direct_api_url,
+					'kwargs_supported'  => $kwargs_supported,
+					'fallback_allowed'  => ! $requires_strict_direct_api,
+					'failure_reason'    => '',
+				) );
 				return $result;
+			}
+
+			if ( $requires_strict_direct_api ) {
+				self::record_translation_transport_diagnostics( array(
+					'transport'         => 'direct_api_failed',
+					'model_slug'        => $model_slug,
+					'direct_api_url'    => $direct_api_url,
+					'kwargs_supported'  => $kwargs_supported,
+					'fallback_allowed'  => false,
+					'failure_reason'    => 'direct_api_failed',
+				) );
+
+				return new \WP_Error(
+					'translategemma_direct_api_failed',
+					__( 'TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations.', 'slytranslate' )
+				);
 			}
 		}
 
@@ -1133,10 +1478,30 @@ class AI_Translate {
 			$builder = $builder->using_model_preference( $model_slug );
 		}
 
+		self::record_translation_transport_diagnostics( array(
+			'transport'         => 'wp_ai_client',
+			'model_slug'        => $model_slug,
+			'direct_api_url'    => is_string( $direct_api_url ) ? $direct_api_url : '',
+			'kwargs_supported'  => $kwargs_supported,
+			'fallback_allowed'  => true,
+			'failure_reason'    => '',
+		) );
+
 		$result = $builder->generate_text();
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
+		}
+
+		$validation_error = self::validate_translated_output( $text, $result );
+		if ( is_wp_error( $validation_error ) ) {
+			self::record_validation_failure_diagnostics( $validation_error );
+
+			if ( 0 === $validation_attempt && self::should_retry_after_validation_failure( $model_slug ) ) {
+				return self::translate_chunk( $text, self::build_retry_prompt( $prompt ), 1 );
+			}
+
+			return $validation_error;
 		}
 
 		return $result;
@@ -1155,11 +1520,12 @@ class AI_Translate {
 	 *
 	 * @param string $text       Text to translate.
 	 * @param string $prompt     System instruction prompt.
-	 * @param string $model_slug Model slug.
-	 * @param string $api_url    Base URL of the API server.
+	 * @param string $model_slug        Model slug.
+	 * @param string $api_url           Base URL of the API server.
+	 * @param bool   $kwargs_supported  Whether chat_template_kwargs should be attached.
 	 * @return string|\WP_Error|null Translated text, WP_Error on failure, or null to signal fallback.
 	 */
-	private static function translate_chunk_direct_api( string $text, string $prompt, string $model_slug, string $api_url ) {
+	private static function translate_chunk_direct_api( string $text, string $prompt, string $model_slug, string $api_url, bool $kwargs_supported ) {
 		$endpoint = trailingslashit( $api_url ) . 'v1/chat/completions';
 
 		$body = array(
@@ -1180,7 +1546,6 @@ class AI_Translate {
 			$body['model'] = $model_slug;
 		}
 
-		$kwargs_supported = get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1';
 		if ( $kwargs_supported && self::$translation_source_lang && self::$translation_target_lang ) {
 			$body['chat_template_kwargs'] = array(
 				'source_lang_code' => self::$translation_source_lang,
@@ -1214,6 +1579,230 @@ class AI_Translate {
 		}
 
 		return $content;
+	}
+
+	private static function direct_api_kwargs_supported(): bool {
+		return get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1';
+	}
+
+	private static function refresh_direct_api_kwargs_detection( string $api_url, string $model_slug ): bool {
+		$probe_result = ConfigurationService::probe_direct_api_kwargs( $api_url, $model_slug );
+		update_option( 'ai_translate_direct_api_kwargs_detected', $probe_result ? '1' : '0' );
+		update_option( 'ai_translate_direct_api_kwargs_last_probed_at', time(), false );
+
+		return $probe_result;
+	}
+
+	private static function model_requires_strict_direct_api( string $model_slug ): bool {
+		return '' !== $model_slug && false !== strpos( strtolower( $model_slug ), 'translategemma' );
+	}
+
+	private static function get_translategemma_runtime_status(): array {
+		$runtime_context = self::get_translation_runtime_context();
+		$model_slug      = self::$model_slug_request_override ?? $runtime_context['model_slug'];
+
+		if ( ! self::model_requires_strict_direct_api( $model_slug ) ) {
+			return array(
+				'ready'  => true,
+				'status' => 'not-selected',
+			);
+		}
+
+		if ( '' === $runtime_context['direct_api_url'] ) {
+			return array(
+				'ready'  => false,
+				'status' => 'direct-api-required',
+			);
+		}
+
+		if ( ! self::direct_api_kwargs_supported() ) {
+			return array(
+				'ready'  => false,
+				'status' => 'kwargs-required',
+			);
+		}
+
+		return array(
+			'ready'  => true,
+			'status' => 'ready',
+		);
+	}
+
+	private static function record_translation_transport_diagnostics( array $diagnostics ): void {
+		self::$last_translation_transport_diagnostics = $diagnostics;
+	}
+
+	private static function record_validation_failure_diagnostics( \WP_Error $error ): void {
+		$diagnostics = is_array( self::$last_translation_transport_diagnostics )
+			? self::$last_translation_transport_diagnostics
+			: array(
+				'transport'        => 'unknown',
+				'model_slug'       => '',
+				'direct_api_url'   => '',
+				'kwargs_supported' => false,
+				'fallback_allowed' => true,
+			);
+
+		$diagnostics['failure_reason'] = $error->get_error_code();
+		self::record_translation_transport_diagnostics( $diagnostics );
+	}
+
+	private static function should_retry_after_validation_failure( string $model_slug ): bool {
+		return ! self::model_requires_strict_direct_api( $model_slug );
+	}
+
+	private static function build_retry_prompt( string $prompt ): string {
+		return $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, and code fences exactly. Do not add explanations, bullet lists, markdown headings, or commentary.";
+	}
+
+	private static function validate_translated_output( string $source_text, string $translated_text ) {
+		$source_text     = (string) $source_text;
+		$translated_text = (string) $translated_text;
+
+		if ( '' === trim( $translated_text ) ) {
+			return new \WP_Error(
+				'invalid_translation_empty',
+				__( 'The model returned an empty translation result.', 'slytranslate' )
+			);
+		}
+
+		$source_plain     = self::normalize_text_for_validation( $source_text );
+		$translated_plain = self::normalize_text_for_validation( $translated_text );
+
+		if ( '' === $translated_plain ) {
+			return new \WP_Error(
+				'invalid_translation_plain_text_missing',
+				__( 'The translated output did not contain usable text.', 'slytranslate' )
+			);
+		}
+
+		if ( self::looks_like_assistant_response( $source_text, $translated_text ) ) {
+			return new \WP_Error(
+				'invalid_translation_assistant_reply',
+				__( 'The model returned explanatory assistant text instead of a clean translation.', 'slytranslate' )
+			);
+		}
+
+		if ( self::has_excessive_short_text_growth( $source_plain, $translated_plain ) ) {
+			return new \WP_Error(
+				'invalid_translation_length_drift',
+				__( 'The translated output is implausibly long for the source text and looks like a generated explanation rather than a translation.', 'slytranslate' )
+			);
+		}
+
+		if ( self::has_structural_translation_drift( $source_text, $translated_text ) ) {
+			return new \WP_Error(
+				'invalid_translation_structure_drift',
+				__( 'The translated output lost required structure such as HTML, Gutenberg block comments, URLs, or code fences.', 'slytranslate' )
+			);
+		}
+
+		return null;
+	}
+
+	private static function normalize_text_for_validation( string $text ): string {
+		$text = wp_strip_all_tags( $text );
+		$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$text = preg_replace( '/\s+/u', ' ', $text );
+
+		return is_string( $text ) ? trim( $text ) : '';
+	}
+
+	private static function looks_like_assistant_response( string $source_text, string $translated_text ): bool {
+		if ( self::looks_like_markdown_assistant_response( $source_text, $translated_text ) ) {
+			return true;
+		}
+
+		$translated_plain = self::normalize_text_for_validation( $translated_text );
+		if ( '' === $translated_plain ) {
+			return false;
+		}
+
+		$source_plain = self::normalize_text_for_validation( $source_text );
+		if ( self::starts_with_assistant_preamble( $translated_plain ) && ! self::starts_with_assistant_preamble( $source_plain ) ) {
+			$translated_line_breaks = preg_match_all( '/\n/u', $translated_text );
+			if ( $translated_line_breaks >= 2 || self::contains_review_markers( $translated_text ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function looks_like_markdown_assistant_response( string $source_text, string $translated_text ): bool {
+		if ( self::contains_markdown_structure( $source_text ) ) {
+			return false;
+		}
+
+		if ( ! self::contains_markdown_structure( $translated_text ) ) {
+			return false;
+		}
+
+		return self::contains_review_markers( $translated_text ) || self::starts_with_assistant_preamble( self::normalize_text_for_validation( $translated_text ) );
+	}
+
+	private static function contains_markdown_structure( string $text ): bool {
+		return 1 === preg_match( '/(^|\n)\s{0,3}(?:[-*+]\s+|\d+\.\s+|#{1,6}\s+)|\*\*[^*\n]+\*\*/u', $text );
+	}
+
+	private static function contains_review_markers( string $text ): bool {
+		return 1 === preg_match( '/strengths\s*:|suggestions(?:\s+for\s+improvement)?\s*:|overall\s*:|key takeaways\s*:|breakdown|great start|vorschl[aä]ge\s*:|st[aä]rken\s*:|zusammenfassung\s*:|wichtige erkenntnisse\s*:/iu', $text );
+	}
+
+	private static function starts_with_assistant_preamble( string $text ): bool {
+		return 1 === preg_match( '/^(?:okay|ok|sure|certainly|absolutely|of course|here(?: is|\'s)|let(?:\'|’)s|this is|this guide|for example|in short|overall|great|hier ist|klar|nat[üu]rlich|gerne|lassen(?:\s+sie)?\s+uns|insgesamt|zum beispiel)\b/iu', $text );
+	}
+
+	private static function has_excessive_short_text_growth( string $source_plain, string $translated_plain ): bool {
+		$source_length = self::text_length( $source_plain );
+		if ( $source_length < 1 || $source_length > 220 ) {
+			return false;
+		}
+
+		$translated_length = self::text_length( $translated_plain );
+		if ( $translated_length <= max( 260, $source_length * self::MAX_SHORT_TEXT_RESPONSE_RATIO ) ) {
+			return false;
+		}
+
+		if ( preg_match( '/\n/u', $translated_plain ) ) {
+			return true;
+		}
+
+		return self::contains_markdown_structure( $translated_plain ) || self::contains_review_markers( $translated_plain );
+	}
+
+	private static function has_structural_translation_drift( string $source_text, string $translated_text ): bool {
+		$source_block_comment_count     = self::count_pattern_matches( '/<!--\s*\/?wp:[^>]+-->/iu', $source_text );
+		$translated_block_comment_count = self::count_pattern_matches( '/<!--\s*\/?wp:[^>]+-->/iu', $translated_text );
+		if ( $source_block_comment_count > 0 && $source_block_comment_count !== $translated_block_comment_count ) {
+			return true;
+		}
+
+		$source_url_count     = self::count_pattern_matches( '/https?:\/\/[^\s"\'<>]+/iu', $source_text );
+		$translated_url_count = self::count_pattern_matches( '/https?:\/\/[^\s"\'<>]+/iu', $translated_text );
+		if ( $source_url_count > 0 && $translated_url_count < $source_url_count ) {
+			return true;
+		}
+
+		$source_code_fence_count     = substr_count( $source_text, '```' );
+		$translated_code_fence_count = substr_count( $translated_text, '```' );
+		if ( $source_code_fence_count !== $translated_code_fence_count ) {
+			return true;
+		}
+
+		$source_html_tag_count     = self::count_pattern_matches( '/<\/?[a-z][^>]*>/iu', $source_text );
+		$translated_html_tag_count = self::count_pattern_matches( '/<\/?[a-z][^>]*>/iu', $translated_text );
+		if ( $source_html_tag_count >= 2 && $translated_html_tag_count < (int) ceil( $source_html_tag_count * 0.6 ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private static function count_pattern_matches( string $pattern, string $text ): int {
+		$count = preg_match_all( $pattern, $text, $matches );
+
+		return false === $count ? 0 : $count;
 	}
 
 	/**
@@ -1914,47 +2503,74 @@ class AI_Translate {
 
 		$target_status = self::normalize_translation_post_status( $status, $post );
 		$translate_title = ! isset( $translate_title ) || (bool) $translate_title;
+		self::initialize_translation_progress_context( $translate_title, $post->post_content );
 
-		// Translate content.
-		$title   = $translate_title ? self::translate( $post->post_title, $to, $from, $additional_prompt ) : $post->post_title;
-		if ( is_wp_error( $title ) ) {
-			return $title;
+		try {
+			// Translate content.
+			if ( $translate_title ) {
+				self::mark_translation_phase( 'title' );
+				$title = self::translate( $post->post_title, $to, $from, $additional_prompt );
+				if ( is_wp_error( $title ) ) {
+					return $title;
+				}
+
+				self::advance_translation_progress_steps();
+			} else {
+				$title = $post->post_title;
+			}
+
+			if ( self::is_translation_cancelled() ) {
+				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+			}
+
+			if ( self::has_content_translation_progress() ) {
+				self::mark_translation_phase( 'content' );
+			}
+
+			$content = self::translate_post_content( $post->post_content, $to, $from, $additional_prompt );
+			if ( is_wp_error( $content ) ) {
+				return $content;
+			}
+
+			if ( self::is_translation_cancelled() ) {
+				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+			}
+
+			self::mark_translation_phase( 'excerpt' );
+			$excerpt = self::translate( $post->post_excerpt, $to, $from, $additional_prompt );
+			if ( is_wp_error( $excerpt ) ) {
+				return $excerpt;
+			}
+
+			self::advance_translation_progress_steps();
+			self::mark_translation_phase( 'meta' );
+			$processed_meta = self::prepare_translation_meta( $post_id, $to, $from, $additional_prompt );
+			if ( is_wp_error( $processed_meta ) ) {
+				return $processed_meta;
+			}
+
+			self::advance_translation_progress_steps();
+			self::mark_translation_phase( 'saving' );
+
+			// Create or update via adapter.
+			$result = $adapter->create_translation( $post_id, $to, array(
+				'post_title'   => $title,
+				'post_content' => $content,
+				'post_excerpt' => $excerpt,
+				'post_status'  => $target_status,
+				'meta'         => $processed_meta,
+				'overwrite'    => $overwrite,
+			) );
+
+			if ( ! is_wp_error( $result ) ) {
+				self::advance_translation_progress_steps();
+				self::set_translation_progress( 'done' );
+			}
+
+			return $result;
+		} finally {
+			self::clear_translation_progress_context();
 		}
-
-		if ( self::is_translation_cancelled() ) {
-			return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
-		}
-
-		$content = self::translate_post_content( $post->post_content, $to, $from, $additional_prompt );
-		if ( is_wp_error( $content ) ) {
-			return $content;
-		}
-
-		if ( self::is_translation_cancelled() ) {
-			return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
-		}
-
-		$excerpt = self::translate( $post->post_excerpt, $to, $from, $additional_prompt );
-		if ( is_wp_error( $excerpt ) ) {
-			return $excerpt;
-		}
-
-		$processed_meta = self::prepare_translation_meta( $post_id, $to, $from, $additional_prompt );
-		if ( is_wp_error( $processed_meta ) ) {
-			return $processed_meta;
-		}
-
-		// Create or update via adapter.
-		$result = $adapter->create_translation( $post_id, $to, array(
-			'post_title'   => $title,
-			'post_content' => $content,
-			'post_excerpt' => $excerpt,
-			'post_status'  => $target_status,
-			'meta'         => $processed_meta,
-			'overwrite'    => $overwrite,
-		) );
-
-		return $result;
 	}
 
 	private static function prepare_translation_meta( int $post_id, string $to, string $from, string $additional_prompt ) {
@@ -1962,6 +2578,10 @@ class AI_Translate {
 		$processed_meta = array();
 
 		foreach ( $meta as $key => $values ) {
+			if ( self::is_translation_cancelled() ) {
+				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+			}
+
 			if ( in_array( $key, self::INTERNAL_META_KEYS_TO_SKIP, true ) ) {
 				continue;
 			}
