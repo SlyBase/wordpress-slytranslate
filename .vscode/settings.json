@@ -1,0 +1,37 @@
+{
+    "VsCodeTaskButtons.showCounter": false,
+    "VsCodeTaskButtons.tasks": [
+        {
+            "label": "$(tools) SlyTranslate",
+            "alignment": "left",
+            "tooltip": "Run SlyTranslate workspace tasks",
+            "tasks": [
+                {
+                    "label": "$(package) Build plugin ZIP",
+                    "task": "SlyTranslate: Build Plugin ZIP",
+                    "description": "Create slytranslate.zip in the workspace root"
+                },
+                {
+                    "label": "$(verified) Verify plugin ZIP",
+                    "task": "SlyTranslate: Verify Plugin ZIP",
+                    "description": "Run the archive checks against slytranslate.zip"
+                },
+                {
+                    "label": "$(combine) Build and verify plugin ZIP",
+                    "task": "SlyTranslate: Build and Verify Plugin ZIP",
+                    "description": "Build slytranslate.zip and verify the archive contents"
+                },
+                {
+                    "label": "$(cloud-upload) Deploy plugin ZIP to WordPress pod",
+                    "task": "SlyTranslate: Deploy Plugin ZIP to WordPress Pod",
+                    "description": "Upload slytranslate.zip into the wordpress container in namespace websites"
+                },
+                {
+                    "label": "$(rocket) Build and deploy plugin ZIP",
+                    "task": "SlyTranslate: Build and Deploy Plugin ZIP",
+                    "description": "Build, verify, and deploy slytranslate.zip to the websites WordPress pod"
+                }
+            ]
+        }
+    ]
+}

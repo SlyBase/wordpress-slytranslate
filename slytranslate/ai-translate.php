@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.4.0
+Version: 1.4.1
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -29,7 +29,7 @@ class AI_Translate {
 	// Default prompt template.
 	public static $PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting and embedded media. Only return the new content.';
 
-	private const VERSION              = '1.4.0';
+	private const VERSION              = '1.4.1';
 	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
 	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 	private const INTERNAL_META_KEYS_TO_SKIP = array(
@@ -76,6 +76,7 @@ class AI_Translate {
 	private static $translation_runtime_context;
 	private static $translation_progress_context;
 	private static $seo_plugin_config;
+	private static $resolved_meta_key_config = array();
 
 	// Per-request model slug override (set by editor REST endpoints).
 	private static $model_slug_request_override;
@@ -863,6 +864,7 @@ class AI_Translate {
 		self::$meta_translate = null;
 		self::$meta_clear     = null;
 		self::$seo_plugin_config = null;
+		self::$resolved_meta_key_config = array();
 		self::$translation_runtime_context = null;
 		self::$last_translation_transport_diagnostics = null;
 		EditorBootstrap::clear_available_models_cache();
@@ -913,9 +915,11 @@ class AI_Translate {
 	}
 
 	public static function pll_translate_post_meta( $value, $key, $lang ) {
-		if ( in_array( $key, self::meta_clear(), true ) ) {
+		$meta_key_config = self::get_effective_meta_key_config( self::get_polylang_translation_source_post_id() );
+
+		if ( in_array( $key, $meta_key_config['clear'], true ) ) {
 			$value = '';
-		} elseif ( in_array( $key, self::meta_translate(), true ) ) {
+		} elseif ( in_array( $key, $meta_key_config['translate'], true ) ) {
 			$value = self::translate_field( $value, $key, true );
 		}
 		return $value;
@@ -1510,10 +1514,13 @@ class AI_Translate {
 	/**
 	 * Translate a chunk via a direct OpenAI-compatible API call.
 	 *
-	 * Always sends a system instruction with the translation prompt. When the
-	 * direct_api_kwargs option is enabled, additionally sends chat_template_kwargs
-	 * with source_lang_code / target_lang_code (useful for models like TranslateGemma
-	 * that use Jinja templates with language parameters).
+	 * Sends the translation prompt as a system instruction unless TranslateGemma is
+	 * running in kwargs mode, where the server-side Jinja template already builds
+	 * the full translation prompt from chat_template_kwargs.
+	 *
+	 * When the direct_api_kwargs option is enabled, additionally sends
+	 * chat_template_kwargs with source_lang_code / target_lang_code (useful for
+	 * models like TranslateGemma that use Jinja templates with language parameters).
 	 *
 	 * Returns null when the request fails so the caller can fall back to the
 	 * standard WP AI Client path.
@@ -1527,18 +1534,27 @@ class AI_Translate {
 	 */
 	private static function translate_chunk_direct_api( string $text, string $prompt, string $model_slug, string $api_url, bool $kwargs_supported ) {
 		$endpoint = trailingslashit( $api_url ) . 'v1/chat/completions';
+		$attach_chat_template_kwargs = $kwargs_supported && self::$translation_source_lang && self::$translation_target_lang;
+		$omit_system_message         = $attach_chat_template_kwargs && self::model_requires_strict_direct_api( $model_slug );
+		$messages                    = array(
+			array(
+				'role'    => 'user',
+				'content' => $text,
+			),
+		);
 
-		$body = array(
-			'messages'    => array(
+		if ( ! $omit_system_message ) {
+			array_unshift(
+				$messages,
 				array(
 					'role'    => 'system',
 					'content' => $prompt,
-				),
-				array(
-					'role'    => 'user',
-					'content' => $text,
-				),
-			),
+				)
+			);
+		}
+
+		$body = array(
+			'messages'    => $messages,
 			'temperature' => 0,
 		);
 
@@ -1546,7 +1562,7 @@ class AI_Translate {
 			$body['model'] = $model_slug;
 		}
 
-		if ( $kwargs_supported && self::$translation_source_lang && self::$translation_target_lang ) {
+		if ( $attach_chat_template_kwargs ) {
 			$body['chat_template_kwargs'] = array(
 				'source_lang_code' => self::$translation_source_lang,
 				'target_lang_code' => self::$translation_target_lang,
@@ -2384,18 +2400,68 @@ class AI_Translate {
 			return self::$seo_plugin_config;
 		}
 
-		$seo_plugin_config = SeoPluginDetector::get_active_plugin_config();
-		$seo_plugin_key    = $seo_plugin_config['key'];
-
-		$seo_plugin_config['translate'] = apply_filters( 'ai_translate_seo_meta_translate', $seo_plugin_config['translate'], $seo_plugin_key, $seo_plugin_config );
-		$seo_plugin_config['clear']     = apply_filters( 'ai_translate_seo_meta_clear', $seo_plugin_config['clear'], $seo_plugin_key, $seo_plugin_config );
-
-		$seo_plugin_config['translate'] = SeoPluginDetector::normalize_meta_keys( $seo_plugin_config['translate'] );
-		$seo_plugin_config['clear']     = SeoPluginDetector::normalize_meta_keys( $seo_plugin_config['clear'] );
-
-		self::$seo_plugin_config = $seo_plugin_config;
+		self::$seo_plugin_config = SeoPluginDetector::get_active_plugin_config();
 
 		return self::$seo_plugin_config;
+	}
+
+	private static function get_effective_meta_key_config( int $post_id = 0, ?array $post_meta = null ): array {
+		if ( $post_id > 0 && null === $post_meta && isset( self::$resolved_meta_key_config[ $post_id ] ) ) {
+			return self::$resolved_meta_key_config[ $post_id ];
+		}
+
+		$seo_plugin_config = self::get_active_seo_plugin_config();
+
+		if ( $post_id > 0 ) {
+			if ( ! is_array( $post_meta ) ) {
+				$post_meta = get_post_meta( $post_id );
+			}
+
+			$seo_plugin_config = SeoPluginDetector::resolve_runtime_plugin_config(
+				self::get_runtime_source_meta_keys( is_array( $post_meta ) ? $post_meta : array() ),
+				$seo_plugin_config['key']
+			);
+		}
+
+		$meta_key_config = array(
+			'translate' => self::merge_meta_keys( self::meta_keys( 'ai_translate_meta_translate' ), $seo_plugin_config['translate'] ),
+			'clear'     => self::merge_meta_keys( self::meta_keys( 'ai_translate_meta_clear' ), $seo_plugin_config['clear'] ),
+			'seo'       => $seo_plugin_config,
+		);
+
+		if ( $post_id > 0 ) {
+			self::$resolved_meta_key_config[ $post_id ] = $meta_key_config;
+		}
+
+		return $meta_key_config;
+	}
+
+	private static function get_runtime_source_meta_keys( array $post_meta ): array {
+		$meta_keys = array();
+
+		foreach ( $post_meta as $meta_key => $values ) {
+			if ( ! is_string( $meta_key ) ) {
+				continue;
+			}
+
+			if ( in_array( $meta_key, self::INTERNAL_META_KEYS_TO_SKIP, true ) ) {
+				continue;
+			}
+
+			$meta_keys[] = $meta_key;
+		}
+
+		return SeoPluginDetector::normalize_meta_keys( $meta_keys );
+	}
+
+	private static function get_polylang_translation_source_post_id(): int {
+		$request_context = self::get_new_post_translation_request_context();
+
+		if ( ! is_array( $request_context ) ) {
+			return 0;
+		}
+
+		return absint( $request_context['source_post_id'] ?? 0 );
 	}
 
 	private static function translate_meta_value( $value, string $to, string $from = 'en', string $additional_prompt = '' ) {
@@ -2576,6 +2642,7 @@ class AI_Translate {
 	private static function prepare_translation_meta( int $post_id, string $to, string $from, string $additional_prompt ) {
 		$meta           = get_post_meta( $post_id );
 		$processed_meta = array();
+		$meta_key_config = self::get_effective_meta_key_config( $post_id, is_array( $meta ) ? $meta : array() );
 
 		foreach ( $meta as $key => $values ) {
 			if ( self::is_translation_cancelled() ) {
@@ -2587,9 +2654,9 @@ class AI_Translate {
 			}
 
 			$value = maybe_unserialize( $values[0] ?? '' );
-			if ( in_array( $key, self::meta_clear(), true ) ) {
+			if ( in_array( $key, $meta_key_config['clear'], true ) ) {
 				$processed_meta[ $key ] = '';
-			} elseif ( in_array( $key, self::meta_translate(), true ) ) {
+			} elseif ( in_array( $key, $meta_key_config['translate'], true ) ) {
 				$translated_meta = self::translate_meta_value_for_key( $key, $value, $to, $from, $additional_prompt );
 				$processed_meta[ $key ] = is_wp_error( $translated_meta ) ? $value : $translated_meta;
 			} else {
@@ -2622,18 +2689,24 @@ class AI_Translate {
 		return SeoPluginDetector::normalize_meta_keys( $merged );
 	}
 
-	private static function meta_clear() {
+	private static function meta_clear( int $post_id = 0 ) {
+		if ( $post_id > 0 ) {
+			return self::get_effective_meta_key_config( $post_id )['clear'];
+		}
+
 		if ( null === self::$meta_clear ) {
-			$seo_plugin_config = self::get_active_seo_plugin_config();
-			self::$meta_clear  = self::merge_meta_keys( self::meta_keys( 'ai_translate_meta_clear' ), $seo_plugin_config['clear'] );
+			self::$meta_clear = self::get_effective_meta_key_config()['clear'];
 		}
 		return self::$meta_clear;
 	}
 
-	private static function meta_translate() {
+	private static function meta_translate( int $post_id = 0 ) {
+		if ( $post_id > 0 ) {
+			return self::get_effective_meta_key_config( $post_id )['translate'];
+		}
+
 		if ( null === self::$meta_translate ) {
-			$seo_plugin_config    = self::get_active_seo_plugin_config();
-			self::$meta_translate = self::merge_meta_keys( self::meta_keys( 'ai_translate_meta_translate' ), $seo_plugin_config['translate'] );
+			self::$meta_translate = self::get_effective_meta_key_config()['translate'];
 		}
 		return self::$meta_translate;
 	}

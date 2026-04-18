@@ -742,13 +742,7 @@
                     'div',
                     { style: { marginTop: '10px', marginBottom: '10px' } },
                     createElement(Notice, { status: 'warning', isDismissible: false }, text('existingTranslationNotice', 'A translation already exists for the selected language. Enable overwrite to update it.'))
-                ) : null,
-                createElement(Button, {
-                    variant: 'secondary',
-                    onClick: refreshData,
-                    disabled: !postId || isRefreshing || isTranslating,
-                    style: { width: '100%', justifyContent: 'center' },
-                }, text('refreshButton', 'Refresh translation status'))
+                ) : null
             ),
             statusItems.length ? createElement(
                 Fragment,
@@ -771,7 +765,17 @@
                         );
                     })
                 )
-            ) : null
+            ) : null,
+            createElement(
+                'div',
+                { style: { marginTop: statusItems.length ? '12px' : 0 } },
+                createElement(Button, {
+                    variant: 'secondary',
+                    onClick: refreshData,
+                    disabled: !postId || isRefreshing || isTranslating,
+                    style: { width: '100%', justifyContent: 'center' },
+                }, text('refreshButton', 'Refresh translation status'))
+            )
         );
     }
 

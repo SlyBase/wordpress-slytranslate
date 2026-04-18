@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -34,7 +34,7 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * Translated outputs are validated before they are accepted. SlyTranslate rejects empty/chatty assistant-style answers, implausibly long title-like responses, and structure drift such as missing HTML tags, Gutenberg block comments, URLs, or code fences. For standard instruct/chat models, the plugin retries once with stricter output instructions before failing.
 * Block content is parsed before translation: code and preformatted blocks are skipped, and consecutive translatable blocks are batched together for efficiency.
 * Translation plugin support via an adapter interface. Currently supports **Polylang**, including posts, pages, custom post types, and associated taxonomies. Additional adapters (WPML, TranslatePress, etc.) can be added.
-* Popular SEO plugins are detected automatically and their key SEO meta fields can be translated or cleared without manual configuration.
+* Popular SEO plugins are detected automatically and their key SEO meta fields can be translated or cleared without manual configuration. At runtime, SlyTranslate also inspects the source post's real SEO meta keys and merges any matching supported profiles, so legacy or mixed setups (for example Genesis meta on a site that now uses The SEO Framework) continue to translate correctly.
 * The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. During active content translations, the panel shows a live progress bar with phase and chunk tracking, and the main action button toggles from **Translate now** to **Cancel translation**. A selected-text action for translating highlighted text inline via `ai-translate/translate-text` is available even without a translation plugin.
 * All abilities are exposed via the REST API (`/wp-abilities/v1/`) and marked public for MCP Adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`.
 * Polylang auto-translate hooks are preserved for backward compatibility — creating a new translation in Polylang still triggers automatic translation.
@@ -107,7 +107,9 @@ Yes. The `translate-content`, `translate-content-bulk`, `get-translation-status`
 
 = How do SEO plugin fields get translated? =
 
-The plugin auto-detects supported SEO plugins such as Yoast SEO, Rank Math, All in One SEO, The SEO Framework, SEOpress, and Slim SEO. Their most important title/description meta fields are translated automatically, while analysis scores are cleared so the SEO plugin can recalculate them.
+The plugin auto-detects supported SEO plugins such as Genesis SEO, Yoast SEO, Rank Math, All in One SEO, The SEO Framework, SEOpress, and Slim SEO. Their most important title/description meta fields are translated automatically, while analysis scores are cleared so the SEO plugin can recalculate them.
+
+For runtime translation, the plugin does not rely only on the currently detected SEO plugin. It also checks the source post's stored meta keys and merges any matching supported profiles, so legacy Genesis fields like `_genesis_title` and `_genesis_description` are still translated even after a later SEO-plugin migration. Unknown Genesis flags, robots settings, and URL-like fields are left untouched unless you add them explicitly via `ai-translate/configure`.
 
 = Can I trigger translation from the block editor? =
 
@@ -118,6 +120,11 @@ Yes. The block editor includes an **AI Translate** panel in the document setting
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= 1.4.1 =
+* SEO: runtime SEO meta resolution now merges the active SEO profile with supported source-post meta keys, so legacy Genesis `_genesis_title` and `_genesis_description` fields are translated even when another SEO plugin is currently active.
+* TranslateGemma: in direct API kwargs mode, translation requests no longer send the system prompt, preventing llama.cpp templates from echoing prompt or style-guidance text at the start of translated chunks.
+* Editor: moved the "Refresh translation status" button below the translation-status list in the block editor sidebar.
 
 = 1.4.0 =
 * Editor: added a real-time translation progress bar to the AI Translate sidebar panel, including phase labels and content chunk tracking.

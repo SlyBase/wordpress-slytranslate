@@ -7,6 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class SeoPluginDetector {
 
 	private const CONFIGS = array(
+		'genesis' => array(
+			'label'     => 'Genesis SEO',
+			'translate' => array(
+				'_genesis_title',
+				'_genesis_description',
+			),
+			'clear'     => array(),
+		),
 		'yoast' => array(
 			'label'     => 'Yoast SEO',
 			'translate' => array(
@@ -95,21 +103,103 @@ class SeoPluginDetector {
 		),
 	);
 
-	public static function get_active_plugin_config(): array {
-		$plugin_key = self::get_active_plugin_key();
-		$configs    = apply_filters( 'ai_translate_seo_plugin_configs', self::CONFIGS );
+	public static function get_plugin_configs(): array {
+		$configs = apply_filters( 'ai_translate_seo_plugin_configs', self::CONFIGS );
 
-		if ( ! is_array( $configs ) || '' === $plugin_key || ! isset( $configs[ $plugin_key ] ) || ! is_array( $configs[ $plugin_key ] ) ) {
+		if ( ! is_array( $configs ) ) {
+			return array();
+		}
+
+		$normalized_configs = array();
+
+		foreach ( $configs as $plugin_key => $config ) {
+			if ( ! is_string( $plugin_key ) || '' === trim( $plugin_key ) || ! is_array( $config ) ) {
+				continue;
+			}
+
+			$normalized_configs[ $plugin_key ] = self::normalize_plugin_config( $plugin_key, $config );
+		}
+
+		return $normalized_configs;
+	}
+
+	public static function get_plugin_config( string $plugin_key ): array {
+		$configs = self::get_plugin_configs();
+
+		if ( '' === $plugin_key || ! isset( $configs[ $plugin_key ] ) ) {
 			return self::get_empty_config();
 		}
 
-		$config              = $configs[ $plugin_key ];
-		$config['key']       = $plugin_key;
-		$config['label']     = isset( $config['label'] ) ? (string) $config['label'] : $plugin_key;
-		$config['translate'] = self::normalize_meta_keys( $config['translate'] ?? array() );
-		$config['clear']     = self::normalize_meta_keys( $config['clear'] ?? array() );
+		return $configs[ $plugin_key ];
+	}
+
+	public static function get_filtered_plugin_config( string $plugin_key ): array {
+		$config = self::get_plugin_config( $plugin_key );
+
+		if ( '' === $config['key'] ) {
+			return $config;
+		}
+
+		$config['translate'] = apply_filters( 'ai_translate_seo_meta_translate', $config['translate'], $plugin_key, $config );
+		$config['clear']     = apply_filters( 'ai_translate_seo_meta_clear', $config['clear'], $plugin_key, $config );
+
+		$config['translate'] = self::normalize_meta_keys( $config['translate'] );
+		$config['clear']     = self::normalize_meta_keys( $config['clear'] );
 
 		return $config;
+	}
+
+	public static function get_active_plugin_config(): array {
+		return self::get_filtered_plugin_config( self::get_active_plugin_key() );
+	}
+
+	public static function resolve_runtime_plugin_config( array $meta_keys, string $active_plugin_key = '' ): array {
+		$meta_keys   = self::normalize_meta_keys( $meta_keys );
+		$plugin_keys = array();
+
+		if ( '' !== $active_plugin_key && '' !== self::get_plugin_config( $active_plugin_key )['key'] ) {
+			$plugin_keys[] = $active_plugin_key;
+		}
+
+		foreach ( self::get_plugin_configs() as $plugin_key => $config ) {
+			if ( self::config_matches_meta_keys( $config, $meta_keys ) ) {
+				$plugin_keys[] = $plugin_key;
+			}
+		}
+
+		$plugin_keys = array_values( array_unique( $plugin_keys ) );
+
+		if ( array() === $plugin_keys ) {
+			return self::get_empty_config();
+		}
+
+		$labels    = array();
+		$translate = array();
+		$clear     = array();
+
+		foreach ( $plugin_keys as $plugin_key ) {
+			$config = self::get_filtered_plugin_config( $plugin_key );
+
+			if ( '' === $config['key'] ) {
+				continue;
+			}
+
+			$labels[]   = $config['label'];
+			$translate  = array_merge( $translate, $config['translate'] );
+			$clear      = array_merge( $clear, $config['clear'] );
+		}
+
+		if ( array() === $labels ) {
+			return self::get_empty_config();
+		}
+
+		return array(
+			'key'          => '' !== $active_plugin_key ? $active_plugin_key : ( 1 === count( $plugin_keys ) ? $plugin_keys[0] : '' ),
+			'label'        => implode( ', ', array_values( array_unique( $labels ) ) ),
+			'translate'    => self::normalize_meta_keys( $translate ),
+			'clear'        => self::normalize_meta_keys( $clear ),
+			'matched_keys' => $plugin_keys,
+		);
 	}
 
 	public static function get_active_plugin_key(): string {
@@ -140,12 +230,33 @@ class SeoPluginDetector {
 		return '';
 	}
 
+	private static function normalize_plugin_config( string $plugin_key, array $config ): array {
+		return array(
+			'key'          => $plugin_key,
+			'label'        => isset( $config['label'] ) ? (string) $config['label'] : $plugin_key,
+			'translate'    => self::normalize_meta_keys( $config['translate'] ?? array() ),
+			'clear'        => self::normalize_meta_keys( $config['clear'] ?? array() ),
+			'matched_keys' => array( $plugin_key ),
+		);
+	}
+
+	private static function config_matches_meta_keys( array $config, array $meta_keys ): bool {
+		if ( array() === $meta_keys ) {
+			return false;
+		}
+
+		$supported_meta_keys = array_merge( $config['translate'] ?? array(), $config['clear'] ?? array() );
+
+		return array() !== array_intersect( $meta_keys, $supported_meta_keys );
+	}
+
 	private static function get_empty_config(): array {
 		return array(
-			'key'       => '',
-			'label'     => '',
-			'translate' => array(),
-			'clear'     => array(),
+			'key'          => '',
+			'label'        => '',
+			'translate'    => array(),
+			'clear'        => array(),
+			'matched_keys' => array(),
 		);
 	}
 

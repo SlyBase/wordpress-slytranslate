@@ -119,6 +119,67 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertSame( 'direct_api_failed', $diagnostics['failure_reason'] );
 	}
 
+	public function test_translategemma_kwargs_request_omits_system_message(): void {
+		$captured_body = array();
+
+		$this->setStaticProperty( AI_Translate::class, 'translation_source_lang', 'en' );
+		$this->setStaticProperty( AI_Translate::class, 'translation_target_lang', 'de' );
+		$this->mockSuccessfulDirectApiResponse( $captured_body );
+
+		$result = $this->invokeStatic(
+			AI_Translate::class,
+			'translate_chunk_direct_api',
+			array( 'Hello world', 'Prompt', 'translategemma-4b-it.Q4_K_M', 'http://llama.local:8080', true )
+		);
+
+		$this->assertSame( 'Hallo Welt', $result );
+		$this->assertSame(
+			array(
+				array(
+					'role'    => 'user',
+					'content' => 'Hello world',
+				),
+			),
+			$captured_body['messages'] ?? null
+		);
+		$this->assertSame(
+			array(
+				'source_lang_code' => 'en',
+				'target_lang_code' => 'de',
+			),
+			$captured_body['chat_template_kwargs'] ?? null
+		);
+	}
+
+	public function test_non_translategemma_kwargs_request_keeps_system_message(): void {
+		$captured_body = array();
+
+		$this->setStaticProperty( AI_Translate::class, 'translation_source_lang', 'en' );
+		$this->setStaticProperty( AI_Translate::class, 'translation_target_lang', 'de' );
+		$this->mockSuccessfulDirectApiResponse( $captured_body );
+
+		$result = $this->invokeStatic(
+			AI_Translate::class,
+			'translate_chunk_direct_api',
+			array( 'Hello world', 'Prompt', 'gemma-3-4b-it', 'http://llama.local:8080', true )
+		);
+
+		$this->assertSame( 'Hallo Welt', $result );
+		$this->assertSame(
+			array(
+				array(
+					'role'    => 'system',
+					'content' => 'Prompt',
+				),
+				array(
+					'role'    => 'user',
+					'content' => 'Hello world',
+				),
+			),
+			$captured_body['messages'] ?? null
+		);
+	}
+
 	public function test_non_translategemma_still_falls_back_to_wp_ai_client(): void {
 		$this->setStaticProperty( AI_Translate::class, 'translation_runtime_context', array(
 			'service_slug'   => '',
@@ -171,5 +232,29 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$diagnostics = $this->getStaticProperty( AI_Translate::class, 'last_translation_transport_diagnostics' );
 		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
 		$this->assertTrue( $diagnostics['fallback_allowed'] );
+	}
+
+	private function mockSuccessfulDirectApiResponse( array &$captured_body, string $translated_text = 'Hallo Welt' ): void {
+		Functions\when( 'wp_remote_post' )->alias(
+			static function ( string $endpoint, array $args ) use ( &$captured_body, $translated_text ) {
+				$decoded_body  = json_decode( $args['body'] ?? '', true );
+				$captured_body = is_array( $decoded_body ) ? $decoded_body : array();
+
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => wp_json_encode(
+						array(
+							'choices' => array(
+								array(
+									'message' => array(
+										'content' => $translated_text,
+									),
+								),
+							),
+						)
+					),
+				);
+			}
+		);
 	}
 }

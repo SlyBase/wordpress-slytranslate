@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class EditorBootstrap {
 
-	private const VERSION              = '1.4.0';
+	private const VERSION              = '1.4.1';
 	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
 	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 	private const AVAILABLE_MODELS_TRANSIENT = 'ai_translate_available_models';

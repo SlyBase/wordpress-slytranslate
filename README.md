@@ -10,7 +10,7 @@ SlyTranslate exposes translation workflows as reusable WordPress abilities, so t
 - Translate posts, pages, and custom post types with `ai-translate/translate-content`
 - Bulk-translate multiple entries with `ai-translate/translate-content-bulk`
 - Inspect translation status and untranslated content
-- Translate SEO title and description fields for major SEO plugins
+- Translate SEO title and description fields for major SEO plugins, including legacy Genesis meta on mixed or migrated sites
 - Use a block-editor sidebar for content translation workflows, including a model selector
 - Real-time translation progress bar with phase and chunk tracking in the editor sidebar
 - Translate selected text inline in the editor, even without a translation plugin
@@ -96,8 +96,11 @@ If no translation plugin is active, text translation still works, including the 
 
 SlyTranslate auto-detects common SEO plugins and translates the most important title and description fields while clearing derived analysis data so the SEO plugin can rebuild it.
 
+At runtime, the plugin merges the active SEO profile with SEO meta keys actually present on the source post. That keeps legacy or mixed setups working, for example when a site now runs The SEO Framework but older content still stores Genesis SEO titles and descriptions.
+
 Supported SEO integrations include:
 
+- Genesis SEO
 - Yoast SEO
 - Rank Math
 - All in One SEO
@@ -180,6 +183,12 @@ TranslateGemma now fails closed: if no direct API URL is configured, if kwargs s
 
 A custom Jinja chat template is still required on the llama.cpp side — see `translategemma-llama-cpp-guide.md` in this repository.
 
+### How do SEO plugin fields get translated?
+
+SlyTranslate combines user-configured meta keys with known SEO-plugin profiles. For runtime translation, it does not rely only on the currently detected SEO plugin: it also inspects the source post's real meta keys and merges any matching supported profiles. That means legacy Genesis fields such as `_genesis_title` and `_genesis_description` are still translated on sites that have since switched to another SEO plugin.
+
+Known text fields are translated, while rebuild-only analysis keys are cleared only for the plugins that explicitly need that behavior. Unknown Genesis flags, robots settings, and URL-like fields are left untouched unless you add them yourself via `ai-translate/configure`.
+
 ### What happens if a model returns a chat answer instead of a translation?
 
 SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
@@ -187,6 +196,17 @@ SlyTranslate validates translation output before saving it. The plugin rejects e
 ## Development
 
 This repository contains the plugin source in the `slytranslate` directory. The WordPress.org-style plugin readme remains in `slytranslate/readme.txt`, while this file is intended for GitHub visitors.
+
+### VS Code Workflow
+
+The workspace includes VS Code tasks for the local plugin packaging and deploy loop:
+
+- `SlyTranslate: Build Plugin ZIP` creates `slytranslate.zip` in the repository root.
+- `SlyTranslate: Verify Plugin ZIP` runs the existing archive guardrails against that ZIP.
+- `SlyTranslate: Deploy Plugin ZIP to WordPress Pod` copies the ZIP contents into `/var/www/html/wp-content/plugins/slytranslate` in the `wordpress` container of the first pod matching `app.kubernetes.io/instance=slybase-com,app.kubernetes.io/name=wordpress` in namespace `websites`.
+- `SlyTranslate: Build and Deploy Plugin ZIP` runs the full build, verify, and deploy sequence.
+
+If you use the `spencerwmiles.vscode-task-buttons` extension, the workspace settings also add a `SlyTranslate` status-bar button with the same task entry points.
 
 If you update a `.po` file under `slytranslate/languages/`, rebuild the matching `.mo` file with `msgfmt` before committing. CI recompiles each tracked PO file and byte-compares the generated MO output against the committed MO artifact.
 

@@ -8,89 +8,94 @@ use AI_Translate\SeoPluginDetector;
 use Brain\Monkey\Functions;
 
 /**
- * Tests for SeoPluginDetector::get_active_plugin_config() and
- * SeoPluginDetector::get_active_plugin_key().
+ * Tests for SeoPluginDetector plugin config and runtime resolution helpers.
  */
 class SeoPluginDetectorTest extends TestCase {
 
-public function test_returns_empty_config_when_no_seo_plugin_active(): void {
-// Default test environment: no SEO constants/classes defined.
-Functions\when( 'apply_filters' )->returnArg( 2 );
+	protected function setUp(): void {
+		parent::setUp();
 
-$config = SeoPluginDetector::get_active_plugin_config();
+		Functions\when( 'apply_filters' )->alias(
+			static function ( string $tag, $value, ...$args ) {
+				return $value;
+			}
+		);
+	}
 
-$this->assertIsArray( $config );
-$this->assertSame( '', $config['key'] );
-$this->assertSame( '', $config['label'] );
-$this->assertSame( [], $config['translate'] );
-$this->assertSame( [], $config['clear'] );
-}
+	public function test_returns_empty_config_when_no_seo_plugin_active(): void {
+		$config = SeoPluginDetector::get_active_plugin_config();
 
-public function test_config_structure_has_required_keys(): void {
-Functions\when( 'apply_filters' )->returnArg( 2 );
+		$this->assertIsArray( $config );
+		$this->assertSame( '', $config['key'] );
+		$this->assertSame( '', $config['label'] );
+		$this->assertSame( array(), $config['translate'] );
+		$this->assertSame( array(), $config['clear'] );
+		$this->assertSame( array(), $config['matched_keys'] );
+	}
 
-$config = SeoPluginDetector::get_active_plugin_config();
+	public function test_get_plugin_config_returns_genesis_profile(): void {
+		$config = SeoPluginDetector::get_plugin_config( 'genesis' );
 
-$this->assertArrayHasKey( 'key', $config );
-$this->assertArrayHasKey( 'label', $config );
-$this->assertArrayHasKey( 'translate', $config );
-$this->assertArrayHasKey( 'clear', $config );
-}
+		$this->assertSame( 'genesis', $config['key'] );
+		$this->assertSame( 'Genesis SEO', $config['label'] );
+		$this->assertSame( array( '_genesis_title', '_genesis_description' ), $config['translate'] );
+		$this->assertSame( array(), $config['clear'] );
+	}
 
-public function test_applies_filter_to_configs(): void {
-$customConfigs = [
-'test-seo' => [
-'label'     => 'Test SEO',
-'translate' => [ '_test_title', '_test_desc' ],
-'clear'     => [ '_test_score' ],
-],
-];
+	public function test_filtered_plugin_config_applies_meta_filters(): void {
+		Functions\when( 'apply_filters' )->alias(
+			static function ( string $tag, $value, ...$args ) {
+				if ( 'ai_translate_seo_meta_translate' === $tag && 'genesis' === ( $args[0] ?? '' ) ) {
+					return array_merge( $value, array( '_genesis_custom_title' ) );
+				}
 
-// The filter returns a modified configs array that includes test-seo.
-// We also need get_active_plugin_key() to return 'test-seo'.
-// Since no SEO constants are defined in test env, key will be ''.
-// Test the filter application on the configs shape only.
-Functions\when( 'apply_filters' )
-->alias( function ( $tag, $value, ...$args ) use ( $customConfigs ) {
-if ( 'ai_translate_seo_plugin_configs' === $tag ) {
-return $customConfigs;
-}
-return $value;
-} );
+				if ( 'ai_translate_seo_meta_clear' === $tag && 'genesis' === ( $args[0] ?? '' ) ) {
+					return array_merge( $value, array( '_genesis_custom_score' ) );
+				}
 
-// With no active plugin (key=''), even with custom configs we get empty config.
-$config = SeoPluginDetector::get_active_plugin_config();
-$this->assertSame( '', $config['key'] );
-}
+				return $value;
+			}
+		);
 
-public function test_returned_translate_keys_are_normalized(): void {
-// Inject a config via filter that has raw (unnormalized) meta keys.
-$dirtyConfigs = [
-'fake-plugin' => [
-'label'     => 'Fake Plugin',
-'translate' => [ '  _dirty_title  ', '_clean', '_clean' ],
-'clear'     => [],
-],
-];
+		$config = SeoPluginDetector::get_filtered_plugin_config( 'genesis' );
 
-Functions\when( 'apply_filters' )
-->alias( function ( $tag, $value ) use ( $dirtyConfigs ) {
-if ( 'ai_translate_seo_plugin_configs' === $tag ) {
-return $dirtyConfigs;
-}
-return $value;
-} );
+		$this->assertContains( '_genesis_custom_title', $config['translate'] );
+		$this->assertContains( '_genesis_custom_score', $config['clear'] );
+	}
 
-// get_active_plugin_key() returns '' → empty config, so normalization
-// is not triggered for our injected config. Test normalization separately
-// via the private normalize_meta_keys method.
-$result = $this->invokeStatic( SeoPluginDetector::class, 'normalize_meta_keys', [ [ '  _dirty  ', '_clean', '_clean' ] ] );
-$this->assertSame( [ '_dirty', '_clean' ], $result );
-}
+	public function test_runtime_config_merges_active_and_meta_matched_profiles(): void {
+		$config = SeoPluginDetector::resolve_runtime_plugin_config(
+			array( '_genesis_title', '_genesis_description' ),
+			'the-seo-framework'
+		);
 
-public function test_get_active_plugin_key_returns_empty_string_in_test_env(): void {
-// In the test environment no SEO plugin constants or classes exist.
-$key = SeoPluginDetector::get_active_plugin_key();
-$this->assertSame( '', $key );
-}
+		$this->assertSame( 'the-seo-framework', $config['key'] );
+		$this->assertSame( array( 'the-seo-framework', 'genesis' ), $config['matched_keys'] );
+		$this->assertContains( '_tsf_title', $config['translate'] );
+		$this->assertContains( '_genesis_title', $config['translate'] );
+		$this->assertContains( '_genesis_description', $config['translate'] );
+		$this->assertContains( '_tsf_counter_page_score', $config['clear'] );
+		$this->assertNotContains( '_genesis_robots_noarchive', $config['translate'] );
+	}
+
+	public function test_runtime_config_does_not_match_unknown_genesis_flags(): void {
+		$config = SeoPluginDetector::resolve_runtime_plugin_config(
+			array( '_genesis_robots_noarchive', '_genesis_canonical_uri' )
+		);
+
+		$this->assertSame( '', $config['key'] );
+		$this->assertSame( array(), $config['translate'] );
+		$this->assertSame( array(), $config['clear'] );
+		$this->assertSame( array(), $config['matched_keys'] );
+	}
+
+	public function test_normalize_meta_keys_trims_and_deduplicates(): void {
+		$result = $this->invokeStatic( SeoPluginDetector::class, 'normalize_meta_keys', array( array( '  _dirty  ', '_clean', '_clean' ) ) );
+
+		$this->assertSame( array( '_dirty', '_clean' ), $result );
+	}
+
+	public function test_get_active_plugin_key_returns_empty_string_in_test_env(): void {
+		$this->assertSame( '', SeoPluginDetector::get_active_plugin_key() );
+	}
 }
