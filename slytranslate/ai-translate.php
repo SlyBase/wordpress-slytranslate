@@ -34,6 +34,7 @@ require_once __DIR__ . '/inc/PostTranslationService.php';
 require_once __DIR__ . '/inc/LegacyPolylangBridge.php';
 require_once __DIR__ . '/inc/EditorRestController.php';
 require_once __DIR__ . '/inc/AbilityRegistrar.php';
+require_once __DIR__ . '/inc/ListTableTranslation.php';
 
 class AI_Translate {
 
@@ -83,6 +84,7 @@ class AI_Translate {
 		add_filter( 'default_content',        array( static::class, 'default_content' ), 10, 2 );
 		add_filter( 'default_excerpt',        array( static::class, 'default_excerpt' ), 10, 2 );
 		add_filter( 'pll_translate_post_meta', array( static::class, 'pll_translate_post_meta' ), 10, 3 );
+		ListTableTranslation::add_hooks();
 	}
 
 	public static function enqueue_editor_plugin(): void {
