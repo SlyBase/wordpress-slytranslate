@@ -126,6 +126,9 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 * Editor: added "Translate → [Language]" row-action links to the post/page list tables; links appear only for languages that do not yet have a translation of that post.
 * Editor: added "Translate with AI → [Language]" entries to the bulk-action dropdown on all post/page list-table screens; results (created, skipped, errors) are reported via an admin notice after processing.
 
+= 1.4.2 =
+* Fix: translation of posts with dense Gutenberg block structure (e.g. privacy policy pages) no longer fails with a "lost required structure" error. The closing block comment of each translated chunk was silently dropped by translation models because it became a trailing HTML comment with nothing after it; a sentinel marker is now appended before sending to the model and stripped afterward, so all placeholders are preserved through translation.
+
 = 1.4.1 =
 * Refactoring: Extracted TranslationProgressTracker, TranslationRuntime, DirectApiTranslationClient, ContentTranslator, MetaTranslationService, PostTranslationService, EditorRestController, LegacyPolylangBridge, and TranslationQueryService from the monolithic AI_Translate class to improve maintainability. All public APIs and test contracts remain stable.
 * Refactoring: extracted text-splitting and translation output validation into dedicated helper classes while keeping the public AI_Translate API and test contracts stable.
