@@ -179,10 +179,20 @@ class ContentTranslator {
 			return TranslationRuntime::translate_text( $serialized, $to, $from, $additional_prompt );
 		}
 
+		// Append a sentinel so the last real placeholder never sits at the very end of the
+		// string. Translation models reliably drop trailing HTML comments that have no content
+		// after them; the sentinel gives those placeholders something to anchor to and is
+		// stripped from the result before block comments are restored.
+		$sentinel  = "\n<!--SLYWPCSENTINEL-->";
+		$stripped .= $sentinel;
+
 		$translated_stripped = TranslationRuntime::translate_text( $stripped, $to, $from, $additional_prompt );
 		if ( is_wp_error( $translated_stripped ) ) {
 			return $translated_stripped;
 		}
+
+		// Remove the sentinel. The model may reformat surrounding whitespace slightly.
+		$translated_stripped = (string) preg_replace( '/\s*<!--SLYWPCSENTINEL-->\s*$/i', '', $translated_stripped );
 
 		// Verify every placeholder survived the translation.
 		foreach ( array_keys( $block_comments ) as $i ) {
