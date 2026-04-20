@@ -131,8 +131,12 @@ class TranslationValidator {
 			return true;
 		}
 
-		$source_url_count     = self::count_pattern_matches( '/https?:\/\/[^\s"\'<>]+/iu', $source_text );
-		$translated_url_count = self::count_pattern_matches( '/https?:\/\/[^\s"\'<>]+/iu', $translated_text );
+		// Count only URLs that appear as HTML attribute values (href, src, action).
+		// Visible-text URLs inside link labels are legitimately replaced with descriptive
+		// anchor text during translation; counting them would produce false positives when
+		// source content contains patterns like <a href="https://…">https://…</a>.
+		$source_url_count     = self::count_pattern_matches( '/\b(?:href|src|action)\s*=\s*["\']https?:\/\/[^\s"\'<>]+["\']/iu', $source_text );
+		$translated_url_count = self::count_pattern_matches( '/\b(?:href|src|action)\s*=\s*["\']https?:\/\/[^\s"\'<>]+["\']/iu', $translated_text );
 		if ( $source_url_count > 0 && $translated_url_count < $source_url_count ) {
 			return true;
 		}

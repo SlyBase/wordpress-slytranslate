@@ -61,6 +61,19 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertNull( $result );
 	}
 
+	public function test_allows_visible_url_text_replaced_with_descriptive_anchor_text(): void {
+		// Models legitimately replace visible URL text like <a href="…">https://…</a>
+		// with descriptive anchor text like <a href="…">Automattic Privacy Policy</a>.
+		// The old all-occurrences regex produced a false positive here (source_count=2,
+		// translated_count=1). The fix counts only href/src/action attribute URLs.
+		$source_text = '<!--SLYWPC0--><p>Details at <a href="https://automattic.com/privacy/">https://automattic.com/privacy/</a>.</p><!--SLYWPC1-->';
+		$translated  = '<!--SLYWPC0--><p>Details at <a href="https://automattic.com/privacy/">Automattic Privacy Policy</a>.</p><!--SLYWPC1-->';
+
+		$result = TranslationValidator::validate( $source_text, $translated );
+
+		$this->assertNull( $result );
+	}
+
 	public function test_placeholder_content_still_checks_url_integrity(): void {
 		$source_text = '<!--SLYWPC0--><p>Visit <a href="https://example.com">here</a>.</p><!--SLYWPC1-->';
 		$translated  = '<!--SLYWPC0--><p>Besuchen Sie hier.</p><!--SLYWPC1-->';
