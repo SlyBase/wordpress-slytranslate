@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.4.1
+Version: 1.5.0
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -25,6 +25,7 @@ require_once __DIR__ . '/inc/TranslationValidator.php';
 require_once __DIR__ . '/inc/ConfigurationService.php';
 require_once __DIR__ . '/inc/EditorBootstrap.php';
 require_once __DIR__ . '/inc/TranslationProgressTracker.php';
+require_once __DIR__ . '/inc/TimingLogger.php';
 require_once __DIR__ . '/inc/DirectApiTranslationClient.php';
 require_once __DIR__ . '/inc/TranslationRuntime.php';
 require_once __DIR__ . '/inc/ContentTranslator.php';
@@ -41,7 +42,7 @@ class AI_Translate {
 	// Default prompt template – referenced by TranslationRuntime::build_prompt().
 	public static $PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting and embedded media. Only return the new content.';
 
-	private const VERSION               = '1.4.1';
+	private const VERSION               = '1.5.0';
 	private const EDITOR_SCRIPT_HANDLE  = 'ai-translate-editor';
 	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 
@@ -112,26 +113,63 @@ class AI_Translate {
 		return self::execute_get_languages();
 	}
 
+	public static function rest_execute_get_available_models( \WP_REST_Request $request ) {
+		$refresh = (bool) $request->get_param( 'refresh' );
+		$models  = EditorBootstrap::get_available_models( $refresh );
+
+		return array(
+			'models'           => $models,
+			'defaultModelSlug' => (string) get_option( 'ai_translate_model_slug', '' ),
+			'refreshed'        => $refresh,
+		);
+	}
+
 	public static function rest_execute_get_translation_status( \WP_REST_Request $request ) {
 		return self::execute_get_translation_status( self::get_editor_rest_input( $request ) );
 	}
 
 	public static function rest_execute_get_translation_progress( \WP_REST_Request $request ) {
-		return TranslationProgressTracker::get_progress();
+		$input   = self::get_editor_rest_input( $request );
+		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+		return TranslationProgressTracker::get_progress( $post_id );
 	}
 
 	public static function rest_execute_translate_text( \WP_REST_Request $request ) {
 		return self::execute_translate_text( self::get_editor_rest_input( $request ) );
 	}
 
+	public static function rest_execute_translate_blocks( \WP_REST_Request $request ) {
+		return self::execute_translate_blocks( self::get_editor_rest_input( $request ) );
+	}
+
 	public static function rest_execute_translate_content( \WP_REST_Request $request ) {
+		// Allow long-running translations to complete server-side even when the
+		// browser navigates away or aborts the fetch (used by the
+		// "Continue in background" flow in the post-list dialog).
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			ignore_user_abort( true );
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 );
+		}
 		TranslationProgressTracker::clear_cancelled();
-		TranslationProgressTracker::clear_progress();
-		return self::execute_translate_content( self::get_editor_rest_input( $request ) );
+		$input   = self::get_editor_rest_input( $request );
+		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+		TranslationProgressTracker::clear_progress( $post_id );
+		return self::execute_translate_content( $input );
 	}
 
 	public static function rest_cancel_translation( \WP_REST_Request $request ) {
 		TranslationProgressTracker::set_cancelled();
+
+		// Clear the per-post progress transient so the next translation start
+		// does not briefly show the cancelled job's last percentage. The bg-bar
+		// polls every 2s and would otherwise render the stale value until the
+		// new job's first set_progress() call lands.
+		$input   = self::get_editor_rest_input( $request );
+		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+		TranslationProgressTracker::clear_progress( $post_id );
+
 		return array( 'cancelled' => true );
 	}
 
@@ -182,10 +220,36 @@ class AI_Translate {
 				if ( is_wp_error( $target_language ) ) { return $target_language; }
 
 				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
+				$plain_text_hint  = 'The input is a short plain-text snippet. Translate it and return only the translated text. Do not wrap in HTML tags or add extra paragraphs.';
+				$additional_prompt = '' !== trim( $additional_prompt ) ? $additional_prompt . "\n\n" . $plain_text_hint : $plain_text_hint;
 				$translated        = self::translate( $text, $target_language, $source_language, $additional_prompt );
 				if ( is_wp_error( $translated ) ) { return $translated; }
 
 				return array( 'translated_text' => $translated, 'source_language' => $source_language, 'target_language' => $target_language );
+			}
+		);
+	}
+
+	public static function execute_translate_blocks( $input ) {
+		$input = is_array( $input ) ? $input : array();
+
+		return TranslationRuntime::with_model_slug_override(
+			$input,
+			function () use ( $input ) {
+				$content = self::require_non_empty_string_input( $input, 'content', 'missing_content', __( 'Block content to translate is required.', 'slytranslate' ) );
+				if ( is_wp_error( $content ) ) { return $content; }
+
+				$source_language = self::require_language_code_input( $input, 'source_language', 'missing_source_language', __( 'Source language is required.', 'slytranslate' ) );
+				if ( is_wp_error( $source_language ) ) { return $source_language; }
+
+				$target_language = self::require_language_code_input( $input, 'target_language', 'missing_target_language', __( 'Target language is required.', 'slytranslate' ) );
+				if ( is_wp_error( $target_language ) ) { return $target_language; }
+
+				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
+				$translated = ContentTranslator::translate_post_content( $content, $target_language, $source_language, $additional_prompt );
+				if ( is_wp_error( $translated ) ) { return $translated; }
+
+				return array( 'translated_content' => $translated, 'source_language' => $source_language, 'target_language' => $target_language );
 			}
 		);
 	}

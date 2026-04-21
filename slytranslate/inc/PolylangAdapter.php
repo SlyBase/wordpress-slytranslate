@@ -94,10 +94,20 @@ class PolylangAdapter implements TranslationPluginAdapter {
 			$update_data['post_title'] = sanitize_text_field( $data['post_title'] );
 		}
 		if ( isset( $data['post_content'] ) ) {
-			$update_data['post_content'] = wp_kses_post( $data['post_content'] );
+			// Do NOT pre-filter through wp_kses_post() here. WordPress core's
+			// `content_save_pre` filter (registered by kses_init_filters)
+			// already runs wp_kses for users without the `unfiltered_html`
+			// capability inside wp_update_post(). Calling wp_kses_post()
+			// unconditionally lowercases case-sensitive SVG attributes
+			// (viewBox → viewbox), strips data-* attributes from custom
+			// blocks like kevinbatdorf/code-block-pro, and removes
+			// `tabindex` from various tags — which causes Gutenberg to
+			// invalidate the block ("Block contains unexpected or invalid
+			// content").
+			$update_data['post_content'] = $data['post_content'];
 		}
 		if ( isset( $data['post_excerpt'] ) ) {
-			$update_data['post_excerpt'] = wp_kses_post( $data['post_excerpt'] );
+			$update_data['post_excerpt'] = $data['post_excerpt'];
 		}
 		$update_data['post_status'] = $data['post_status'] ?? 'draft';
 

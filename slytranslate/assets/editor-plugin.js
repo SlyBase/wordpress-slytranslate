@@ -21,11 +21,17 @@
     const apiFetch = wp.apiFetch;
     const blockEditor = wp.blockEditor || wp.editor || {};
     const RichTextToolbarButton = blockEditor.RichTextToolbarButton;
+    const wpBlocks = wp.blocks || {};
+    const serializeBlocks = wpBlocks.serialize;
+    const parseBlocks = wpBlocks.parse;
+    const useDispatch = wp.data.useDispatch;
+    const PluginBlockSettingsMenuItem = (wp.editor && wp.editor.PluginBlockSettingsMenuItem) || (wp.editPost && wp.editPost.PluginBlockSettingsMenuItem);
     const richText = wp.richText || {};
     const registerFormatType = richText.registerFormatType;
     const slice = richText.slice;
     const insert = richText.insert;
     const selectionFeatureAvailable = !!(registerFormatType && RichTextToolbarButton && slice && insert);
+    const blockTranslationAvailable = !!(serializeBlocks && parseBlocks && PluginBlockSettingsMenuItem && useDispatch);
     const hasTranslationPlugin = !!(settings && settings.translationPluginAvailable);
     const selectionLanguageCodes = [
         'ar', 'bg', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'he', 'hi', 'hr', 'hu', 'id',
@@ -66,12 +72,40 @@
     }
 
     function getSelectionLanguages() {
-        return selectionLanguageCodes.map(function (languageCode) {
-            return {
+        // Prepend languages configured in the active translation plugin
+        // (Polylang) so the user sees them at the top of the dropdown,
+        // followed by the generic fallback list. Names from the plugin take
+        // precedence over Intl.DisplayNames-derived names because the plugin
+        // values are typically already localised by the site administrator.
+        var pluginLanguages = (settings && Array.isArray(settings.translationPluginLanguages))
+            ? settings.translationPluginLanguages
+            : [];
+
+        var seenBaseCodes = {};
+        var result = [];
+
+        pluginLanguages.forEach(function (entry) {
+            if (!entry || !entry.code) { return; }
+            var baseCode = getLanguageBaseCode(entry.code) || normalizeLanguageCode(entry.code);
+            if (!baseCode || seenBaseCodes[baseCode]) { return; }
+            seenBaseCodes[baseCode] = true;
+            result.push({
+                code: entry.code,
+                name: entry.name || getLanguageDisplayName(entry.code),
+            });
+        });
+
+        selectionLanguageCodes.forEach(function (languageCode) {
+            var baseCode = getLanguageBaseCode(languageCode) || normalizeLanguageCode(languageCode);
+            if (!baseCode || seenBaseCodes[baseCode]) { return; }
+            seenBaseCodes[baseCode] = true;
+            result.push({
                 code: languageCode,
                 name: getLanguageDisplayName(languageCode),
-            };
+            });
         });
+
+        return result;
     }
 
     function text(key, fallback) {
@@ -89,6 +123,19 @@
 
     function getRunAbilityPath(abilityName) {
         return getEditorRestPath(abilityName);
+    }
+
+    function slyDebugEnabled() {
+        return !!(typeof window !== 'undefined' && window.SLY_TRANSLATE_DEBUG);
+    }
+
+    function slyDebug() {
+        if (!slyDebugEnabled() || typeof console === 'undefined' || !console.log) {
+            return;
+        }
+        var args = ['[SlyTranslate]'];
+        for (var i = 0; i < arguments.length; i++) { args.push(arguments[i]); }
+        try { console.log.apply(console, args); } catch (e) { }
     }
 
     function runAbility(abilityName, input, signal) {
@@ -110,7 +157,14 @@
             request.signal = signal;
         }
 
-        return apiFetch(request);
+        slyDebug('runAbility request', abilityName, input);
+        return apiFetch(request).then(function (response) {
+            slyDebug('runAbility response', abilityName, response);
+            return response;
+        }, function (error) {
+            slyDebug('runAbility error', abilityName, error);
+            throw error;
+        });
     }
 
     function getErrorMessage(error) {
@@ -140,10 +194,11 @@
     }
 
     function pollTranslationProgress() {
+        const editorPostId = getCurrentEditorPostId();
         const request = {
             path: getEditorRestPath('ai-translate/translation-progress'),
             method: 'POST',
-            data: {},
+            data: editorPostId ? { input: { post_id: editorPostId } } : {},
         };
 
         if (settings && settings.restNonce) {
@@ -170,20 +225,18 @@
             case 'title':
                 return text('progressTitle', 'Translating title...');
             case 'content':
-                return formatText(
-                    text('progressContent', 'Translating content ({current}/{total})...'),
-                    {
-                        current: translationProgress.currentChunk,
-                        total: translationProgress.totalChunks,
-                    }
-                );
+                if (translationProgress.totalChunks > 0 && translationProgress.currentChunk >= translationProgress.totalChunks) {
+                    return text('progressContentFinishing', 'Processing translated content...');
+                }
+                return text('progressContent', 'Translating content...');
             case 'excerpt':
                 return text('progressExcerpt', 'Translating excerpt...');
             case 'meta':
                 return text('progressMeta', 'Translating metadata...');
             case 'saving':
-            case 'done':
                 return text('progressSaving', 'Saving translation...');
+            case 'done':
+                return text('progressDone', 'Translation complete.');
             default:
                 return text('loadingStatus', 'Loading translation status...');
         }
@@ -276,12 +329,89 @@
         return languages[0] ? languages[0].code : 'en';
     }
 
+    // Cached per-post source-language lookup. The selection / block toolbar
+    // dialogs use this to default the "Source language" dropdown to the actual
+    // language of the post being edited (as configured in Polylang) rather
+    // than the browser locale.
+    const _postSourceLanguageCache = {};
+
+    function getCurrentEditorPostId() {
+        try {
+            if (wp && wp.data && typeof wp.data.select === 'function') {
+                const editorStore = wp.data.select('core/editor');
+                if (editorStore && typeof editorStore.getCurrentPostId === 'function') {
+                    return parseInt(editorStore.getCurrentPostId(), 10) || 0;
+                }
+            }
+        } catch (e) { }
+        return 0;
+    }
+
+    function fetchCurrentPostSourceLanguage() {
+        const postId = getCurrentEditorPostId();
+        if (!postId) { return Promise.resolve(''); }
+        if (Object.prototype.hasOwnProperty.call(_postSourceLanguageCache, postId)) {
+            return Promise.resolve(_postSourceLanguageCache[postId]);
+        }
+        return runAbility('ai-translate/get-translation-status', { post_id: postId })
+            .then(function (response) {
+                const sourceLanguage = response && response.source_language ? String(response.source_language) : '';
+                _postSourceLanguageCache[postId] = sourceLanguage;
+                return sourceLanguage;
+            })
+            .catch(function () { return ''; });
+    }
+
     // Module-level cache so both Sidebar and Toolbar share the latest value within a page session.
     let _lastAdditionalPrompt = settings && settings.lastAdditionalPrompt ? settings.lastAdditionalPrompt : '';
 
     // Module-level model slug shared between Sidebar and Selection modal.
-    const _availableModels = settings && Array.isArray(settings.models) ? settings.models : [];
+    // _availableModels is mutable so the sidebar's "refresh models" button
+    // can replace the cached list after fetching fresh data from the server.
+    let _availableModels = settings && Array.isArray(settings.models) ? settings.models : [];
     let _selectedModelSlug = '';
+    // Subscribers (React setState callbacks) that get notified when
+    // _availableModels is replaced via fetchAvailableModels(refresh=true).
+    const _modelListSubscribers = [];
+
+    function subscribeToModelList(callback) {
+        _modelListSubscribers.push(callback);
+        return function unsubscribe() {
+            const index = _modelListSubscribers.indexOf(callback);
+            if (index !== -1) { _modelListSubscribers.splice(index, 1); }
+        };
+    }
+
+    function notifyModelListSubscribers() {
+        _modelListSubscribers.forEach(function (cb) {
+            try { cb(_availableModels); } catch (e) { }
+        });
+    }
+
+    function fetchAvailableModels(forceRefresh) {
+        const path = getEditorRestPath('ai-translate/available-models');
+        const request = {
+            path: path,
+            method: 'POST',
+            data: { refresh: !!forceRefresh },
+        };
+        if (settings && settings.restNonce) {
+            request.headers = { 'X-WP-Nonce': settings.restNonce };
+        }
+        return apiFetch(request).then(function (response) {
+            const models = response && Array.isArray(response.models) ? response.models : [];
+            _availableModels = models;
+            // If the currently selected model is no longer available, reset
+            // the selection to the connector default so the sidebar does not
+            // keep submitting an unknown slug.
+            if (_selectedModelSlug && !models.some(function (m) { return m.value === _selectedModelSlug; })) {
+                _selectedModelSlug = '';
+                try { if (window.localStorage) { window.localStorage.removeItem('aiTranslateModelSlug'); } } catch (e) { }
+            }
+            notifyModelListSubscribers();
+            return models;
+        });
+    }
 
     // Compute the label for the "Auto" option, showing the effective default model.
     var _autoOptionLabel = '— Auto —';
@@ -392,9 +522,14 @@
         const [statusData, setStatusData] = useState(null);
         const [targetLanguage, setTargetLanguage] = useState('');
         const [overwrite, setOverwrite] = useState(false);
-        const [translateTitle, setTranslateTitle] = useState(true);
+        // Title translation is always enabled now; the toggle was removed
+        // from the sidebar UI but the translate-content endpoint still
+        // expects translate_title to be passed.
+        const translateTitle = true;
         const [additionalPrompt, setAdditionalPrompt] = useState(getLastAdditionalPrompt);
         const [modelSlug, setModelSlug] = useState(initSelectedModelSlug);
+        const [availableModels, setAvailableModels] = useState(_availableModels);
+        const [isRefreshingModels, setIsRefreshingModels] = useState(false);
         const [isRefreshing, setIsRefreshing] = useState(false);
         const [isTranslating, setIsTranslating] = useState(false);
         const [translationProgress, setTranslationProgress] = useState(null);
@@ -423,9 +558,13 @@
         function startTranslationProgressPolling() {
             stopTranslationProgressPolling();
             requestTranslationProgress();
+            // 2s cadence keeps the overlay visibly responsive while halving
+            // the REST round-trip rate compared to the original 1s loop. Long
+            // page translations otherwise generate 600+ progress polls per
+            // job, each touching a transient + capability check.
             progressPollingIntervalRef.current = window.setInterval(function () {
                 requestTranslationProgress();
-            }, 1000);
+            }, 2000);
         }
 
         function refreshData() {
@@ -497,6 +636,26 @@
                 stopTranslationProgressPolling();
             };
         }, []);
+
+        // Keep this panel in sync with the module-level model list so that
+        // refreshes triggered from anywhere (sidebar refresh button, future
+        // modal refreshes) propagate without remounting.
+        useEffect(function () {
+            return subscribeToModelList(function (nextModels) {
+                setAvailableModels(nextModels.slice());
+                if (modelSlug && !nextModels.some(function (m) { return m.value === modelSlug; })) {
+                    setModelSlug('');
+                }
+            });
+        }, [modelSlug]);
+
+        function handleRefreshModels() {
+            if (isRefreshingModels) { return; }
+            setIsRefreshingModels(true);
+            fetchAvailableModels(true)
+                .catch(function () { })
+                .finally(function () { setIsRefreshingModels(false); });
+        }
 
         const translationIndex = indexTranslations(statusData && statusData.translations ? statusData.translations : []);
         const sourceLanguage = statusData && statusData.source_language ? statusData.source_language : '';
@@ -598,8 +757,21 @@
             if (translateAbortControllerRef.current) {
                 translateAbortControllerRef.current.abort();
             }
+            // Reset the local progress state immediately so the bar drops to 0
+            // before the next translation starts. Without this the editor
+            // briefly re-displays the cancelled job's last percentage when the
+            // user clicks "Translate now" again.
+            stopTranslationProgressPolling();
+            setTranslationProgress(null);
+            setIsTranslating(false);
             var cancelPath = getEditorRestPath('ai-translate/cancel-translation');
-            var cancelRequest = { path: cancelPath, method: 'POST', data: {} };
+            var cancelRequest = {
+                path: cancelPath,
+                method: 'POST',
+                // Pass post_id so the server can also wipe the per-post
+                // progress transient that the bg-bar polls every 2s.
+                data: { input: { post_id: postId } }
+            };
             if (settings && settings.restNonce) {
                 cancelRequest.headers = { 'X-WP-Nonce': settings.restNonce };
             }
@@ -635,28 +807,6 @@
                 { style: { marginTop: '20px', marginBottom: '20px' } },
                 createElement(
                     'div',
-                    { style: { marginBottom: '16px' } },
-                    createElement(ToggleControl, {
-                        label: text('translateTitleLabel', 'Translate title'),
-                        checked: translateTitle,
-                        onChange: function (value) {
-                            setTranslateTitle(!!value);
-                        },
-                    })
-                ),
-                createElement(
-                    'div',
-                    null,
-                    createElement(ToggleControl, {
-                        label: text('overwriteLabel', 'Overwrite existing translation'),
-                        checked: overwrite,
-                        onChange: function (value) {
-                            setOverwrite(!!value);
-                        },
-                    })
-                ),
-                createElement(
-                    'div',
                     { style: { marginTop: '8px' } },
                     createElement(TextareaControl, {
                         label: text('additionalPromptLabel', 'Additional instructions (optional)'),
@@ -682,18 +832,35 @@
                     }),
                 })
             ) : (!isRefreshing && hasLoadedData && !errorMessage ? createElement(Notice, { status: 'info', isDismissible: false }, text('noLanguages', 'No target languages are available for this content item.')) : null),
-            _availableModels.length > 0 ? createElement(
+            availableModels.length > 0 ? createElement(
                 'div',
                 { style: { marginTop: '4px', marginBottom: '20px' } },
-                createElement(SelectControl, {
-                    label: text('modelLabel', 'AI model'),
-                    value: modelSlug,
-                    onChange: function (nextModelSlug) {
-                        setModelSlug(nextModelSlug);
-                        storeModelSlug(nextModelSlug);
-                    },
-                    options: [{ label: _autoOptionLabel, value: '' }].concat(_availableModels),
-                })
+                createElement(
+                    'div',
+                    { style: { display: 'flex', gap: '6px', alignItems: 'flex-end' } },
+                    createElement(
+                        'div',
+                        { style: { flex: 1, minWidth: 0 } },
+                        createElement(SelectControl, {
+                            label: text('modelLabel', 'AI model'),
+                            value: modelSlug,
+                            onChange: function (nextModelSlug) {
+                                setModelSlug(nextModelSlug);
+                                storeModelSlug(nextModelSlug);
+                            },
+                            options: [{ label: _autoOptionLabel, value: '' }].concat(availableModels),
+                        })
+                    ),
+                    createElement(Button, {
+                        icon: 'update',
+                        variant: 'tertiary',
+                        label: text('refreshModelsButton', 'Refresh model list'),
+                        showTooltip: true,
+                        onClick: handleRefreshModels,
+                        disabled: isRefreshingModels,
+                        isBusy: isRefreshingModels,
+                    })
+                )
             ) : null,
             (modelSlug || '').toLowerCase().indexOf('translategemma') !== -1 ? createElement(
                 Notice,
@@ -738,10 +905,21 @@
                         getTranslationProgressLabel(translationProgress)
                     )
                 ) : null,
-                hasExistingTranslation && !overwrite ? createElement(
+                hasExistingTranslation ? createElement(
                     'div',
                     { style: { marginTop: '10px', marginBottom: '10px' } },
-                    createElement(Notice, { status: 'warning', isDismissible: false }, text('existingTranslationNotice', 'A translation already exists for the selected language. Enable overwrite to update it.'))
+                    !overwrite ? createElement(Notice, { status: 'warning', isDismissible: false }, text('existingTranslationNotice', 'A translation already exists for the selected language. Enable overwrite to update it.')) : null,
+                    createElement(
+                        'div',
+                        { style: { marginTop: !overwrite ? '8px' : 0 } },
+                        createElement(ToggleControl, {
+                            label: text('overwriteLabel', 'Overwrite existing translation'),
+                            checked: overwrite,
+                            onChange: function (value) {
+                                setOverwrite(!!value);
+                            },
+                        })
+                    )
                 ) : null
             ),
             statusItems.length ? createElement(
@@ -757,11 +935,24 @@
                         });
                         const languageLabel = matchingLanguage ? matchingLanguage.name + ' (' + translation.lang + ')' : translation.lang;
 
+                        if (translation.exists) {
+                            // Direct link to the translated post; fall back to
+                            // a plain "Available" label if no edit link is
+                            // exposed (e.g. caps-restricted users).
+                            return createElement(
+                                'li',
+                                { key: translation.lang },
+                                languageLabel + ': ',
+                                translation.edit_link
+                                    ? createElement('a', { href: translation.edit_link }, text('openTranslationShort', 'Open'))
+                                    : text('translationExists', 'Available')
+                            );
+                        }
+
                         return createElement(
                             'li',
                             { key: translation.lang },
-                            languageLabel + ': ' + (translation.exists ? text('translationExists', 'Available') : text('translationMissing', 'Not translated yet')),
-                            translation.edit_link ? createElement(Fragment, null, ' ', createElement('a', { href: translation.edit_link }, text('openTranslation', 'Open translation'))) : null
+                            languageLabel + ': ' + text('translationMissing', 'Not translated yet')
                         );
                     })
                 )
@@ -782,7 +973,6 @@
     function TranslateSelectionControl(props) {
         const [isOpen, setIsOpen] = useState(false);
         const [selectedText, setSelectedText] = useState('');
-        const [selectionValue, setSelectionValue] = useState(null);
         const [selectionStart, setSelectionStart] = useState(0);
         const [selectionEnd, setSelectionEnd] = useState(0);
         const [languages, setLanguages] = useState([]);
@@ -791,6 +981,18 @@
         const [errorMessage, setErrorMessage] = useState('');
         const [isTranslating, setIsTranslating] = useState(false);
         const [additionalPrompt, setAdditionalPrompt] = useState(getLastAdditionalPrompt);
+        const selectionAbortRef = useRef(null);
+        // Keep a ref to the latest props so the async .then() always uses the
+        // current onChange / value instead of a stale closure capture. The
+        // RichTextToolbarButton format component may re-render while the modal
+        // is open, so we always read the freshest onChange/value through this
+        // ref.
+        const propsRef = useRef(props);
+        propsRef.current = props;
+        // Snapshot of the RichText value at dialog-open time. We replace into
+        // this snapshot to guarantee the original selection range is valid even
+        // if the live value lost its selection while the modal had focus.
+        const selectionValueRef = useRef(null);
 
         const hasSelection = !!(
             props.value &&
@@ -809,6 +1011,14 @@
             setErrorMessage('');
         }
 
+        function handleCancelSelection() {
+            if (selectionAbortRef.current) {
+                selectionAbortRef.current.abort();
+                selectionAbortRef.current = null;
+            }
+            setIsTranslating(false);
+        }
+
         function openDialog() {
             if (!hasSelection) {
                 return;
@@ -822,25 +1032,41 @@
             }
 
             const nextLanguages = getSelectionLanguages();
-            const nextSourceLanguage = getDefaultSelectionSourceLanguage(nextLanguages);
-            const nextTargetLanguage = resolveSelectionTargetLanguage(nextLanguages, nextSourceLanguage, '');
+            const fallbackSourceLanguage = getDefaultSelectionSourceLanguage(nextLanguages);
+            const nextTargetLanguage = resolveSelectionTargetLanguage(nextLanguages, fallbackSourceLanguage, '');
 
-            setSelectionValue(props.value);
+            selectionValueRef.current = props.value;
             setSelectionStart(props.value.start);
             setSelectionEnd(props.value.end);
             setSelectedText(nextSelectedText);
+            slyDebug('openDialog selection', { start: props.value.start, end: props.value.end, text: nextSelectedText });
             setLanguages(nextLanguages);
-            setSourceLanguage(nextSourceLanguage);
+            setSourceLanguage(fallbackSourceLanguage);
             setTargetLanguage(nextTargetLanguage);
             setErrorMessage(nextTargetLanguage ? '' : text('translateSelectionUnavailable', 'No target languages are available for the selected text.'));
             setIsOpen(true);
+
+            // Refine the source language to the actual post language (Polylang)
+            // once the REST status responds. Falls back silently if unavailable.
+            fetchCurrentPostSourceLanguage().then(function (postSourceLanguage) {
+                if (!postSourceLanguage) { return; }
+                const matchedSource = findMatchingLanguageCode(nextLanguages, postSourceLanguage);
+                if (!matchedSource || matchedSource === fallbackSourceLanguage) { return; }
+                slyDebug('source language refined from post', { from: fallbackSourceLanguage, to: matchedSource });
+                setSourceLanguage(matchedSource);
+                setTargetLanguage(function (currentTargetLanguage) {
+                    return resolveSelectionTargetLanguage(nextLanguages, matchedSource, currentTargetLanguage);
+                });
+            });
         }
 
         function handleTranslateSelection() {
-            if (!selectionValue || !selectedText.trim() || !sourceLanguage || !targetLanguage) {
+            if (!selectedText.trim() || !sourceLanguage || !targetLanguage) {
                 return;
             }
 
+            var abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            selectionAbortRef.current = abortController;
             setIsTranslating(true);
             setErrorMessage('');
 
@@ -850,7 +1076,7 @@
                 target_language: targetLanguage,
                 additional_prompt: additionalPrompt || undefined,
                 model_slug: _selectedModelSlug || undefined,
-            })
+            }, abortController ? abortController.signal : undefined)
                 .then(function (response) {
                     const translatedText = response && response.translated_text ? response.translated_text : '';
 
@@ -859,15 +1085,40 @@
                         return;
                     }
 
+                    // Guard against model echoing back only the additional_prompt instead of translating.
+                    if (additionalPrompt && translatedText.trim() === additionalPrompt.trim()) {
+                        setErrorMessage(text('unknownError', 'An unexpected error occurred.'));
+                        return;
+                    }
+
                     storeTargetLanguage(targetLanguage);
                     saveAdditionalPromptPreference(additionalPrompt);
-                    props.onChange(insert(selectionValue, translatedText, selectionStart, selectionEnd));
-                    closeDialog();
+
+                    // Apply replacement synchronously into the snapshot value
+                    // captured at dialog-open time, then close the modal. This
+                    // restores the working behaviour from 1.4.0 — the deferred
+                    // useEffect approach failed because the format-type wrapper
+                    // around RichTextToolbarButton can re-mount while the modal
+                    // is open, leaving propsRef pointing at a defunct onChange.
+                    var snapshotValue = selectionValueRef.current || propsRef.current.value;
+                    var onChange = propsRef.current.onChange;
+                    slyDebug('applying inline replacement', { translatedText: translatedText, start: selectionStart, end: selectionEnd, hasOnChange: typeof onChange === 'function' });
+                    if (typeof onChange === 'function' && snapshotValue) {
+                        onChange(insert(snapshotValue, translatedText, selectionStart, selectionEnd));
+                    } else {
+                        slyDebug('inline replacement skipped: missing onChange or snapshotValue');
+                    }
+                    setIsOpen(false);
+                    setErrorMessage('');
                 })
                 .catch(function (error) {
+                    if (error && (error.name === 'AbortError' || error.code === 'abort_error')) {
+                        return;
+                    }
                     setErrorMessage(getErrorMessage(error));
                 })
                 .finally(function () {
+                    selectionAbortRef.current = null;
                     setIsTranslating(false);
                 });
         }
@@ -907,6 +1158,24 @@
                         };
                     }),
                 }) : null,
+                (languages.length && availableTargetLanguages.length) ? createElement(
+                    'div',
+                    { style: { margin: '4px 0 8px' } },
+                    createElement(Button, {
+                        icon: 'controls-repeat',
+                        variant: 'tertiary',
+                        label: text('swapLanguagesButton', 'Swap source and target language'),
+                        showTooltip: true,
+                        disabled: !sourceLanguage || !targetLanguage,
+                        onClick: function () {
+                            if (!sourceLanguage || !targetLanguage) { return; }
+                            var nextSource = targetLanguage;
+                            var nextTarget = sourceLanguage;
+                            setSourceLanguage(nextSource);
+                            setTargetLanguage(resolveSelectionTargetLanguage(languages, nextSource, nextTarget));
+                        },
+                    })
+                ) : null,
                 availableTargetLanguages.length ? createElement(SelectControl, {
                     label: text('targetLanguageLabel', 'Target language'),
                     value: targetLanguage,
@@ -932,27 +1201,11 @@
                     { status: 'warning', isDismissible: false, style: { marginTop: '8px' } },
                     text('translateGemmaAdditionalPromptWarning', 'TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs.')
                 ) : null,
-                selectedText ? createElement(
-                    Fragment,
-                    null,
-                    createElement('p', null, createElement('strong', null, text('translateSelectionTextLabel', 'Selected text'))),
-                    createElement('div', {
-                        style: {
-                            maxHeight: '160px',
-                            overflowY: 'auto',
-                            padding: '12px',
-                            border: '1px solid #dcdcde',
-                            borderRadius: '4px',
-                            background: '#f6f7f7',
-                            whiteSpace: 'pre-wrap',
-                        },
-                    }, selectedText)
-                ) : null,
                 createElement(
                     'div',
                     { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' } },
-                    createElement(Button, { variant: 'secondary', onClick: closeDialog, disabled: isTranslating }, text('cancelButton', 'Cancel')),
-                    createElement(Button, { variant: 'primary', onClick: handleTranslateSelection, disabled: isTranslating || !sourceLanguage || !targetLanguage || !selectedText.trim(), isBusy: isTranslating }, text('translateSelectionButton', 'Translate with SlyTranslate'))
+                    !isTranslating ? createElement(Button, { variant: 'secondary', onClick: closeDialog }, text('cancelButton', 'Cancel')) : null,
+                    createElement(Button, { variant: 'primary', onClick: isTranslating ? handleCancelSelection : handleTranslateSelection, disabled: isTranslating ? false : (!sourceLanguage || !targetLanguage || !selectedText.trim()), isBusy: isTranslating }, isTranslating ? text('cancelTranslationButton', 'Cancel translation') : text('translateSelectionButton', 'Translate with SlyTranslate'))
                 )
             ) : null
         );
@@ -961,6 +1214,253 @@
     if (PluginDocumentSettingPanel && hasTranslationPlugin) {
         registerPlugin('ai-translate-editor-panel', {
             render: AiTranslatePanel,
+        });
+    }
+
+    // Block-level translation: toolbar button for selected blocks.
+    if (blockTranslationAvailable) {
+        function TranslateBlockPlugin() {
+            var selectedBlockClientIds = useSelect(function (select) {
+                var blockEditorStore = select('core/block-editor');
+                if (!blockEditorStore) { return []; }
+                // getSelectedBlockClientIds covers single and multi-selection.
+                if (typeof blockEditorStore.getSelectedBlockClientIds === 'function') {
+                    return blockEditorStore.getSelectedBlockClientIds();
+                }
+                // Fallback: combine single + multi selection.
+                var multi = typeof blockEditorStore.getMultiSelectedBlockClientIds === 'function'
+                    ? blockEditorStore.getMultiSelectedBlockClientIds()
+                    : [];
+                if (multi.length > 0) { return multi; }
+                var single = typeof blockEditorStore.getSelectedBlockClientId === 'function'
+                    ? blockEditorStore.getSelectedBlockClientId()
+                    : null;
+                return single ? [single] : [];
+            }, []);
+
+            var blockEditorDispatch = useDispatch('core/block-editor');
+            var replaceBlocks = blockEditorDispatch ? blockEditorDispatch.replaceBlocks : null;
+
+            var [isOpen, setIsOpen] = useState(false);
+            var [languages, setLanguages] = useState([]);
+            var [sourceLanguage, setSourceLanguage] = useState('');
+            var [targetLanguage, setTargetLanguage] = useState('');
+            var [additionalPrompt, setAdditionalPrompt] = useState(getLastAdditionalPrompt);
+            var [isTranslating, setIsTranslating] = useState(false);
+            var [errorMessage, setErrorMessage] = useState('');
+            var blockAbortRef = useRef(null);
+            // Capture the client IDs when the dialog opens so they stay stable during translation.
+            var capturedClientIdsRef = useRef([]);
+            // Keep replaceBlocks in a ref so the .then() callback always sees the
+            // latest dispatcher even after re-renders of the menu-item host.
+            var replaceBlocksRef = useRef(replaceBlocks);
+            replaceBlocksRef.current = replaceBlocks;
+
+            var hasBlocks = selectedBlockClientIds.length > 0;
+
+            function openBlockTranslateDialog() {
+                if (!hasBlocks) { return; }
+                capturedClientIdsRef.current = selectedBlockClientIds.slice();
+                var nextLanguages = getSelectionLanguages();
+                var fallbackSourceLanguage = getDefaultSelectionSourceLanguage(nextLanguages);
+                var nextTargetLanguage = resolveSelectionTargetLanguage(nextLanguages, fallbackSourceLanguage, '');
+                setLanguages(nextLanguages);
+                setSourceLanguage(fallbackSourceLanguage);
+                setTargetLanguage(nextTargetLanguage);
+                setErrorMessage('');
+                setIsOpen(true);
+
+                // Refine the source language to the actual post language
+                // (Polylang) once the REST status responds.
+                fetchCurrentPostSourceLanguage().then(function (postSourceLanguage) {
+                    if (!postSourceLanguage) { return; }
+                    var matchedSource = findMatchingLanguageCode(nextLanguages, postSourceLanguage);
+                    if (!matchedSource || matchedSource === fallbackSourceLanguage) { return; }
+                    slyDebug('block source language refined from post', { from: fallbackSourceLanguage, to: matchedSource });
+                    setSourceLanguage(matchedSource);
+                    setTargetLanguage(function (currentTargetLanguage) {
+                        return resolveSelectionTargetLanguage(nextLanguages, matchedSource, currentTargetLanguage);
+                    });
+                });
+            }
+
+            function closeBlockDialog() {
+                if (isTranslating) { return; }
+                setIsOpen(false);
+                setErrorMessage('');
+            }
+
+            function handleCancelBlockTranslation() {
+                if (blockAbortRef.current) {
+                    blockAbortRef.current.abort();
+                    blockAbortRef.current = null;
+                }
+                setIsTranslating(false);
+            }
+
+            function handleTranslateBlocks() {
+                if (!capturedClientIdsRef.current.length || !sourceLanguage || !targetLanguage || !replaceBlocks) {
+                    return;
+                }
+
+                var blockEditorStore = wp.data.select('core/block-editor');
+                if (!blockEditorStore) { return; }
+
+                var selectedBlocks = capturedClientIdsRef.current.map(function (clientId) {
+                    return blockEditorStore.getBlock(clientId);
+                }).filter(Boolean);
+
+                if (!selectedBlocks.length) {
+                    setErrorMessage(text('unknownError', 'An unexpected error occurred.'));
+                    return;
+                }
+
+                var serializedContent = serializeBlocks(selectedBlocks);
+                if (!serializedContent.trim()) {
+                    setErrorMessage(text('unknownError', 'An unexpected error occurred.'));
+                    return;
+                }
+
+                var abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+                blockAbortRef.current = abortController;
+                setIsTranslating(true);
+                setErrorMessage('');
+
+                runAbility('ai-translate/translate-blocks', {
+                    content: serializedContent,
+                    source_language: sourceLanguage,
+                    target_language: targetLanguage,
+                    additional_prompt: additionalPrompt || undefined,
+                    model_slug: _selectedModelSlug || undefined,
+                }, abortController ? abortController.signal : undefined)
+                    .then(function (response) {
+                        var translatedContent = response && response.translated_content ? response.translated_content : '';
+                        if (!translatedContent.trim()) {
+                            setErrorMessage(text('unknownError', 'An unexpected error occurred.'));
+                            return;
+                        }
+
+                        storeTargetLanguage(targetLanguage);
+                        saveAdditionalPromptPreference(additionalPrompt);
+
+                        var translatedBlocks = parseBlocks(translatedContent);
+                        if (!translatedBlocks || !translatedBlocks.length) {
+                            setErrorMessage(text('unknownError', 'An unexpected error occurred.'));
+                            return;
+                        }
+
+                        // Apply replaceBlocks synchronously: replaceBlocks is a
+                        // global block-editor dispatcher and works regardless of
+                        // current focus, so deferring it via useEffect only adds
+                        // a window where the host component can unmount and the
+                        // call is silently dropped.
+                        var dispatch = replaceBlocksRef.current;
+                        slyDebug('applying block replacement', { ids: capturedClientIdsRef.current, blockCount: translatedBlocks.length, hasDispatch: typeof dispatch === 'function' });
+                        if (typeof dispatch === 'function') {
+                            dispatch(capturedClientIdsRef.current, translatedBlocks);
+                        } else {
+                            slyDebug('block replacement skipped: replaceBlocks dispatcher unavailable');
+                            setErrorMessage(text('unknownError', 'An unexpected error occurred.'));
+                            return;
+                        }
+                        setIsOpen(false);
+                        setErrorMessage('');
+                    })
+                    .catch(function (error) {
+                        if (error && (error.name === 'AbortError' || error.code === 'abort_error')) {
+                            return;
+                        }
+                        setErrorMessage(getErrorMessage(error));
+                    })
+                    .finally(function () {
+                        blockAbortRef.current = null;
+                        setIsTranslating(false);
+                    });
+            }
+
+            var availableTargetLanguages = getAvailableTargetLanguages(languages, sourceLanguage);
+            var blockCount = selectedBlockClientIds.length;
+
+            return createElement(
+                Fragment,
+                null,
+                createElement(PluginBlockSettingsMenuItem, {
+                    icon: 'translation',
+                    label: text('translateSelectionButton', 'Translate (SlyTranslate)'),
+                    onClick: openBlockTranslateDialog,
+                }),
+                isOpen && Modal ? createElement(
+                    Modal,
+                    {
+                        title: text('translateSelectionTitle', 'Translate selected text with SlyTranslate'),
+                        onRequestClose: closeBlockDialog,
+                        shouldCloseOnClickOutside: !isTranslating,
+                        shouldCloseOnEsc: !isTranslating,
+                    },
+                    errorMessage ? createElement(Notice, { status: 'error', isDismissible: true, onRemove: function () { setErrorMessage(''); } }, errorMessage) : null,
+                    languages.length ? createElement(SelectControl, {
+                        label: text('sourceLanguageLabel', 'Source language'),
+                        value: sourceLanguage,
+                        onChange: function (nextSourceLanguage) {
+                            setSourceLanguage(nextSourceLanguage);
+                            setTargetLanguage(function (currentTargetLanguage) {
+                                return resolveSelectionTargetLanguage(languages, nextSourceLanguage, currentTargetLanguage);
+                            });
+                        },
+                        options: languages.map(function (language) {
+                            return { label: language.name + ' (' + language.code + ')', value: language.code };
+                        }),
+                    }) : null,
+                    (languages.length && availableTargetLanguages.length) ? createElement(
+                        'div',
+                        { style: { margin: '4px 0 8px' } },
+                        createElement(Button, {
+                            icon: 'controls-repeat',
+                            variant: 'tertiary',
+                            label: text('swapLanguagesButton', 'Swap source and target language'),
+                            showTooltip: true,
+                            disabled: !sourceLanguage || !targetLanguage,
+                            onClick: function () {
+                                if (!sourceLanguage || !targetLanguage) { return; }
+                                var nextSource = targetLanguage;
+                                var nextTarget = sourceLanguage;
+                                setSourceLanguage(nextSource);
+                                setTargetLanguage(resolveSelectionTargetLanguage(languages, nextSource, nextTarget));
+                            },
+                        })
+                    ) : null,
+                    availableTargetLanguages.length ? createElement(SelectControl, {
+                        label: text('targetLanguageLabel', 'Target language'),
+                        value: targetLanguage,
+                        onChange: function (nextTargetLanguage) { setTargetLanguage(nextTargetLanguage); },
+                        options: availableTargetLanguages.map(function (language) {
+                            return { label: language.name + ' (' + language.code + ')', value: language.code };
+                        }),
+                    }) : null,
+                    createElement(TextareaControl, {
+                        label: text('additionalPromptLabel', 'Additional instructions (optional)'),
+                        help: text('additionalPromptHelp', 'Supplements the site-wide translation instructions. Example: Use informal language.'),
+                        value: additionalPrompt,
+                        onChange: setAdditionalPrompt,
+                        rows: 3,
+                    }),
+                    createElement(
+                        'div',
+                        { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' } },
+                        !isTranslating ? createElement(Button, { variant: 'secondary', onClick: closeBlockDialog }, text('cancelButton', 'Cancel')) : null,
+                        createElement(Button, {
+                            variant: 'primary',
+                            onClick: isTranslating ? handleCancelBlockTranslation : handleTranslateBlocks,
+                            disabled: isTranslating ? false : (!sourceLanguage || !targetLanguage),
+                            isBusy: isTranslating,
+                        }, isTranslating ? text('cancelTranslationButton', 'Cancel translation') : text('translateButton', 'Translate now'))
+                    )
+                ) : null
+            );
+        }
+
+        registerPlugin('ai-translate-block-translation', {
+            render: TranslateBlockPlugin,
         });
     }
 

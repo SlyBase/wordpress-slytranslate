@@ -113,11 +113,11 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertSame( 'translategemma_direct_api_failed', $result->get_error_code() );
+		$this->assertSame( 'direct_api_connection_error', $result->get_error_code() );
 
 		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'direct_api_failed', $diagnostics['transport'] );
-		$this->assertSame( 'direct_api_failed', $diagnostics['failure_reason'] );
+		$this->assertSame( 'direct_api_connection_error', $diagnostics['failure_reason'] );
 	}
 
 	public function test_translategemma_kwargs_request_omits_system_message(): void {
@@ -197,7 +197,11 @@ class TranslationTransportGuardrailTest extends TestCase {
 				return $default;
 			}
 		);
-		Functions\when( 'wp_remote_post' )->justReturn( new \WP_Error( 'http_failed', 'boom' ) );
+		// Non-connection failure (4xx) returns null → falls through to wp_ai_client.
+		Functions\when( 'wp_remote_post' )->justReturn( array(
+			'response' => array( 'code' => 502 ),
+			'body'     => '',
+		) );
 		Functions\when( 'wp_ai_client_prompt' )->alias(
 			static function ( string $text ) {
 				return new class( $text ) {
@@ -222,6 +226,49 @@ class TranslationTransportGuardrailTest extends TestCase {
 					public function generate_text(): string {
 						return 'Hallo Welt';
 					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertSame( 'Hallo Welt', $result );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
+		$this->assertTrue( $diagnostics['fallback_allowed'] );
+	}
+
+	public function test_non_translategemma_connection_error_falls_back_to_wp_ai_client(): void {
+		// A single timeout / connection drop on the direct API must not
+		// tear down the entire content phase: for non-strict models the
+		// runtime falls back to the WP AI Client transport for THIS chunk
+		// only and lets subsequent chunks try the direct path again.
+		// Strict-direct-API models like TranslateGemma still hard-fail
+		// (covered by the dedicated translategemma guardrail tests).
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'gemma-3-4b-it',
+			'direct_api_url' => 'http://llama.local:8080',
+		) );
+
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+
+				return $default;
+			}
+		);
+		Functions\when( 'wp_remote_post' )->justReturn( new \WP_Error( 'http_failed', 'Connection refused' ) );
+		Functions\when( 'wp_ai_client_prompt' )->alias(
+			static function () {
+				return new class {
+					public function using_system_instruction( string $prompt ) { return $this; }
+					public function using_temperature( int $temperature ) { return $this; }
+					public function using_model_preference( string $model_slug ) { return $this; }
+					public function generate_text(): string { return 'Hallo Welt'; }
 				};
 			}
 		);

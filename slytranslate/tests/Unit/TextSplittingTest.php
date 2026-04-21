@@ -13,7 +13,7 @@ use AI_Translate\TextSplitter;
  *
  * Constants (from AI_Translate):
  *   MIN_TRANSLATION_CHARS = 1200
- *   MAX_TRANSLATION_CHARS = 8000
+ *   MAX_TRANSLATION_CHARS = 48000
  */
 class TextSplittingTest extends TestCase {
 

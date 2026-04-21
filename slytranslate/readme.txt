@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.4.2
+Stable tag: 1.5.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -37,6 +37,7 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * Translation plugin support via an adapter interface. Currently supports **Polylang**, including posts, pages, custom post types, and associated taxonomies. Additional adapters (WPML, TranslatePress, etc.) can be added.
 * Popular SEO plugins are detected automatically and their key SEO meta fields can be translated or cleared without manual configuration. At runtime, SlyTranslate also inspects the source post's real SEO meta keys and merges any matching supported profiles, so legacy or mixed setups (for example Genesis meta on a site that now uses The SEO Framework) continue to translate correctly.
 * The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. During active content translations, the panel shows a live progress bar with phase and chunk tracking, and the main action button toggles from **Translate now** to **Cancel translation**. A selected-text action for translating highlighted text inline via `ai-translate/translate-text` is available even without a translation plugin.
+* Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. If the running dialog is dismissed or the user leaves the admin page mid-translation, the job is handed off automatically to the background bar so progress and the eventually created draft remain visible instead of appearing unexpectedly later.
 * All abilities are exposed via the REST API (`/wp-abilities/v1/`) and marked public for MCP Adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`.
 * Polylang auto-translate hooks are preserved for backward compatibility — creating a new translation in Polylang still triggers automatic translation.
 * Plugin labels and descriptions are translation-ready and include a bundled German (`de_DE`) translation.
@@ -116,13 +117,50 @@ For runtime translation, the plugin does not rely only on the currently detected
 
 Yes. The block editor includes an **AI Translate** panel in the document settings sidebar when a translation plugin is active. It loads translation status, can create or update translations directly from the editor, and shows a live progress bar while a translation is running. During that time, the main action button switches to **Cancel translation** so you can stop the current job without leaving the editor. When you highlight text inside supported rich-text fields, you also get a **Translate with SlyTranslate** action for inline translation of just that selection via `ai-translate/translate-text`, even without a translation plugin.
 
+= What happens if I close the post list translation dialog or leave the page mid-translation? =
+
+The running translation is handed off automatically to the same global background-task bar that the **Continue in background** button uses. That means progress stays visible across wp-admin screens and the created draft does not appear "out of nowhere" after the dialog disappeared.
+
 = Does this work without Polylang? =
 
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
 
-= 1.4.2 =
+= 1.5.0 =
+* UI: list-table row action and bulk action collapsed to a single "Translate" entry each; a unified picker dialog lets the user choose source/target language (with swap button), AI model, and additional instructions before starting.
+* UI: editor sidebar panel renamed "Translate (SlyTranslate)"; title translation is now always on (toggle removed); translation-status list simplified ("Not translated yet" / "Open" link).
+* UI: model-selector refresh button added to the editor sidebar (same cache-busting behaviour as the list-table picker).
+* UI: inline and block-level translation modals now include a source↔target swap button.
+* UI: background-task bar overhauled — compact/collapsible, per-post-title labels, strictly monotonic progress, auto-dismisses finished tasks after 5 s, full content width, "Clear finished" action.
+* UI: progress bar now advances proportionally to translated character volume instead of step count; chunk counter label removed.
+* Performance: `core/list` blocks skip the outer group-translation attempt and go directly to the recursive inner-block path, removing one wasted model call per list wrapper.
+* Performance: block translation is 5–20× faster on small instruct models — short plain-text hint for paragraph fast-path, skip redundant group-fallback calls, fix trailing-whitespace block-comment mismatch.
+* Performance: chunk size ceiling raised from 24 000 → 48 000 chars; max output tokens ceiling from 4 096 → 8 192 (both tunable via new filters). Simple-wrapper blocks now send only inner HTML to the model (single call instead of two).
+* Feature: context-window size is now discovered dynamically from the direct API's `/v1/models` response (`context_window`, `context_length`, `meta.n_ctx_train`/`meta.n_ctx`) and cached per model; no plugin update needed for new endpoints.
+* Fix: HTTP 429 rate-limit responses handled transparently on both transports with a parse-pause-retry loop (up to 3 attempts, `Retry-After` / inline hint parsed, 500 ms jitter).
+* Fix: direct-API timeout raised to 120 s; transport errors fall back to the WP AI Client for that chunk and resume the direct path on the next.
+* Fix: direct API is now skipped entirely when no explicit model slug is in scope; model-slug resolution falls back to the WP AI Client registry (`findModelsMetadataForSupport()`).
+* Fix: validator failures (`invalid_translation_*`) no longer abort the entire job — the offending block is kept in the source language and the rest of the post is translated normally.
+* Fix: runaway output (>3× source length for inputs >220 chars) rejected with `invalid_translation_runaway_output`; max output-token budget enforced per chunk on both transports.
+* Fix: short-input length-drift guard checks raw (un-normalised) text and adds a 6× ratio hard ceiling, catching numbered-list hallucinations that previously bypassed the markdown regex.
+* Fix: markdown code fences flagged by `contains_markdown_structure()`; structural tripwire rejects plain-source → structured-output expansions ≥ 3× regardless of absolute floor.
+* Fix: pseudo-XML single-tag outputs (e.g. `<responsible>`) unwrapped to plain text before validation.
+* Fix: tag-only fragments (image-only blocks, empty block-comment shells) no longer fail `invalid_translation_plain_text_missing`.
+* Fix: simple-wrapper fast path verifies inline-formatting tag counts (em/strong/code/a/…) and retries if any tag is dropped; also detects and recovers corrupted wrapper boundaries (missing opening tag, stray markdown).
+* Fix: translated content is no longer passed through `wp_kses_post()` before saving (prevented SVG attribute case, stripped custom-block attributes, broke Gutenberg block validation).
+* Fix: HTML→Markdown inline-formatting regression (e.g. `<strong>` → `**`) detected and triggers retry/fallback.
+* Fix: progress transient cleared on job completion; cancel endpoint also resets progress to zero; parallel translations keyed by `(user_id, post_id)`.
+* Fix: inline/block replacement in the editor applied synchronously to avoid stale closure references on re-mount; source-language dropdown defaults to the post's actual language.
+* Debug: `ai_validation_failed` event now includes 240-char excerpts of source and output; `direct_api_error_body` logs non-2xx response bodies; full per-job wall-clock timeline emitted when `WP_DEBUG=true`; bg-bar respects `window.SLY_TRANSLATE_DEBUG`.
+* i18n: German translations updated for all new strings; `slytranslate-de_DE.mo` recompiled.
+* Fix: the "Refresh model list" button in the post/page list-table translation dialog now actually returns a fresh model list when the user switched the configured AI connector (e.g. from a local llama.cpp server to Groq). Previously only the SlyTranslate-side 5-minute transient (`ai_translate_available_models`) was cleared, but the WordPress AI Client's own per-provider `ModelMetadataDirectory` cache (default TTL: 24 hours, persisted via the PSR-16 cache configured through `AiClient::setCache()`) kept serving the model list from the previously active connector. The refresh path now additionally calls `invalidateCaches()` on every registered provider's `modelMetadataDirectory()` and clears the `aipf_llamacpp_model_ids` transient used by `ai-provider-for-llamacpp`, so connector changes take effect on the next refresh click without waiting 24 hours.
+* i18n: German translations added for the new model-picker dialog strings ("AI model", "Start translation", "Refresh model list", "Loading available models...", "Connector default", bulk-translation title / progress / completion messages, …) and recompiled `slytranslate-de_DE.mo`.
+* UI: the post/page list-table translation flow now opens a model-picker dialog before translation starts. The dialog lists every model registered by the active AI Connector (queried live via the new `ai-translate/available-models` REST route, with a refresh button to bypass the 5-minute model cache) and remembers the last selection per browser. Bulk translations show one dialog for the whole selection and then process the items as background tasks via the existing bg-bar, so each post still gets its own progress / cancel UI. The previous behaviour silently reused a stale `aiTranslateModelSlug` value from the editor sidebar, which made the list-table action send the wrong model after switching connectors.
+* Internal: `EditorBootstrap::get_available_models()` now accepts an optional `$force_refresh` flag to bypass the `ai_translate_available_models` transient. The new REST endpoint `ai-translate/v1/ai-translate/available-models` exposes this to the admin UI so users can pick up newly configured connectors immediately.
+* Fix: selected-text translation in the block editor no longer confuses the additional prompt with the content to translate. The additional prompt is now clearly prefixed as style instructions in the system message so models do not treat it as translatable content.
+* Fix: when the configured direct API endpoint is unreachable (connection refused, timeout), the error is now returned immediately with a clear message including the endpoint URL, instead of silently falling back to the WordPress AI Client (which would fail with the same infrastructure).
+* Fix: translation of posts with dense Gutenberg block structure (e.g. privacy policy pages) no longer fails with a "lost required structure" error. When grouped block translation drops placeholders even after retry, the plugin now falls back to translating blocks individually instead of aborting.
 * Fix: translation of posts with dense Gutenberg block structure (e.g. privacy policy pages) no longer fails with a "lost required structure" error. The closing block comment of each translated chunk was silently dropped by translation models because it became a trailing HTML comment with nothing after it; a sentinel marker is now appended before sending to the model and stripped afterward, so all placeholders are preserved through translation.
 * Fix: translation of posts containing links where the visible anchor text is a URL (e.g. `<a href="https://…">https://…</a>`) no longer triggers a false "URL lost" structural-drift error when the model correctly replaces the visible URL with descriptive text. The URL integrity check now counts only URLs in `href`/`src`/`action` attributes rather than all URL occurrences in the text.
 * Editor: added "Translate → [Language]" row-action links to the post/page list tables; links appear only for languages that do not yet have a translation of that post.

@@ -19,9 +19,32 @@ class EditorRestController {
 		self::register_route( '/ai-translate/get-translation-status', array( AI_Translate::class, 'rest_execute_get_translation_status' ) );
 		self::register_route( '/ai-translate/translation-progress',   array( AI_Translate::class, 'rest_execute_get_translation_progress' ) );
 		self::register_route( '/ai-translate/translate-text',         array( AI_Translate::class, 'rest_execute_translate_text' ) );
+		self::register_route( '/ai-translate/translate-blocks',       array( AI_Translate::class, 'rest_execute_translate_blocks' ) );
 		self::register_route( '/ai-translate/translate-content',      array( AI_Translate::class, 'rest_execute_translate_content' ) );
 		self::register_route( '/ai-translate/translate-post',         array( AI_Translate::class, 'rest_execute_translate_content' ) );
 		self::register_route( '/ai-translate/cancel-translation',     array( AI_Translate::class, 'rest_cancel_translation' ) );
+
+		// Available AI models (used by the post-list translation dialog and
+		// the editor sidebar). Bypasses the transient cache when the request
+		// includes refresh=1 so users can pick up newly configured connectors
+		// without waiting for the 5-minute TTL.
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/ai-translate/available-models',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( AI_Translate::class, 'rest_execute_get_available_models' ),
+				'permission_callback' => array( AI_Translate::class, 'rest_can_access_translation_abilities' ),
+				'args'                => array(
+					'refresh' => array(
+						'required'          => false,
+						'sanitize_callback' => static function ( $value ): bool {
+							return (bool) $value;
+						},
+					),
+				),
+			)
+		);
 
 		// User preference endpoint (save last-used additional prompt per user).
 		register_rest_route(

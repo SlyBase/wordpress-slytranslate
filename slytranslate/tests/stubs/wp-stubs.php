@@ -77,12 +77,35 @@ function wp_remote_post( $url, $args = [] ) {
 return new WP_Error( 'wp_remote_post_not_mocked', 'wp_remote_post was not mocked in this test.' );
 }
 
+function wp_remote_get( $url, $args = [] ) {
+return new WP_Error( 'wp_remote_get_not_mocked', 'wp_remote_get was not mocked in this test.' );
+}
+
 function wp_remote_retrieve_response_code( $response ): int {
 return isset( $response['response']['code'] ) ? (int) $response['response']['code'] : 0;
 }
 
 function wp_remote_retrieve_body( $response ): string {
 return isset( $response['body'] ) ? (string) $response['body'] : '';
+}
+
+function get_transient( $key ) {
+return false;
+}
+
+function set_transient( $key, $value, $expiration = 0 ): bool {
+return true;
+}
+
+function delete_transient( $key ): bool {
+return true;
+}
+
+if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
+define( 'MINUTE_IN_SECONDS', 60 );
+}
+if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+define( 'HOUR_IN_SECONDS', 3600 );
 }
 
 // -----------------------------------------------------------------------

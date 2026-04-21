@@ -11,7 +11,7 @@ use AI_Translate\AI_Translate;
  *
  * Constants used by the methods under test:
  *   MIN_TRANSLATION_CHARS         = 1200
- *   MAX_TRANSLATION_CHARS         = 8000
+ *   MAX_TRANSLATION_CHARS         = 48000
  *   MIN_CONTEXT_WINDOW_TOKENS     = 2048
  *   SAFE_CHARS_PER_CONTEXT_TOKEN  = 0.5
  */
@@ -52,23 +52,23 @@ class ContextWindowTest extends TestCase {
 	}
 
 	public function test_large_context_window_is_clamped_to_max_chars(): void {
-		// 200000 * 0.5 = 100000 → above MAX_TRANSLATION_CHARS (8000) → 8000.
+		// 200000 * 0.5 = 100000 → above MAX_TRANSLATION_CHARS (48000) → 48000.
 		$result = $this->invokeStatic(
 			AI_Translate::class,
 			'get_translation_chunk_char_limit_from_context_window',
 			[ 200000 ]
 		);
-		$this->assertSame( 8000, $result );
+		$this->assertSame( 48000, $result );
 	}
 
 	public function test_context_window_just_above_threshold_for_max(): void {
-		// 16000 * 0.5 = 8000 → exactly MAX → 8000.
+		// 96000 * 0.5 = 48000 → exactly MAX → 48000.
 		$result = $this->invokeStatic(
 			AI_Translate::class,
 			'get_translation_chunk_char_limit_from_context_window',
-			[ 16000 ]
+			[ 96000 ]
 		);
-		$this->assertSame( 8000, $result );
+		$this->assertSame( 48000, $result );
 	}
 
 	// -----------------------------------------------------------------------

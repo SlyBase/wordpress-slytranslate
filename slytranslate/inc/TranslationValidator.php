@@ -8,6 +8,30 @@ class TranslationValidator {
 
 	private const MAX_SHORT_TEXT_RESPONSE_RATIO = 4;
 
+	/**
+	 * Above this output/input ratio on short inputs the result is a runaway
+	 * generation / hallucination regardless of structural markers. Live
+	 * logs showed 68→1170 and 52→881 plain-prose explanations that slipped
+	 * past the markdown-structure gate because normalize_text_for_validation
+	 * strips newlines before the gate can inspect them.
+	 */
+	private const HARD_SHORT_TEXT_RATIO_CEILING = 6;
+
+	/**
+	 * Maximum allowed output-to-input character ratio for non-trivial inputs.
+	 * Translations should rarely exceed ~2x the source length; values above
+	 * this threshold indicate the model started generating commentary,
+	 * hallucinated content, or entered a runaway generation loop.
+	 */
+	private const MAX_RUNAWAY_OUTPUT_RATIO = 3;
+
+	/**
+	 * Inputs shorter than this skip the runaway guard because the
+	 * short-text guard (max 4x growth, max 220 source chars) already
+	 * covers them.
+	 */
+	private const RUNAWAY_GUARD_MIN_SOURCE_CHARS = 221;
+
 	public static function validate( string $source_text, string $translated_text ) {
 		$source_text     = (string) $source_text;
 		$translated_text = (string) $translated_text;
@@ -22,7 +46,14 @@ class TranslationValidator {
 		$source_plain     = self::normalize_text_for_validation( $source_text );
 		$translated_plain = self::normalize_text_for_validation( $translated_text );
 
-		if ( '' === $translated_plain ) {
+		// "Plain text missing" only matters when the source actually had
+		// translatable plain text. Tag-only fragments such as a bare
+		// <a href="…"></a>, <img …/>, an empty Gutenberg block comment
+		// wrapper, or a media-only block normalise to '' on both sides —
+		// the model legitimately echoes the structural markup back and
+		// there is nothing to translate. Failing those would tear down
+		// the whole content phase over fragments that contain no words.
+		if ( '' === $translated_plain && '' !== $source_plain ) {
 			return new \WP_Error(
 				'invalid_translation_plain_text_missing',
 				__( 'The translated output did not contain usable text.', 'slytranslate' )
@@ -36,10 +67,17 @@ class TranslationValidator {
 			);
 		}
 
-		if ( self::has_excessive_short_text_growth( $source_plain, $translated_plain ) ) {
+		if ( self::has_excessive_short_text_growth( $source_plain, $translated_plain, $translated_text ) ) {
 			return new \WP_Error(
 				'invalid_translation_length_drift',
 				__( 'The translated output is implausibly long for the source text and looks like a generated explanation rather than a translation.', 'slytranslate' )
+			);
+		}
+
+		if ( self::has_runaway_output_growth( $source_plain, $translated_plain ) ) {
+			return new \WP_Error(
+				'invalid_translation_runaway_output',
+				__( 'The translated output is far longer than the source text, indicating the model entered a runaway generation loop or appended hallucinated content.', 'slytranslate' )
 			);
 		}
 
@@ -95,6 +133,11 @@ class TranslationValidator {
 	}
 
 	private static function contains_markdown_structure( string $text ): bool {
+		// Code fences (``` …), ATX headings, list markers, bold markers.
+		if ( false !== strpos( $text, '```' ) ) {
+			return true;
+		}
+
 		return 1 === preg_match( '/(^|\n)\s{0,3}(?:[-*+]\s+|\d+\.\s+|#{1,6}\s+)|\*\*[^*\n]+\*\*/u', $text );
 	}
 
@@ -106,22 +149,78 @@ class TranslationValidator {
 		return 1 === preg_match( '/^(?:okay|ok|sure|certainly|absolutely|of course|here(?: is|\'s)|let(?:\'|’)s|this is|this guide|for example|in short|overall|great|hier ist|klar|nat[üu]rlich|gerne|lassen(?:\s+sie)?\s+uns|insgesamt|zum beispiel)\b/iu', $text );
 	}
 
-	private static function has_excessive_short_text_growth( string $source_plain, string $translated_plain ): bool {
+	private static function has_excessive_short_text_growth( string $source_plain, string $translated_plain, string $translated_raw ): bool {
 		$source_length = self::text_length( $source_plain );
 		if ( $source_length < 1 || $source_length > 220 ) {
 			return false;
 		}
 
 		$translated_length = self::text_length( $translated_plain );
+
+		// Structural tripwire: if the model injects markdown / code fences /
+		// newlines / numbered lists that the (short, plain) source does not
+		// have, any output ≥ 3x the source length is a hallucinated
+		// explanation. This fires before the absolute floor because
+		// expansions like "Select model" (12 chars) → "```html Model 1
+		// Model 2 Model 3 ```" (180 chars) stay under the 260-char floor
+		// but are still obvious hallucinations.
+		$source_has_structure = self::contains_markdown_structure( $source_plain )
+			|| false !== strpos( $source_plain, "\n" );
+
+		if ( ! $source_has_structure && $translated_length >= max( 60, $source_length * 3 ) ) {
+			if ( false !== strpos( $translated_raw, "\n" )
+				|| self::contains_markdown_structure( $translated_raw )
+				|| self::contains_review_markers( $translated_raw )
+			) {
+				return true;
+			}
+		}
+
 		if ( $translated_length <= max( 260, $source_length * self::MAX_SHORT_TEXT_RESPONSE_RATIO ) ) {
 			return false;
 		}
 
-		if ( preg_match( '/\n/u', $translated_plain ) ) {
+		// Extreme growth (>= 6x) is never a legitimate translation regardless
+		// of structural markers — short inputs that balloon to hundreds of
+		// plain-prose characters are hallucinated explanations.
+		if ( $translated_length >= $source_length * self::HARD_SHORT_TEXT_RATIO_CEILING ) {
+			return true;
+		}
+
+		// Inspect the RAW translated text for multi-line structure / markdown
+		// lists. normalize_text_for_validation() collapses all whitespace
+		// (including \n) to single spaces, which makes the `(^|\n)` anchor
+		// in contains_markdown_structure() always fail on $translated_plain
+		// and previously let numbered lists like "1. Schritt\n2. Schritt"
+		// slip past the guard.
+		if ( preg_match( '/\n/u', $translated_raw ) ) {
+			return true;
+		}
+
+		if ( self::contains_markdown_structure( $translated_raw ) || self::contains_review_markers( $translated_raw ) ) {
 			return true;
 		}
 
 		return self::contains_markdown_structure( $translated_plain ) || self::contains_review_markers( $translated_plain );
+	}
+
+	/**
+	 * Detect runaway output for inputs above the short-text threshold.
+	 *
+	 * Live debug logs showed translation calls where 763–2.176 source chars
+	 * produced 21.000–23.000 translated chars (10x–30x ratio), each call
+	 * stalling for 4–5 minutes. Translations above the short-text band rarely
+	 * legitimately exceed ~2x the source length.
+	 */
+	private static function has_runaway_output_growth( string $source_plain, string $translated_plain ): bool {
+		$source_length = self::text_length( $source_plain );
+		if ( $source_length < self::RUNAWAY_GUARD_MIN_SOURCE_CHARS ) {
+			return false;
+		}
+
+		$translated_length = self::text_length( $translated_plain );
+
+		return $translated_length > $source_length * self::MAX_RUNAWAY_OUTPUT_RATIO;
 	}
 
 	private static function has_structural_translation_drift( string $source_text, string $translated_text ): bool {
@@ -129,6 +228,24 @@ class TranslationValidator {
 		$translated_block_comment_count = self::count_pattern_matches( '/<!--\s*\/?wp:[^>]+-->/iu', $translated_text );
 		if ( $source_block_comment_count > 0 && $source_block_comment_count !== $translated_block_comment_count ) {
 			return true;
+		}
+
+		// Detect HTML→Markdown regression: when the source contains HTML inline
+		// formatting (<strong>/<em>/<p>/<br>) but the translation contains
+		// Markdown-style formatting (**bold**, *italic*) and lost most of those
+		// HTML tags, the model has rewritten HTML as Markdown — which Gutenberg
+		// will render as plain text and treat as block-validation failure. This
+		// check runs regardless of skip_html_tag_validation because it is the
+		// most common quality regression with small translation models.
+		if ( self::introduces_markdown_for_html( $source_text, $translated_text ) ) {
+			return true;
+		}
+
+		// ContentTranslator sets this flag when translating individual blocks whose
+		// structural integrity is already guaranteed at the block level. Small models
+		// like TranslateGemma may drop inline formatting and URLs from anchor tags.
+		if ( TranslationRuntime::should_skip_html_tag_validation() ) {
+			return false;
 		}
 
 		// Count only URLs that appear as HTML attribute values (href, src, action).
@@ -171,6 +288,37 @@ class TranslationValidator {
 		$count = preg_match_all( $pattern, $text, $matches );
 
 		return false === $count ? 0 : $count;
+	}
+
+	/**
+	 * Detect a regression where HTML inline formatting is replaced with Markdown
+	 * formatting (e.g. <strong>X</strong> → **X**). This produces invalid block
+	 * markup in Gutenberg ("Block contains unexpected or invalid content").
+	 */
+	private static function introduces_markdown_for_html( string $source_text, string $translated_text ): bool {
+		$source_html_inline = self::count_pattern_matches( '/<(?:p|br|strong|em|b|i|u|code|li|h[1-6])\b[^>]*>/iu', $source_text );
+		if ( $source_html_inline < 1 ) {
+			return false;
+		}
+
+		// Markdown bold (**text**) or markdown headings/list markers introduced.
+		$translated_md_bold     = self::count_pattern_matches( '/\*\*[^*\n]+\*\*/u', $translated_text );
+		$translated_md_headings = self::count_pattern_matches( '/(^|\n)\s{0,3}#{1,6}\s+/u', $translated_text );
+		if ( $translated_md_bold < 1 && $translated_md_headings < 1 ) {
+			return false;
+		}
+
+		// Source itself uses markdown? Then it's not a regression.
+		if ( self::contains_markdown_structure( $source_text ) ) {
+			return false;
+		}
+
+		$translated_html_inline = self::count_pattern_matches( '/<(?:p|br|strong|em|b|i|u|code|li|h[1-6])\b[^>]*>/iu', $translated_text );
+
+		// If at least half of the source inline-HTML tags are still present, the
+		// translation kept the HTML structure and just added some markdown — be
+		// lenient. If less than half remain, treat as drift.
+		return $translated_html_inline < (int) ceil( $source_html_inline * 0.5 );
 	}
 
 	private static function text_length( string $text ): int {

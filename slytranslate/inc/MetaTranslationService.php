@@ -88,6 +88,15 @@ class MetaTranslationService {
 		$processed_meta  = array();
 		$meta_key_config = self::get_effective_meta_key_config( $post_id, is_array( $meta ) ? $meta : array() );
 
+		$meta_calls_before = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+		TimingLogger::log( 'meta_start', array(
+			'post'           => $post_id,
+			'key_count'      => is_array( $meta ) ? count( $meta ) : 0,
+			'translate_keys' => count( $meta_key_config['translate'] ),
+			'clear_keys'     => count( $meta_key_config['clear'] ),
+		) );
+		$meta_started_at = TimingLogger::start();
+
 		foreach ( $meta as $key => $values ) {
 			if ( TranslationProgressTracker::is_cancelled() ) {
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
@@ -102,14 +111,47 @@ class MetaTranslationService {
 			if ( in_array( $key, $meta_key_config['clear'], true ) ) {
 				$processed_meta[ $key ] = '';
 			} elseif ( in_array( $key, $meta_key_config['translate'], true ) ) {
-				$translated_meta        = self::translate_meta_value_for_key( $key, $value, $to, $from, $additional_prompt );
-				$processed_meta[ $key ] = is_wp_error( $translated_meta ) ? $value : $translated_meta;
+				$key_started     = TimingLogger::start();
+				$calls_before    = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+				$translated_meta = self::translate_meta_value_for_key( $key, $value, $to, $from, $additional_prompt );
+				$calls_after     = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+				$ok              = ! is_wp_error( $translated_meta );
+				TimingLogger::log( 'meta_key_done', array(
+					'key'         => $key,
+					'subcalls'    => $calls_after - $calls_before,
+					'duration_ms' => TimingLogger::stop( $key_started ),
+					'chars'       => self::sum_value_chars( $value ),
+					'ok'          => $ok,
+					'reason'      => $ok ? '' : $translated_meta->get_error_code(),
+				) );
+				$processed_meta[ $key ] = $ok ? $translated_meta : $value;
 			} else {
 				$processed_meta[ $key ] = $value;
 			}
 		}
 
+		$meta_calls_after = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+		TimingLogger::log( 'meta_end', array(
+			'post'        => $post_id,
+			'duration_ms' => TimingLogger::stop( $meta_started_at ),
+			'total_calls' => $meta_calls_after - $meta_calls_before,
+		) );
+
 		return $processed_meta;
+	}
+
+	private static function sum_value_chars( $value ): int {
+		if ( is_string( $value ) ) {
+			return function_exists( 'mb_strlen' ) ? (int) mb_strlen( $value, 'UTF-8' ) : strlen( $value );
+		}
+		if ( is_array( $value ) ) {
+			$total = 0;
+			foreach ( $value as $item ) {
+				$total += self::sum_value_chars( $item );
+			}
+			return $total;
+		}
+		return 0;
 	}
 
 	/* ---------------------------------------------------------------

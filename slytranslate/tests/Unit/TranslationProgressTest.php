@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\MetaTranslationService;
 use AI_Translate\TranslationProgressTracker;
+use AI_Translate\TranslationPluginAdapter;
 use AI_Translate\TranslationRuntime;
 use Brain\Monkey\Functions;
 
 class TranslationProgressTest extends TestCase {
 
 	protected function tearDown(): void {
+		$this->setStaticProperty( AI_Translate::class, 'adapter', null );
+		MetaTranslationService::reset_cache();
 		$this->setStaticProperty( TranslationRuntime::class, 'context', null );
 		$this->setStaticProperty( TranslationProgressTracker::class, 'context', null );
 
@@ -84,15 +88,19 @@ class TranslationProgressTest extends TestCase {
 			}
 		);
 
+		// Pre-register a content budget that matches the upcoming work so the
+		// percentage maths can verify monotonic, char-weighted progress.
+		$content_budget = mb_strlen( $text, 'UTF-8' );
 		$this->setStaticProperty(
 			TranslationProgressTracker::class,
 			'context',
 			array(
-				'phase'                    => '',
-				'total_steps'              => $chunk_count,
-				'completed_steps'          => 0,
-				'content_total_chunks'     => $chunk_count,
-				'content_completed_chunks' => 0,
+				'phase'           => '',
+				'post_id'         => 0,
+				'phase_budgets'   => array( 'content' => $content_budget ),
+				'phase_completed' => array(),
+				'total_units'     => $content_budget,
+				'completed_units' => 0,
 			)
 		);
 
@@ -107,22 +115,109 @@ class TranslationProgressTest extends TestCase {
 				static function ( $progress ) {
 					return is_array( $progress )
 						&& ( $progress['phase'] ?? '' ) === 'content'
-						&& (int) ( $progress['current_chunk'] ?? 0 ) > 0;
+						&& (int) ( $progress['percent'] ?? 0 ) > 0;
 				}
 			)
 		);
 
+		// One progress write per chunk (advance_units triggers set_progress
+		// for the active phase).
 		$this->assertCount( $chunk_count, $content_progress_calls );
-		$this->assertSame( range( 1, $chunk_count ), array_column( $content_progress_calls, 'current_chunk' ) );
-		$this->assertSame( array_fill( 0, $chunk_count, $chunk_count ), array_column( $content_progress_calls, 'total_chunks' ) );
+
+		// Percentages must be strictly monotonic and the final write must be
+		// 100 % once every chunk is credited (because the chunk char totals
+		// equal the registered budget).
+		$percents = array_column( $content_progress_calls, 'percent' );
+		$this->assertSame( $percents, array_values( array_unique( $percents ) ) );
+		for ( $i = 1; $i < count( $percents ); $i++ ) {
+			$this->assertGreaterThan( $percents[ $i - 1 ], $percents[ $i ] );
+		}
+		$this->assertSame( 100, end( $percents ) );
+	}
+
+	public function test_translate_post_clears_per_post_progress_after_success(): void {
+		$transients = array();
+		$source_post = new \WP_Post(
+			array(
+				'ID'           => 42,
+				'post_type'    => 'page',
+				'post_status'  => 'publish',
+				'post_title'   => '',
+				'post_content' => '',
+				'post_excerpt' => '',
+			)
+		);
+
+		$adapter = new class implements TranslationPluginAdapter {
+			public function is_available(): bool {
+				return true;
+			}
+
+			public function get_languages(): array {
+				return array(
+					'en' => 'English',
+					'de' => 'Deutsch',
+				);
+			}
+
+			public function get_post_language( int $post_id ): ?string {
+				return 42 === $post_id ? 'en' : null;
+			}
+
+			public function get_post_translations( int $post_id ): array {
+				return array();
+			}
+
+			public function create_translation( int $source_post_id, string $target_lang, array $data ) {
+				return 84;
+			}
+
+			public function link_translation( int $source_post_id, int $translated_post_id, string $target_lang ): bool {
+				return true;
+			}
+		};
+
+		Functions\when( 'get_current_user_id' )->justReturn( 17 );
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'post_type_exists' )->justReturn( true );
+		Functions\when( 'get_post' )->alias(
+			static function ( $post_id ) use ( $source_post ) {
+				return 42 === (int) $post_id ? $source_post : null;
+			}
+		);
+		Functions\when( 'get_post_meta' )->justReturn( array() );
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) use ( &$transients ) {
+				return $transients[ $key ] ?? false;
+			}
+		);
+		Functions\when( 'set_transient' )->alias(
+			static function ( $key, $value ) use ( &$transients ) {
+				$transients[ $key ] = $value;
+				return true;
+			}
+		);
+		Functions\when( 'delete_transient' )->alias(
+			static function ( $key ) use ( &$transients ) {
+				unset( $transients[ $key ] );
+				return true;
+			}
+		);
+
+		$this->setStaticProperty( AI_Translate::class, 'adapter', $adapter );
+
+		$result = AI_Translate::translate_post( 42, 'de', 'draft', false, false );
+
+		$this->assertSame( 84, $result );
+		$this->assertArrayNotHasKey( 'ai_translate_progress_17_42', $transients );
 		$this->assertSame(
-			array_map(
-				static function ( int $chunk_index ) use ( $chunk_count ): int {
-					return (int) round( ( $chunk_index / $chunk_count ) * 100 );
-				},
-				range( 1, $chunk_count )
+			array(
+				'phase'         => '',
+				'current_chunk' => 0,
+				'total_chunks'  => 0,
+				'percent'       => 0,
 			),
-			array_column( $content_progress_calls, 'percent' )
+			TranslationProgressTracker::get_progress( 42 )
 		);
 	}
 }

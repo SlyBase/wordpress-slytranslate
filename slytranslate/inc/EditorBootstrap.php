@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class EditorBootstrap {
 
-	private const VERSION              = '1.4.1';
+	private const VERSION              = '1.5.0';
 	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
 	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 	private const AVAILABLE_MODELS_TRANSIENT = 'ai_translate_available_models';
@@ -15,7 +15,7 @@ class EditorBootstrap {
 		wp_enqueue_script(
 			self::EDITOR_SCRIPT_HANDLE,
 			plugins_url( 'assets/editor-plugin.js', dirname( __DIR__ ) . '/ai-translate.php' ),
-			array( 'wp-api-fetch', 'wp-block-editor', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-plugins', 'wp-rich-text' ),
+			array( 'wp-api-fetch', 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-editor', 'wp-element', 'wp-plugins', 'wp-rich-text' ),
 			self::get_editor_script_version(),
 			true
 		);
@@ -39,15 +39,18 @@ class EditorBootstrap {
 			'abilitiesRunBasePath'      => self::get_editor_rest_base_path(),
 			'restNonce'                 => wp_create_nonce( 'wp_rest' ),
 			'translationPluginAvailable' => null !== AI_Translate::get_adapter(),
+			'translationPluginLanguages' => self::get_translation_plugin_languages(),
 			'defaultSourceLanguage'     => self::get_editor_default_source_language(),
 			'lastAdditionalPrompt'      => $last_additional_prompt,
 			'models'                    => self::get_available_models(),
 			'defaultModelSlug'          => get_option( 'ai_translate_model_slug', '' ),
 			'strings'                   => array(
 				'modelLabel'                => __( 'AI model', 'slytranslate' ),
-				'panelTitle'                => __( 'AI Translation with SlyTranslate', 'slytranslate' ),
+				'refreshModelsButton'       => __( 'Refresh model list', 'slytranslate' ),
+				'panelTitle'                => __( 'Translate (SlyTranslate)', 'slytranslate' ),
 				'sourceLanguageLabel'       => __( 'Source language', 'slytranslate' ),
 				'targetLanguageLabel'       => __( 'Target language', 'slytranslate' ),
+				'swapLanguagesButton'       => __( 'Swap source and target language', 'slytranslate' ),
 				'overwriteLabel'            => __( 'Overwrite existing translation', 'slytranslate' ),
 				'translateTitleLabel'       => __( 'Translate title', 'slytranslate' ),
 				'additionalPromptLabel'     => __( 'Additional instructions (optional)', 'slytranslate' ),
@@ -55,10 +58,12 @@ class EditorBootstrap {
 				'translateButton'           => __( 'Translate now', 'slytranslate' ),
 				'cancelTranslationButton'   => __( 'Cancel translation', 'slytranslate' ),
 				'progressTitle'             => __( 'Translating title...', 'slytranslate' ),
-				'progressContent'           => __( 'Translating content ({current}/{total})...', 'slytranslate' ),
+				'progressContent'           => __( 'Translating content...', 'slytranslate' ),
+				'progressContentFinishing'  => __( 'Processing translated content...', 'slytranslate' ),
 				'progressExcerpt'           => __( 'Translating excerpt...', 'slytranslate' ),
 				'progressMeta'              => __( 'Translating metadata...', 'slytranslate' ),
 				'progressSaving'            => __( 'Saving translation...', 'slytranslate' ),
+				'progressDone'              => __( 'Translation complete.', 'slytranslate' ),
 				'refreshButton'             => __( 'Refresh translation status', 'slytranslate' ),
 				'loadingLanguages'          => __( 'Loading available languages...', 'slytranslate' ),
 				'loadingStatus'             => __( 'Loading translation status...', 'slytranslate' ),
@@ -67,6 +72,7 @@ class EditorBootstrap {
 				'translationExists'         => __( 'Available', 'slytranslate' ),
 				'translationMissing'        => __( 'Not translated yet', 'slytranslate' ),
 				'openTranslation'           => __( 'Open translation', 'slytranslate' ),
+				'openTranslationShort'      => __( 'Open', 'slytranslate' ),
 				'saveFirstNotice'           => __( 'Save the content before creating a translation.', 'slytranslate' ),
 				'saveChangesNotice'         => __( 'Save your latest changes before translating so the translation uses the current content.', 'slytranslate' ),
 				'translationCreatedNotice'  => __( 'Translation created successfully.', 'slytranslate' ),
@@ -83,10 +89,14 @@ class EditorBootstrap {
 		);
 	}
 
-	public static function get_available_models(): array {
-		$cached_models = get_transient( self::AVAILABLE_MODELS_TRANSIENT );
-		if ( is_array( $cached_models ) ) {
-			return $cached_models;
+	public static function get_available_models( bool $force_refresh = false ): array {
+		if ( $force_refresh ) {
+			delete_transient( self::AVAILABLE_MODELS_TRANSIENT );
+		} else {
+			$cached_models = get_transient( self::AVAILABLE_MODELS_TRANSIENT );
+			if ( is_array( $cached_models ) ) {
+				return $cached_models;
+			}
 		}
 
 		if ( ! function_exists( 'wp_ai_client_prompt' ) ) {
@@ -94,7 +104,33 @@ class EditorBootstrap {
 		}
 
 		try {
-			$registry         = \WordPress\AiClient\AiClient::defaultRegistry();
+			$registry = \WordPress\AiClient\AiClient::defaultRegistry();
+
+			// When the user requested a refresh, also invalidate the AI Client's
+			// own per-provider model metadata cache (default TTL: 24h, persisted
+			// via the PSR-16 cache configured through AiClient::setCache()).
+			// Without this, changing a connector's endpoint or credentials (or
+			// switching from a local llama.cpp server to e.g. Groq) would keep
+			// returning the previously fetched model list for up to 24 hours.
+			// Also drop the separate per-connector transient used by
+			// ai-provider-for-llamacpp so the /v1/models probe is re-issued.
+			if ( $force_refresh ) {
+				foreach ( $registry->getRegisteredProviderIds() as $provider_id ) {
+					try {
+						$class_name = $registry->getProviderClassName( $provider_id );
+						$directory  = $class_name::modelMetadataDirectory();
+						if ( method_exists( $directory, 'invalidateCaches' ) ) {
+							$directory->invalidateCaches();
+						}
+					} catch ( \Throwable $e ) {
+						// Ignore a single provider failure so the refresh can
+						// still clear the remaining providers' caches.
+						continue;
+					}
+				}
+				delete_transient( 'aipf_llamacpp_model_ids' );
+			}
+
 			$requirements     = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements( array(), array() );
 			$provider_results = $registry->findModelsMetadataForSupport( $requirements );
 		} catch ( \Throwable $e ) {
@@ -150,5 +186,38 @@ class EditorBootstrap {
 
 	private static function get_editor_rest_base_path(): string {
 		return '/' . self::EDITOR_REST_NAMESPACE . '/';
+	}
+
+	/**
+	 * Languages that the active translation plugin (Polylang) is configured
+	 * for. Used to surface those languages first in editor language pickers
+	 * so users see the languages they actually translate into before the
+	 * generic global fallback list.
+	 *
+	 * @return array<int,array{code:string,name:string}>
+	 */
+	private static function get_translation_plugin_languages(): array {
+		$adapter = AI_Translate::get_adapter();
+		if ( null === $adapter ) {
+			return array();
+		}
+
+		$languages = $adapter->get_languages();
+		if ( ! is_array( $languages ) || empty( $languages ) ) {
+			return array();
+		}
+
+		$result = array();
+		foreach ( $languages as $code => $name ) {
+			$code = (string) $code;
+			if ( '' === $code ) {
+				continue;
+			}
+			$result[] = array(
+				'code' => $code,
+				'name' => (string) $name,
+			);
+		}
+		return $result;
 	}
 }

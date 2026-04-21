@@ -44,6 +44,8 @@ SlyTranslate adds two editor-facing workflows:
 
 Both workflows include a model dropdown that lists all models registered with the WordPress AI Client. The selection persists in `localStorage` and defaults to the site-wide connector model.
 
+Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. If the running dialog is dismissed or the user leaves the current wp-admin screen mid-translation, the job is handed off automatically to that background bar so progress and the eventually created draft stay visible.
+
 During full-content translations, the sidebar polls a lightweight REST endpoint and shows the current phase plus chunk progress for long content, so editors can see whether the plugin is translating the title, content, excerpt, metadata, or saving the translated post.
 
 The selected-text workflow is independent from Polylang and uses `ai-translate/translate-text`, which makes it useful even on sites that only want inline text translation.
@@ -167,6 +169,10 @@ Yes, for text translation.
 Yes.
 
 `ai-translate/translate-content`, `ai-translate/translate-content-bulk`, `ai-translate/get-translation-status`, and `ai-translate/get-untranslated` work with any Polylang-enabled post type, including pages and custom post types.
+
+### What happens if I close the post list translation dialog or leave the page mid-translation?
+
+The running translation is handed off automatically to the same global background-task bar that the explicit `Continue in background` action uses. That keeps progress visible across wp-admin screens and avoids the confusing case where the translated draft appears a few seconds later without any visible running task.
 
 ### Where do I configure prompts?
 

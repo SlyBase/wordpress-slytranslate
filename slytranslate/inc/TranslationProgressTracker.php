@@ -12,6 +12,24 @@ defined( 'ABSPATH' ) || exit;
  */
 class TranslationProgressTracker {
 
+	/**
+	 * Lifetime of the progress transient. Long enough to outlast a slow page
+	 * translation (large hero pages with deep block trees can take 15+ minutes
+	 * on small models) so the polling endpoint never returns stale defaults
+	 * mid-job.
+	 */
+	private const PROGRESS_TTL_SECONDS = 1800;
+
+	/** Known progress phases, in execution order. */
+	public const PHASES = array( 'title', 'content', 'excerpt', 'meta', 'saving' );
+
+	/**
+	 * Minimum budget per registered phase. Avoids zero-weight phases that
+	 * would otherwise contribute nothing to the percentage even though they
+	 * take observable wall-clock time (e.g. saving, empty excerpt).
+	 */
+	private const MIN_PHASE_UNITS = 32;
+
 	/** In-memory context for the current translate_post() call. */
 	private static $context = null;
 
@@ -45,8 +63,8 @@ class TranslationProgressTracker {
 	 * Progress read / write (transient-backed)
 	 * ------------------------------------------------------------- */
 
-	public static function get_progress(): array {
-		$transient_key = self::get_transient_key();
+	public static function get_progress( int $post_id = 0 ): array {
+		$transient_key = self::get_transient_key( $post_id );
 		if ( null === $transient_key ) {
 			return self::default_progress();
 		}
@@ -65,7 +83,8 @@ class TranslationProgressTracker {
 	}
 
 	public static function set_progress( string $phase, int $current_chunk = 0, int $total_chunks = 0 ): void {
-		$transient_key = self::get_transient_key();
+		$post_id       = is_array( self::$context ) ? absint( self::$context['post_id'] ?? 0 ) : 0;
+		$transient_key = self::get_transient_key( $post_id );
 		if ( null === $transient_key ) {
 			return;
 		}
@@ -79,6 +98,18 @@ class TranslationProgressTracker {
 			$current_chunk = 0;
 		}
 
+		// If no chunk hint was passed, fall back to the current phase's
+		// completed/budget character counts so the existing JS label
+		// ("Processing translated content...") still triggers when the phase
+		// is fully consumed.
+		if ( 0 === $total_chunks && is_array( self::$context ) ) {
+			$total_chunks  = self::phase_budget( $phase );
+			$current_chunk = self::phase_completed( $phase );
+			if ( $total_chunks > 0 ) {
+				$current_chunk = min( $current_chunk, $total_chunks );
+			}
+		}
+
 		set_transient(
 			$transient_key,
 			array(
@@ -87,12 +118,30 @@ class TranslationProgressTracker {
 				'total_chunks'  => $total_chunks,
 				'percent'       => self::calculate_percent( $phase ),
 			),
-			5 * MINUTE_IN_SECONDS
+			self::PROGRESS_TTL_SECONDS
 		);
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( sprintf(
+				'[SlyTranslate progress] post=%d phase=%s chunk=%d/%d percent=%d%% units=%d/%d',
+				$post_id,
+				$phase,
+				$current_chunk,
+				$total_chunks,
+				self::calculate_percent( $phase ),
+				is_array( self::$context ) ? absint( self::$context['completed_units'] ?? 0 ) : 0,
+				is_array( self::$context ) ? absint( self::$context['total_units'] ?? 0 ) : 0
+			) );
+		}
 	}
 
-	public static function clear_progress(): void {
-		$transient_key = self::get_transient_key();
+	public static function clear_progress( int $post_id = 0 ): void {
+		$ctx_post_id = is_array( self::$context ) ? absint( self::$context['post_id'] ?? 0 ) : 0;
+		if ( $post_id < 1 && $ctx_post_id > 0 ) {
+			$post_id = $ctx_post_id;
+		}
+
+		$transient_key = self::get_transient_key( $post_id );
 		if ( null !== $transient_key ) {
 			delete_transient( $transient_key );
 		}
@@ -105,20 +154,18 @@ class TranslationProgressTracker {
 	 * ------------------------------------------------------------- */
 
 	/**
-	 * Initialise the in-memory context for a new translation job.
-	 *
-	 * @param bool $translate_title       Whether the post title will be translated.
-	 * @param int  $content_total_chunks  Pre-computed number of content chunks.
+	 * Initialise the in-memory context for a new translation job. Phase
+	 * budgets are registered later via register_phase_units() once the source
+	 * lengths are known.
 	 */
-	public static function initialize_context( bool $translate_title, int $content_total_chunks ): void {
-		$total_steps = ( $translate_title ? 1 : 0 ) + $content_total_chunks + 3;
-
+	public static function initialize_context( int $post_id = 0 ): void {
 		self::$context = array(
-			'phase'                    => '',
-			'total_steps'              => max( 1, $total_steps ),
-			'completed_steps'          => 0,
-			'content_total_chunks'     => $content_total_chunks,
-			'content_completed_chunks' => 0,
+			'phase'           => '',
+			'post_id'         => max( 0, $post_id ),
+			'phase_budgets'   => array(),
+			'phase_completed' => array(),
+			'total_units'     => 0,
+			'completed_units' => 0,
 		);
 	}
 
@@ -126,124 +173,125 @@ class TranslationProgressTracker {
 		self::$context = null;
 	}
 
+	/**
+	 * Register (or extend) the budget for a phase, expressed as the number of
+	 * source characters that will be translated in that phase. Each call adds
+	 * to any previously registered budget for the same phase, which lets
+	 * recursive code paths announce additional work mid-flight.
+	 */
+	public static function register_phase_units( string $phase, int $units ): void {
+		if ( ! is_array( self::$context ) || $units < 1 ) {
+			return;
+		}
+
+		$units = max( $units, self::MIN_PHASE_UNITS );
+
+		$current  = absint( self::$context['phase_budgets'][ $phase ] ?? 0 );
+		$new      = $current + $units;
+
+		self::$context['phase_budgets'][ $phase ] = $new;
+		self::$context['total_units']             = absint( self::$context['total_units'] ?? 0 ) + $units;
+	}
+
+	/**
+	 * Credit translated source characters to a phase. Capped at the phase
+	 * budget so wildly long translations cannot push percentages > 100.
+	 */
+	public static function advance_units( string $phase, int $units ): void {
+		if ( ! is_array( self::$context ) || $units < 1 ) {
+			return;
+		}
+
+		$budget    = absint( self::$context['phase_budgets'][ $phase ] ?? 0 );
+		$completed = absint( self::$context['phase_completed'][ $phase ] ?? 0 );
+
+		if ( $budget < 1 ) {
+			// Phase wasn't pre-registered; register on the fly so the work
+			// counts toward overall progress instead of being silently dropped.
+			self::register_phase_units( $phase, $units );
+			$budget = absint( self::$context['phase_budgets'][ $phase ] ?? 0 );
+		}
+
+		$delta = min( $units, max( 0, $budget - $completed ) );
+		if ( $delta < 1 ) {
+			return;
+		}
+
+		self::$context['phase_completed'][ $phase ] = $completed + $delta;
+		self::$context['completed_units']           = absint( self::$context['completed_units'] ?? 0 ) + $delta;
+
+		if ( ( self::$context['phase'] ?? '' ) === $phase ) {
+			self::set_progress( $phase );
+		}
+	}
+
+	/**
+	 * Mark a phase as fully done — fills any remaining budget so the bar
+	 * never freezes when individual sub-paths skipped their advance_units()
+	 * call (e.g. recursive block fallback or oversized chunks that returned
+	 * early on validation drift).
+	 */
+	public static function complete_phase( string $phase ): void {
+		if ( ! is_array( self::$context ) ) {
+			return;
+		}
+
+		$budget    = absint( self::$context['phase_budgets'][ $phase ] ?? 0 );
+		$completed = absint( self::$context['phase_completed'][ $phase ] ?? 0 );
+
+		if ( $budget > $completed ) {
+			self::advance_units( $phase, $budget - $completed );
+		}
+	}
+
+	public static function get_phase_budget( string $phase ): int {
+		return self::phase_budget( $phase );
+	}
+
+	public static function get_phase_completed( string $phase ): int {
+		return self::phase_completed( $phase );
+	}
+
+	/**
+	 * Return the phase that mark_phase() most recently activated, or '' when
+	 * no context is currently initialised. Used by TranslationRuntime to route
+	 * per-chunk progress credit to whichever phase is running.
+	 */
+	public static function current_phase(): string {
+		if ( ! is_array( self::$context ) ) {
+			return '';
+		}
+		$phase = self::$context['phase'] ?? '';
+		return is_string( $phase ) ? $phase : '';
+	}
+
 	public static function has_content_progress(): bool {
-		return is_array( self::$context ) && absint( self::$context['content_total_chunks'] ?? 0 ) > 0;
+		return self::phase_budget( 'content' ) > 0;
 	}
 
 	/* ---------------------------------------------------------------
-	 * Phase and step tracking
+	 * Phase tracking
 	 * ------------------------------------------------------------- */
 
 	public static function mark_phase( string $phase ): void {
-		$current_chunk = 0;
-		$total_chunks  = 0;
-
 		if ( is_array( self::$context ) ) {
 			self::$context['phase'] = $phase;
-
-			if ( 'content' === $phase ) {
-				$current_chunk = absint( self::$context['content_completed_chunks'] ?? 0 );
-				$total_chunks  = absint( self::$context['content_total_chunks'] ?? 0 );
-			}
 		}
 
-		self::set_progress( $phase, $current_chunk, $total_chunks );
-	}
-
-	public static function advance_steps( int $steps = 1 ): void {
-		if ( ! is_array( self::$context ) || $steps < 1 ) {
-			return;
-		}
-
-		$total_steps = max( 1, absint( self::$context['total_steps'] ?? 0 ) );
-		self::$context['completed_steps'] = min(
-			$total_steps,
-			absint( self::$context['completed_steps'] ?? 0 ) + $steps
-		);
-	}
-
-	public static function advance_content_chunk(): int {
-		if ( ! is_array( self::$context ) || 'content' !== ( self::$context['phase'] ?? '' ) ) {
-			return 0;
-		}
-
-		$content_total_chunks = absint( self::$context['content_total_chunks'] ?? 0 );
-		if ( $content_total_chunks < 1 ) {
-			return 0;
-		}
-
-		self::$context['content_completed_chunks'] = min(
-			$content_total_chunks,
-			absint( self::$context['content_completed_chunks'] ?? 0 ) + 1
-		);
-		self::advance_steps();
-		self::set_progress(
-			'content',
-			absint( self::$context['content_completed_chunks'] ?? 0 ),
-			$content_total_chunks
-		);
-
-		return 1;
-	}
-
-	public static function rewind_content_chunks( int $completed_chunks ): void {
-		if ( $completed_chunks < 1 || ! is_array( self::$context ) || 'content' !== ( self::$context['phase'] ?? '' ) ) {
-			return;
-		}
-
-		self::$context['content_completed_chunks'] = max(
-			0,
-			absint( self::$context['content_completed_chunks'] ?? 0 ) - $completed_chunks
-		);
-		self::$context['completed_steps'] = max(
-			0,
-			absint( self::$context['completed_steps'] ?? 0 ) - $completed_chunks
-		);
-		self::set_progress(
-			'content',
-			absint( self::$context['content_completed_chunks'] ?? 0 ),
-			absint( self::$context['content_total_chunks'] ?? 0 )
-		);
-	}
-
-	public static function synchronize_content_chunks( int $chunk_count, ?int $previous_chunk_count = null ): void {
-		if ( ! is_array( self::$context ) || 'content' !== ( self::$context['phase'] ?? '' ) ) {
-			return;
-		}
-
-		$chunk_count = max( 0, $chunk_count );
-
-		if ( null === $previous_chunk_count ) {
-			if ( 0 === absint( self::$context['content_total_chunks'] ?? 0 ) ) {
-				self::$context['content_total_chunks'] = $chunk_count;
-				self::$context['total_steps']          = max( 1, absint( self::$context['total_steps'] ?? 0 ) + $chunk_count );
-			}
-			return;
-		}
-
-		$delta = $chunk_count - max( 0, $previous_chunk_count );
-		if ( 0 === $delta ) {
-			return;
-		}
-
-		self::$context['content_total_chunks'] = max(
-			absint( self::$context['content_completed_chunks'] ?? 0 ),
-			absint( self::$context['content_total_chunks'] ?? 0 ) + $delta
-		);
-		self::$context['total_steps'] = max(
-			absint( self::$context['completed_steps'] ?? 0 ) + 1,
-			absint( self::$context['total_steps'] ?? 0 ) + $delta
-		);
+		self::set_progress( $phase );
 	}
 
 	/* ---------------------------------------------------------------
 	 * Private helpers
 	 * ------------------------------------------------------------- */
 
-	private static function get_transient_key(): ?string {
+	private static function get_transient_key( int $post_id = 0 ): ?string {
 		$user_id = get_current_user_id();
 		if ( $user_id < 1 ) {
 			return null;
+		}
+		if ( $post_id > 0 ) {
+			return 'ai_translate_progress_' . $user_id . '_' . $post_id;
 		}
 		return 'ai_translate_progress_' . $user_id;
 	}
@@ -266,9 +314,25 @@ class TranslationProgressTracker {
 			return 0;
 		}
 
-		$total_steps     = max( 1, absint( self::$context['total_steps'] ?? 0 ) );
-		$completed_steps = min( $total_steps, absint( self::$context['completed_steps'] ?? 0 ) );
+		$total_units     = max( 1, absint( self::$context['total_units'] ?? 0 ) );
+		$completed_units = min( $total_units, absint( self::$context['completed_units'] ?? 0 ) );
 
-		return (int) round( ( $completed_steps / $total_steps ) * 100 );
+		return (int) round( ( $completed_units / $total_units ) * 100 );
+	}
+
+	private static function phase_budget( string $phase ): int {
+		if ( ! is_array( self::$context ) ) {
+			return 0;
+		}
+
+		return absint( self::$context['phase_budgets'][ $phase ] ?? 0 );
+	}
+
+	private static function phase_completed( string $phase ): int {
+		if ( ! is_array( self::$context ) ) {
+			return 0;
+		}
+
+		return absint( self::$context['phase_completed'][ $phase ] ?? 0 );
 	}
 }

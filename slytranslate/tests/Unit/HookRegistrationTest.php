@@ -6,6 +6,7 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\AbilityRegistrar;
+use AI_Translate\ListTableTranslation;
 use Brain\Monkey\Functions;
 
 class HookRegistrationTest extends TestCase {
@@ -60,6 +61,30 @@ class HookRegistrationTest extends TestCase {
 				array(
 					'hook'          => 'wp_abilities_api_init',
 					'callback'      => array( AbilityRegistrar::class, 'register_abilities' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'hook'          => 'current_screen',
+					'callback'      => array( ListTableTranslation::class, 'register_list_table_hooks' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'hook'          => 'admin_post_ai_translate_single',
+					'callback'      => array( ListTableTranslation::class, 'handle_single_translate' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'hook'          => 'admin_notices',
+					'callback'      => array( ListTableTranslation::class, 'show_admin_notice' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'hook'          => 'admin_footer',
+					'callback'      => array( ListTableTranslation::class, 'enqueue_global_background_bar' ),
 					'priority'      => 10,
 					'accepted_args' => 1,
 				),

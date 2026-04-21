@@ -62,6 +62,14 @@ if ( ! class_exists( 'WP_Error' ) ) {
 			$codes = $this->get_error_codes();
 			return $codes[0] ?? '';
 		}
+
+		public function get_error_message( string $code = '' ): string {
+			if ( '' === $code ) {
+				$code = $this->get_error_code();
+			}
+			$messages = $this->errors[ $code ] ?? [];
+			return $messages[0] ?? '';
+		}
 	}
 }
 

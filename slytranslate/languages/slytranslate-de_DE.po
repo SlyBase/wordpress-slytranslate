@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.4.0\n"
+"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.5.0\n"
 "Report-Msgid-Bugs-To: https://github.com/SlyBase/wordpress-slytranslate/issues\n"
 "POT-Creation-Date: 2026-04-18 00:30+0200\n"
 "PO-Revision-Date: 2026-04-18 00:30+0200\n"
@@ -221,8 +221,8 @@ msgstr "Übersetzung abbrechen"
 msgid "Translating title..."
 msgstr "Titel wird übersetzt ..."
 
-msgid "Translating content ({current}/{total})..."
-msgstr "Inhalt wird übersetzt ({current}/{total}) ..."
+msgid "Translating content..."
+msgstr "Inhalt wird übersetzt ..."
 
 msgid "Translating excerpt..."
 msgstr "Auszug wird übersetzt ..."
@@ -259,3 +259,121 @@ msgstr "Die übersetzte Ausgabe hat erforderliche Struktur wie HTML, Gutenberg-B
 
 msgid "TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs."
 msgstr "TranslateGemma befolgt Stil-Vorgaben nicht zuverlässig. Für Ton, Anrede und Sprachregister empfehlen sich Instruct-LLMs."
+
+msgid "Processing translated content..."
+msgstr "Übersetzte Inhalte werden verarbeitet ..."
+
+msgid "Translation complete."
+msgstr "Übersetzung abgeschlossen."
+
+msgid "AI model"
+msgstr "KI-Modell"
+
+#, php-format
+msgid "Translate → %s"
+msgstr "Übersetzen → %s"
+
+#, php-format
+msgid "Translate with AI → %s"
+msgstr "Mit KI übersetzen → %s"
+
+msgid "Invalid request."
+msgstr "Ungültige Anfrage."
+
+msgid "Translation completed successfully."
+msgstr "Übersetzung erfolgreich abgeschlossen."
+
+#, php-format
+msgid "Translation failed: %s"
+msgstr "Übersetzung fehlgeschlagen: %s"
+
+msgid "Translating..."
+msgstr "Wird übersetzt ..."
+
+#, php-format
+msgid "Translating to %s..."
+msgstr "Wird nach %s übersetzt ..."
+
+msgid "Continue in background"
+msgstr "Im Hintergrund fortsetzen"
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "Translation cancelled."
+msgstr "Übersetzung abgebrochen."
+
+msgid "Translation continues in the background. You can navigate away."
+msgstr "Die Übersetzung läuft im Hintergrund weiter. Du kannst die Seite verlassen."
+
+msgid "Done"
+msgstr "Fertig"
+
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+msgid "Translation failed."
+msgstr "Übersetzung fehlgeschlagen."
+
+msgid "Dismiss"
+msgstr "Verwerfen"
+
+msgid "SlyTranslate background tasks"
+msgstr "SlyTranslate Hintergrundaufgaben"
+
+msgid "Clear finished"
+msgstr "Abgeschlossene entfernen"
+
+msgctxt "background bar status summary"
+msgid "running"
+msgstr "läuft"
+
+msgctxt "background bar status summary"
+msgid "done"
+msgstr "fertig"
+
+msgctxt "background bar status summary"
+msgid "failed"
+msgstr "fehlgeschlagen"
+
+msgid "Translate to %s"
+msgstr "Nach %s übersetzen"
+
+msgid "Translate %d items to %s"
+msgstr "%d Einträge nach %s übersetzen"
+
+msgid "Start translation"
+msgstr "Übersetzung starten"
+
+msgid "Refresh model list"
+msgstr "Modellliste aktualisieren"
+
+msgid "Loading available models..."
+msgstr "Verfügbare Modelle werden geladen..."
+
+msgid "No AI models are available. Configure a connector under Settings → Connectors first."
+msgstr "Keine KI-Modelle verfügbar. Bitte zuerst einen Connector unter Einstellungen → Connectors einrichten."
+
+msgid "Connector default"
+msgstr "Connector-Standard"
+
+msgid "Please select at least one item before translating."
+msgstr "Bitte wähle mindestens einen Eintrag zum Übersetzen aus."
+
+msgid "Translating item %1$d of %2$d..."
+msgstr "Übersetze Eintrag %1$d von %2$d..."
+
+msgid "Bulk translation complete: %1$d translated, %2$d skipped, %3$d failed."
+msgstr "Massenübersetzung abgeschlossen: %1$d übersetzt, %2$d übersprungen, %3$d fehlgeschlagen."
+
+msgid "Translate"
+msgstr "Übersetzen"
+
+msgid "Translate %d items"
+msgstr "%d Einträge übersetzen"
+
+msgid "Swap source and target language"
+msgstr "Quell- und Zielsprache tauschen"
+
+msgid "Open"
+msgstr "Öffnen"

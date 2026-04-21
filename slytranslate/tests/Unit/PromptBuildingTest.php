@@ -95,6 +95,6 @@ class PromptBuildingTest extends TestCase {
 		$parts  = explode( "\n\n", $result );
 		$this->assertCount( 3, $parts );
 		$this->assertSame( 'Addon text.', $parts[1] );
-		$this->assertSame( 'Extra instruction.', $parts[2] );
+		$this->assertSame( 'Additional style instructions (do NOT translate these lines, apply them to the user-provided content): Extra instruction.', $parts[2] );
 	}
 }

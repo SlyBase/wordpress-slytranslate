@@ -78,25 +78,63 @@ class PostTranslationService {
 
 		$target_status = self::normalize_post_status( $status, $post );
 
-		// Initialise progress context.
-		$chunk_char_limit    = TranslationRuntime::get_chunk_char_limit();
-		$content_total_chunks = TextSplitter::count_content_translation_chunks( $post->post_content, $chunk_char_limit );
-		TranslationProgressTracker::initialize_context( $translate_title, $content_total_chunks );
+		// Initialise progress context with character-budget per phase, so the
+		// progress bar advances at a rate proportional to the actual amount of
+		// source text translated rather than counting "phases" at equal weight.
+		TranslationProgressTracker::initialize_context( $post_id );
+
+		TimingLogger::reset_counters();
+		$job_started_at  = TimingLogger::start();
+		$runtime_context = TranslationRuntime::get_runtime_context();
+		TimingLogger::log( 'job_start', array(
+			'post'      => $post_id,
+			'post_type' => $post->post_type,
+			'from'      => $from,
+			'to'        => $to,
+			'model'     => (string) ( $runtime_context['model_slug'] ?? '' ),
+			'overwrite' => $overwrite ? 1 : 0,
+		) );
+
+		$content_units = self::estimate_content_translation_units( $post->post_content );
+		$meta_units    = self::estimate_meta_translation_units( $post_id );
+
+		if ( $translate_title ) {
+			TranslationProgressTracker::register_phase_units( 'title', self::char_length( $post->post_title ) );
+		}
+		if ( $content_units > 0 ) {
+			TranslationProgressTracker::register_phase_units( 'content', $content_units );
+		}
+		TranslationProgressTracker::register_phase_units( 'excerpt', self::char_length( $post->post_excerpt ) );
+		if ( $meta_units > 0 ) {
+			TranslationProgressTracker::register_phase_units( 'meta', $meta_units );
+		}
+		// Saving has no source text but takes observable time (adapter
+		// create_translation can hit Polylang sync, term assignment, …).
+		TranslationProgressTracker::register_phase_units( 'saving', 1 );
 
 		try {
 			// Translate title.
 			if ( $translate_title ) {
 				TranslationProgressTracker::mark_phase( 'title' );
-				$title = TranslationRuntime::translate_text( $post->post_title, $to, $from, $additional_prompt );
+				TimingLogger::log( 'phase_start', array( 'phase' => 'title', 'chars' => self::char_length( $post->post_title ) ) );
+				$phase_started = TimingLogger::start();
+				$title_prompt = $additional_prompt;
+				$title_hint   = 'This is a post title. Translate it concisely and keep a similar length to the original. Do not expand, elaborate, or add content.';
+				$title_prompt = '' !== trim( $title_prompt ) ? $title_prompt . "\n\n" . $title_hint : $title_hint;
+				$title = TranslationRuntime::translate_text( $post->post_title, $to, $from, $title_prompt );
 				if ( is_wp_error( $title ) ) {
+					TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $title->get_error_code() ) );
+					self::log_job_end( $post_id, $job_started_at, false );
 					return $title;
 				}
-				TranslationProgressTracker::advance_steps();
+				TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
+				TranslationProgressTracker::complete_phase( 'title' );
 			} else {
 				$title = $post->post_title;
 			}
 
 			if ( TranslationProgressTracker::is_cancelled() ) {
+				self::log_job_end( $post_id, $job_started_at, false, 'cancelled' );
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
 			}
 
@@ -105,33 +143,58 @@ class PostTranslationService {
 				TranslationProgressTracker::mark_phase( 'content' );
 			}
 
+			TimingLogger::log( 'phase_start', array( 'phase' => 'content', 'chars' => self::char_length( $post->post_content ) ) );
+			$phase_started = TimingLogger::start();
 			$content = ContentTranslator::translate_post_content( $post->post_content, $to, $from, $additional_prompt );
 			if ( is_wp_error( $content ) ) {
+				TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $content->get_error_code() ) );
+				self::log_job_end( $post_id, $job_started_at, false );
 				return $content;
 			}
+			TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
+
+			// Fill any remaining content budget so the bar never stalls when
+			// individual sub-paths (recursive inner-block translation, oversized
+			// chunks falling back to verbatim copies) skipped their own
+			// advance_units() call.
+			TranslationProgressTracker::complete_phase( 'content' );
 
 			if ( TranslationProgressTracker::is_cancelled() ) {
+				self::log_job_end( $post_id, $job_started_at, false, 'cancelled' );
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
 			}
 
 			// Translate excerpt.
 			TranslationProgressTracker::mark_phase( 'excerpt' );
+			TimingLogger::log( 'phase_start', array( 'phase' => 'excerpt', 'chars' => self::char_length( $post->post_excerpt ) ) );
+			$phase_started = TimingLogger::start();
 			$excerpt = TranslationRuntime::translate_text( $post->post_excerpt, $to, $from, $additional_prompt );
 			if ( is_wp_error( $excerpt ) ) {
+				TimingLogger::log( 'phase_end', array( 'phase' => 'excerpt', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $excerpt->get_error_code() ) );
+				self::log_job_end( $post_id, $job_started_at, false );
 				return $excerpt;
 			}
+			TimingLogger::log( 'phase_end', array( 'phase' => 'excerpt', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
 
-			TranslationProgressTracker::advance_steps();
+			TranslationProgressTracker::complete_phase( 'excerpt' );
 
 			// Translate / clear meta.
 			TranslationProgressTracker::mark_phase( 'meta' );
+			TimingLogger::log( 'phase_start', array( 'phase' => 'meta' ) );
+			$phase_started = TimingLogger::start();
 			$processed_meta = MetaTranslationService::prepare_translation_meta( $post_id, $to, $from, $additional_prompt );
 			if ( is_wp_error( $processed_meta ) ) {
+				TimingLogger::log( 'phase_end', array( 'phase' => 'meta', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $processed_meta->get_error_code() ) );
+				self::log_job_end( $post_id, $job_started_at, false );
 				return $processed_meta;
 			}
+			TimingLogger::log( 'phase_end', array( 'phase' => 'meta', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
 
-			TranslationProgressTracker::advance_steps();
+			TranslationProgressTracker::complete_phase( 'meta' );
 			TranslationProgressTracker::mark_phase( 'saving' );
+
+			TimingLogger::log( 'phase_start', array( 'phase' => 'saving' ) );
+			$phase_started = TimingLogger::start();
 
 			// Persist via adapter.
 			$result = $adapter->create_translation( $post_id, $to, array(
@@ -143,15 +206,139 @@ class PostTranslationService {
 				'overwrite'    => $overwrite,
 			) );
 
-			if ( ! is_wp_error( $result ) ) {
-				TranslationProgressTracker::advance_steps();
+			$saving_ok = ! is_wp_error( $result );
+			TimingLogger::log( 'phase_end', array(
+				'phase'       => 'saving',
+				'duration_ms' => TimingLogger::stop( $phase_started ),
+				'ok'          => $saving_ok,
+				'reason'      => $saving_ok ? '' : $result->get_error_code(),
+			) );
+
+			if ( $saving_ok ) {
+				TranslationProgressTracker::complete_phase( 'saving' );
 				TranslationProgressTracker::set_progress( 'done' );
 			}
 
+			self::log_job_end( $post_id, $job_started_at, $saving_ok );
+
 			return $result;
 		} finally {
-			TranslationProgressTracker::clear_context();
+			// Remove terminal progress state so a later retry cannot briefly
+			// inherit the last percentage from this completed/failed job.
+			TranslationProgressTracker::clear_progress( $post_id );
 		}
+	}
+
+	private static function log_job_end( int $post_id, float $job_started_at, bool $ok, string $reason = '' ): void {
+		$counters = TimingLogger::get_counters();
+		TimingLogger::log( 'job_end', array(
+			'post'        => $post_id,
+			'total_ms'    => TimingLogger::stop( $job_started_at ),
+			'ai_calls'    => $counters['ai_calls'] ?? 0,
+			'retries'     => $counters['retries'] ?? 0,
+			'fallbacks'   => $counters['fallbacks'] ?? 0,
+			'ok'          => $ok,
+			'reason'      => $reason,
+		) );
+	}
+
+	/* ---------------------------------------------------------------
+	 * Char-budget helpers used to size progress phases
+	 * ------------------------------------------------------------- */
+
+	/**
+	 * Approximate the number of source characters that ContentTranslator will
+	 * actually feed to the AI client. Skipped blocks (code, preformatted, …)
+	 * are excluded so the budget reflects translatable work only.
+	 */
+	private static function estimate_content_translation_units( string $content ): int {
+		$content = (string) $content;
+		if ( '' === trim( $content ) ) {
+			return 0;
+		}
+
+		if ( ! function_exists( 'parse_blocks' ) ) {
+			return self::char_length( $content );
+		}
+
+		$blocks = parse_blocks( $content );
+		if ( ! is_array( $blocks ) || empty( $blocks ) ) {
+			return self::char_length( $content );
+		}
+
+		$units = 0;
+		foreach ( $blocks as $block ) {
+			$units += self::estimate_block_units( $block );
+		}
+
+		return $units;
+	}
+
+	private static function estimate_block_units( array $block ): int {
+		if ( TextSplitter::should_skip_block_translation( $block ) ) {
+			return 0;
+		}
+
+		$units = 0;
+		if ( function_exists( 'serialize_blocks' ) ) {
+			$serialized = serialize_blocks( array( $block ) );
+			if ( TextSplitter::should_translate_block_fragment( $serialized ) ) {
+				$units = self::char_length( $serialized );
+			}
+		}
+
+		return $units;
+	}
+
+	private static function estimate_meta_translation_units( int $post_id ): int {
+		if ( ! function_exists( 'get_post_meta' ) ) {
+			return 0;
+		}
+
+		$meta = get_post_meta( $post_id );
+		if ( ! is_array( $meta ) || empty( $meta ) ) {
+			return 0;
+		}
+
+		$translatable = MetaTranslationService::meta_translate( $post_id );
+		if ( empty( $translatable ) ) {
+			return 0;
+		}
+
+		$units = 0;
+		foreach ( $translatable as $key ) {
+			if ( ! isset( $meta[ $key ][0] ) ) {
+				continue;
+			}
+			$value  = function_exists( 'maybe_unserialize' ) ? maybe_unserialize( $meta[ $key ][0] ) : $meta[ $key ][0];
+			$units += self::sum_value_chars( $value );
+		}
+
+		return $units;
+	}
+
+	private static function sum_value_chars( $value ): int {
+		if ( is_string( $value ) ) {
+			return self::char_length( $value );
+		}
+		if ( is_array( $value ) ) {
+			$total = 0;
+			foreach ( $value as $item ) {
+				$total += self::sum_value_chars( $item );
+			}
+			return $total;
+		}
+		return 0;
+	}
+
+	private static function char_length( $text ): int {
+		if ( ! is_string( $text ) || '' === $text ) {
+			return 0;
+		}
+		if ( function_exists( 'mb_strlen' ) ) {
+			return (int) mb_strlen( $text, 'UTF-8' );
+		}
+		return strlen( $text );
 	}
 
 	/* ---------------------------------------------------------------

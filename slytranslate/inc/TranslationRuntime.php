@@ -17,25 +17,64 @@ class TranslationRuntime {
 	private const DEFAULT_CONTEXT_WINDOW_TOKENS = 8192;
 	private const MIN_CONTEXT_WINDOW_TOKENS     = 2048;
 	private const MIN_TRANSLATION_CHARS         = 1200;
-	private const MAX_TRANSLATION_CHARS         = 8000;
+	// Hard upper bound for chunk size in characters. Sized to let modern
+	// hosted LLMs (Groq, OpenAI, Anthropic, Gemini, Mistral, xAI, …) batch
+	// translations in far fewer requests so per-minute rate limits stop
+	// firing on longer pages, while still leaving enough context-window
+	// headroom for prompt overhead and the translated output. Local
+	// llama.cpp / ollama endpoints with smaller context windows remain
+	// naturally clamped by `get_chunk_char_limit_from_context_window()`
+	// (context_window_tokens * SAFE_CHARS_PER_CONTEXT_TOKEN) below this
+	// ceiling, so this bump does not affect them.
+	//
+	// The ceiling is deliberately high enough that for 128K+ context
+	// models, a whole medium post fits into a single request (fewer RPM
+	// hits on hosted providers like Groq). Output-side headroom is
+	// handled separately by `compute_max_output_tokens()` (capped at
+	// `MAX_OUTPUT_TOKENS_CEILING`), so raising this value without also
+	// raising the output ceiling would truncate the model response.
+	private const MAX_TRANSLATION_CHARS         = 48000;
 	private const SAFE_CHARS_PER_CONTEXT_TOKEN  = 0.5;
+	// Upper bound for `max_tokens` / `max_output_tokens` per request.
+	// Kept in sync with MAX_TRANSLATION_CHARS (~0.5 tokens per input
+	// char × growth factor) so a chunk that fills the char ceiling is
+	// still allowed to emit a same-size translation. Filter:
+	// `ai_translate_max_output_tokens_ceiling`.
+	private const MAX_OUTPUT_TOKENS_CEILING     = 8192;
+	private const MIN_OUTPUT_TOKENS             = 256;
 	private const KNOWN_MODEL_CONTEXT_WINDOWS   = array(
-		'claude'        => 200000,
-		'gemini-2.5'    => 1000000,
-		'gemini-2.0'    => 1000000,
-		'gemini-1.5'    => 1000000,
-		'gpt-4.5'       => 128000,
-		'gpt-4.1'       => 128000,
-		'gpt-4o'        => 128000,
-		'gpt-4-turbo'   => 128000,
-		'gpt-3.5-turbo' => 16385,
-		'o4-mini'       => 128000,
-		'o3'            => 128000,
+		'claude'          => 200000,
+		'gemini-2.5'      => 1000000,
+		'gemini-2.0'      => 1000000,
+		'gemini-1.5'      => 1000000,
+		'gpt-4.5'         => 128000,
+		'gpt-4.1'         => 128000,
+		'gpt-4o'          => 128000,
+		'gpt-4-turbo'     => 128000,
+		'gpt-3.5-turbo'   => 16385,
+		'o4-mini'         => 128000,
+		'o3'              => 128000,
 		'mistral-large'   => 32768,
 		'mistral-small'   => 32768,
 		'sonar'           => 32768,
-		'grok'            => 32768,
+		'grok'            => 131072,
+		// Hosted open-weight models (Groq, Together, Fireworks, DeepInfra, …).
+		// Matching is substring-based so provider prefixes like
+		// `llama-3.3-70b-versatile` or `meta-llama/Llama-3.1-…` are covered.
+		'llama-4'         => 131072,
+		'llama-3.3'       => 131072,
+		'llama-3.2'       => 131072,
+		'llama-3.1'       => 131072,
+		'llama-3'         => 8192,
+		'mixtral'         => 32768,
+		'qwen2.5'         => 131072,
+		'qwen-2.5'        => 131072,
+		'qwen3'           => 131072,
+		'qwen'            => 32768,
+		'deepseek'        => 131072,
 		'translategemma'  => 8192,
+		'gemma-3'         => 131072,
+		'gemma'           => 8192,
 	);
 
 	/* ---------------------------------------------------------------
@@ -54,6 +93,27 @@ class TranslationRuntime {
 
 	/** Diagnostics from the most recent chunk transport call. */
 	private static $last_diagnostics = null;
+
+	/** When true, TranslationValidator skips the HTML tag count and URL count checks. */
+	private static $skip_html_tag_validation = false;
+
+	/** Recursion guard for rate-limit (HTTP 429) retries inside a single chunk call. */
+	private static int $rate_limit_retry_depth = 0;
+	private const RATE_LIMIT_MAX_RETRIES   = 3;
+	private const RATE_LIMIT_MAX_SLEEP_SEC = 30;
+	private const RATE_LIMIT_MIN_SLEEP_SEC = 1;
+
+	/* ---------------------------------------------------------------
+	 * HTML tag validation bypass (used by ContentTranslator)
+	 * ------------------------------------------------------------- */
+
+	public static function set_skip_html_tag_validation( bool $skip ): void {
+		self::$skip_html_tag_validation = $skip;
+	}
+
+	public static function should_skip_html_tag_validation(): bool {
+		return self::$skip_html_tag_validation;
+	}
 
 	/* ---------------------------------------------------------------
 	 * Prompt building
@@ -75,7 +135,7 @@ class TranslationRuntime {
 		}
 
 		if ( is_string( $additional_prompt ) && '' !== trim( $additional_prompt ) ) {
-			$parts[] = trim( $additional_prompt );
+			$parts[] = 'Additional style instructions (do NOT translate these lines, apply them to the user-provided content): ' . trim( $additional_prompt );
 		}
 
 		return implode( "\n\n", $parts );
@@ -146,10 +206,8 @@ class TranslationRuntime {
 			return '';
 		}
 
-		TranslationProgressTracker::synchronize_content_chunks( count( $chunks ), $previous_chunk_count );
-
-		$translated_chunks = array();
-		$completed_chunks  = 0;
+		$translated_chunks    = array();
+		$completed_unit_count = 0;
 
 		foreach ( $chunks as $chunk ) {
 			if ( TranslationProgressTracker::is_cancelled() ) {
@@ -161,17 +219,54 @@ class TranslationRuntime {
 			if ( is_wp_error( $translated_chunk ) ) {
 				$adjusted = self::maybe_adjust_chunk_limit_from_error( $translated_chunk, $chunk_char_limit );
 				if ( $adjusted > 0 && $attempt < 2 ) {
-					TranslationProgressTracker::rewind_content_chunks( $completed_chunks );
+					// Re-attempt with smaller chunk size; do NOT roll back the
+					// already-credited progress because the upcoming retry
+					// will re-translate the same source text and credit it
+					// again \u2014 capping at the phase budget keeps the bar
+					// monotonic regardless.
 					return self::translate_with_chunk_limit( $text, $prompt, $adjusted, $attempt + 1, count( $chunks ) );
 				}
 				return $translated_chunk;
 			}
 
 			$translated_chunks[] = $translated_chunk;
-			$completed_chunks   += TranslationProgressTracker::advance_content_chunk();
+
+			$chunk_units = self::char_length( $chunk );
+			if ( $chunk_units > 0 ) {
+				$active_phase = TranslationProgressTracker::current_phase();
+				if ( '' !== $active_phase && 'saving' !== $active_phase && 'done' !== $active_phase ) {
+					TranslationProgressTracker::advance_units( $active_phase, $chunk_units );
+					$completed_unit_count += $chunk_units;
+				}
+			}
 		}
 
 		return implode( '', $translated_chunks );
+	}
+
+	private static function char_length( string $text ): int {
+		if ( function_exists( 'mb_strlen' ) ) {
+			return (int) mb_strlen( $text, 'UTF-8' );
+		}
+		return strlen( $text );
+	}
+
+	/**
+	 * Return a single-line, length-bounded excerpt of $text suitable for
+	 * inclusion in error_log lines. Used by validation diagnostics so we
+	 * can see what the model actually produced when something fails.
+	 */
+	private static function truncate_for_log( string $text, int $max = 240 ): string {
+		$text = preg_replace( '/\s+/u', ' ', $text ) ?? $text;
+		$text = trim( (string) $text );
+		if ( function_exists( 'mb_strlen' ) ) {
+			if ( mb_strlen( $text, 'UTF-8' ) > $max ) {
+				$text = mb_substr( $text, 0, $max, 'UTF-8' ) . '…';
+			}
+		} elseif ( strlen( $text ) > $max ) {
+			$text = substr( $text, 0, $max ) . '…';
+		}
+		return $text;
 	}
 
 	public static function translate_chunk( string $text, string $prompt, int $validation_attempt = 0 ): mixed {
@@ -219,18 +314,99 @@ class TranslationRuntime {
 			}
 		}
 
-		if ( is_string( $direct_api_url ) && '' !== $direct_api_url ) {
-			$result = DirectApiTranslationClient::translate(
+		$input_chars = self::char_length( $text );
+		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
+
+		// Direct API only carries a single, explicit model. When no model is
+		// configured (DB option `ai_translate_model_slug` empty AND no per-call
+		// override), we MUST defer to the WordPress AI Client so its connector
+		// hierarchy (per-user preference → global default) decides which model
+		// to use. Otherwise we would either send an empty `model` field (HTTP 400
+		// on llama.cpp) or, worse, paper over the gap with whatever model the
+		// endpoint happened to load — silently overriding the user's choice.
+		if ( is_string( $direct_api_url ) && '' !== $direct_api_url && '' !== $model_slug ) {
+			$direct_started = TimingLogger::start();
+			$result         = DirectApiTranslationClient::translate(
 				$text,
 				$prompt,
 				$model_slug,
 				$direct_api_url,
 				$kwargs_supported,
 				self::$source_lang,
-				self::$target_lang
+				self::$target_lang,
+				$max_output_tokens
 			);
+			$direct_duration_ms = TimingLogger::stop( $direct_started );
+			TimingLogger::increment( 'ai_calls' );
 
-			if ( null !== $result ) {
+			if ( is_wp_error( $result ) ) {
+				$direct_error_code = (string) $result->get_error_code();
+				TimingLogger::log( 'ai_call', array(
+					'transport'   => 'direct',
+					'model'       => $model_slug,
+					'input_chars' => $input_chars,
+					'output_chars' => 0,
+					'duration_ms' => $direct_duration_ms,
+					'attempt'     => $validation_attempt,
+					'ok'          => false,
+					'reason'      => 'direct_api_rate_limited' === $direct_error_code ? 'rate_limited' : 'connection_error',
+				) );
+
+				// HTTP 429 from the direct endpoint: the server is healthy,
+				// it is just asking us to slow down. Parse the retry-after
+				// hint, pause, and recurse. Falling back to the WP AI Client
+				// would hit the same provider and trip the same per-minute
+				// limit, so the sleep-and-retry path is strictly better.
+				if ( 'direct_api_rate_limited' === $direct_error_code ) {
+					return self::handle_rate_limit_and_retry( $result, $text, $prompt, $validation_attempt, $model_slug );
+				}
+
+				// Strict-direct-API models (e.g. TranslateGemma) cannot fall
+				// back to the WP AI Client because they require chat-template
+				// kwargs that the generic Client transport does not expose.
+				if ( $requires_strict_direct_api ) {
+					self::record_transport_diagnostics( array(
+						'transport'        => 'direct_api_failed',
+						'model_slug'       => $model_slug,
+						'direct_api_url'   => $direct_api_url,
+						'kwargs_supported' => $kwargs_supported,
+						'fallback_allowed' => false,
+						'failure_reason'   => 'direct_api_connection_error',
+					) );
+					return $result;
+				}
+
+				// For all other models, a single timeout / connection drop on
+				// the direct API must not tear down the entire content phase
+				// — the endpoint is typically healthy again on the very next
+				// chunk. Fall back to the WP AI Client transport for THIS
+				// chunk only and let subsequent chunks try the direct path
+				// again.
+				TimingLogger::increment( 'fallbacks' );
+				TimingLogger::log( 'ai_call_fallback', array(
+					'from'   => 'direct',
+					'to'     => 'wp_ai_client',
+					'reason' => 'direct_api_connection_error',
+					'model'  => $model_slug,
+				) );
+				self::record_transport_diagnostics( array(
+					'transport'        => 'direct_api_failed',
+					'model_slug'       => $model_slug,
+					'direct_api_url'   => $direct_api_url,
+					'kwargs_supported' => $kwargs_supported,
+					'fallback_allowed' => true,
+					'failure_reason'   => 'direct_api_connection_error',
+				) );
+			} elseif ( is_string( $result ) ) {
+				TimingLogger::log( 'ai_call', array(
+					'transport'    => 'direct',
+					'model'        => $model_slug,
+					'input_chars'  => $input_chars,
+					'output_chars' => self::char_length( $result ),
+					'duration_ms'  => $direct_duration_ms,
+					'attempt'      => $validation_attempt,
+					'ok'           => true,
+				) );
 				self::record_transport_diagnostics( array(
 					'transport'        => 'direct_api',
 					'model_slug'       => $model_slug,
@@ -241,6 +417,17 @@ class TranslationRuntime {
 				) );
 				return self::finalize_translated_chunk( $text, $result, $model_slug, $prompt, $validation_attempt );
 			}
+
+			TimingLogger::log( 'ai_call', array(
+				'transport'    => 'direct',
+				'model'        => $model_slug,
+				'input_chars'  => $input_chars,
+				'output_chars' => 0,
+				'duration_ms'  => $direct_duration_ms,
+				'attempt'      => $validation_attempt,
+				'ok'           => false,
+				'reason'       => 'non_2xx_or_empty',
+			) );
 
 			if ( $requires_strict_direct_api ) {
 				self::record_transport_diagnostics( array(
@@ -257,14 +444,29 @@ class TranslationRuntime {
 					__( 'TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations.', 'slytranslate' )
 				);
 			}
+
+			TimingLogger::increment( 'fallbacks' );
+			TimingLogger::log( 'ai_call_fallback', array(
+				'from'   => 'direct',
+				'to'     => 'wp_ai_client',
+				'reason' => 'direct_api_returned_null',
+				'model'  => $model_slug,
+			) );
 		}
 
+		$wp_started = TimingLogger::start();
 		$builder = wp_ai_client_prompt( $text )
 			->using_system_instruction( $prompt )
 			->using_temperature( 0 );
 
 		if ( '' !== $model_slug && is_callable( array( $builder, 'using_model_preference' ) ) ) {
 			$builder = $builder->using_model_preference( $model_slug );
+		}
+
+		if ( is_callable( array( $builder, 'using_max_tokens' ) ) ) {
+			$builder = $builder->using_max_tokens( $max_output_tokens );
+		} elseif ( is_callable( array( $builder, 'using_max_output_tokens' ) ) ) {
+			$builder = $builder->using_max_output_tokens( $max_output_tokens );
 		}
 
 		self::record_transport_diagnostics( array(
@@ -278,11 +480,72 @@ class TranslationRuntime {
 
 		$result = $builder->generate_text();
 
+		$wp_duration_ms = TimingLogger::stop( $wp_started );
+		TimingLogger::increment( 'ai_calls' );
+
 		if ( is_wp_error( $result ) ) {
+			TimingLogger::log( 'ai_call', array(
+				'transport'    => 'wp_ai_client',
+				'model'        => $model_slug,
+				'input_chars'  => $input_chars,
+				'output_chars' => 0,
+				'duration_ms'  => $wp_duration_ms,
+				'attempt'      => $validation_attempt,
+				'ok'           => false,
+				'reason'       => $result->get_error_code(),
+			) );
+
+			if ( self::is_rate_limit_error( $result ) ) {
+				return self::handle_rate_limit_and_retry( $result, $text, $prompt, $validation_attempt, $model_slug );
+			}
+
 			return $result;
 		}
 
+		TimingLogger::log( 'ai_call', array(
+			'transport'    => 'wp_ai_client',
+			'model'        => $model_slug,
+			'input_chars'  => $input_chars,
+			'output_chars' => is_string( $result ) ? self::char_length( $result ) : 0,
+			'duration_ms'  => $wp_duration_ms,
+			'attempt'      => $validation_attempt,
+			'ok'           => true,
+		) );
+
 		return self::finalize_translated_chunk( $text, $result, $model_slug, $prompt, $validation_attempt );
+	}
+
+	/**
+	 * Unwrap pseudo-XML translations like `<responsible>` or
+	 * `<communication-partner>` that small models (notably Phi-4-mini)
+	 * occasionally emit when asked to translate single noun-like inputs.
+	 * The model intends the inner identifier as the translation but wraps
+	 * it in angle brackets, which `wp_strip_all_tags()` then removes,
+	 * making the validator see "no plain text" and the entire content
+	 * phase abort over a single short word.
+	 *
+	 * Only triggered when the source itself contained no `<` characters
+	 * (so we don't strip legitimate HTML the model echoed back), the
+	 * output trims to one bare tag with no attributes, and the tag name
+	 * looks like a single word or hyphenated identifier (letters and
+	 * single hyphens only). The unwrapped form replaces hyphens with
+	 * spaces — `<communication-partner>` becomes `communication partner`.
+	 */
+	private static function unwrap_pseudo_tag_translation( string $source_text, string $translated_text ): string {
+		$trimmed = trim( $translated_text );
+		if ( '' === $trimmed ) {
+			return $translated_text;
+		}
+
+		if ( false !== strpos( $source_text, '<' ) ) {
+			return $translated_text;
+		}
+
+		if ( ! preg_match( '/^<([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)>$/', $trimmed, $match ) ) {
+			return $translated_text;
+		}
+
+		return str_replace( '-', ' ', $match[1] );
 	}
 
 	private static function finalize_translated_chunk(
@@ -292,11 +555,27 @@ class TranslationRuntime {
 		string $prompt,
 		int $validation_attempt
 	): mixed {
+		$translated_text  = self::unwrap_pseudo_tag_translation( $source_text, $translated_text );
 		$validation_error = TranslationValidator::validate( $source_text, $translated_text );
 		if ( is_wp_error( $validation_error ) ) {
 			self::record_validation_failure_diagnostics( $validation_error );
 
+			TimingLogger::log( 'ai_validation_failed', array(
+				'model'           => $model_slug,
+				'reason'          => $validation_error->get_error_code(),
+				'attempt'         => $validation_attempt,
+				'source_chars'    => self::char_length( $source_text ),
+				'output_chars'    => self::char_length( $translated_text ),
+				'source_excerpt'  => self::truncate_for_log( $source_text ),
+				'output_excerpt'  => self::truncate_for_log( $translated_text ),
+			) );
+
 			if ( 0 === $validation_attempt && self::should_retry_after_validation_failure( $model_slug ) ) {
+				TimingLogger::increment( 'retries' );
+				TimingLogger::log( 'ai_validation_retry', array(
+					'model'  => $model_slug,
+					'reason' => $validation_error->get_error_code(),
+				) );
 				return self::translate_chunk( $source_text, self::build_retry_prompt( $prompt ), 1 );
 			}
 
@@ -340,6 +619,21 @@ class TranslationRuntime {
 		$runtime_context     = self::get_runtime_context();
 		$context_window_size = self::get_learned_context_window_tokens();
 
+		// Opportunistic: if a direct API endpoint is configured but we have
+		// not yet recorded a context window for the active model, probe the
+		// endpoint's model list once per day for OpenAI-compatible
+		// `context_window` / `meta.n_ctx_train` fields. This lets hosted
+		// providers (Groq, OpenRouter, …) and local servers (llama.cpp,
+		// llama-swap, vLLM) advertise their actual capacity without the
+		// plugin having to ship a hardcoded model-name table.
+		if ( $context_window_size < 1
+			&& '' !== $runtime_context['direct_api_url']
+			&& '' !== $runtime_context['model_slug']
+			&& self::maybe_autoprobe_direct_api_context_windows( $runtime_context['direct_api_url'] )
+		) {
+			$context_window_size = self::get_learned_context_window_tokens();
+		}
+
 		if ( $context_window_size < 1 ) {
 			$context_window_size = self::get_known_context_window_for_model( $runtime_context['model_slug'] );
 		}
@@ -357,18 +651,99 @@ class TranslationRuntime {
 		return max( self::MIN_CONTEXT_WINDOW_TOKENS, $context_window_size );
 	}
 
+	/**
+	 * Run `ConfigurationService::probe_and_remember_direct_api_context_windows()`
+	 * at most once per day for a given endpoint. Returns true when the probe
+	 * actually ran (so the caller knows to re-read the learned window).
+	 */
+	private static function maybe_autoprobe_direct_api_context_windows( string $api_url ): bool {
+		$last_probed_at = (int) get_option( 'ai_translate_direct_api_models_last_probed_at', 0 );
+		if ( $last_probed_at > 0 && ( time() - $last_probed_at ) < DAY_IN_SECONDS ) {
+			return false;
+		}
+
+		// Record the attempt before probing so a failing endpoint does not
+		// get re-hit on every translation request.
+		update_option( 'ai_translate_direct_api_models_last_probed_at', time(), false );
+		ConfigurationService::probe_and_remember_direct_api_context_windows( $api_url );
+
+		return true;
+	}
+
 	public static function get_runtime_context(): array {
 		if ( is_array( self::$context ) ) {
 			return self::$context;
 		}
 
+		$direct_api_url = (string) get_option( 'ai_translate_direct_api_url', '' );
+		$model_slug     = (string) get_option( 'ai_translate_model_slug', '' );
+
+		// Final fallback in the model-selection hierarchy:
+		//   1. per-call override (with_model_slug_override())
+		//   2. plugin DB option ai_translate_model_slug (handled above)
+		//   3. AI Client connector default (handled here)
+		//
+		// The WP AI Client itself does not always pass a connector's default
+		// model id down to the OpenAI-compatible HTTP request, which on
+		// llama-swap / llama.cpp setups results in an empty `model` field and
+		// the endpoint serving whatever model happens to be currently loaded —
+		// silently overriding the user's connector choice.
+		//
+		// To stay connector-agnostic (so we work with Ultimate AI Connector,
+		// the official OpenAI connector, Anthropic, Google, or any other
+		// plugin that registers itself with the WP AI Client) we resolve the
+		// default by asking the AI Client registry for the first model that
+		// matches the basic text-generation requirements — the same call
+		// EditorBootstrap uses to populate the editor's model dropdown. The
+		// `slytranslate_default_model_slug` filter remains available so
+		// integrations can override the default explicitly.
+		if ( '' === $model_slug ) {
+			$model_slug = (string) apply_filters(
+				'slytranslate_default_model_slug',
+				self::resolve_first_available_model_slug()
+			);
+		}
+
 		self::$context = array(
 			'service_slug'   => '',
-			'model_slug'     => get_option( 'ai_translate_model_slug', '' ),
-			'direct_api_url' => get_option( 'ai_translate_direct_api_url', '' ),
+			'model_slug'     => $model_slug,
+			'direct_api_url' => $direct_api_url,
 		);
 
 		return self::$context;
+	}
+
+	/**
+	 * Return the first model id the WP AI Client registry currently exposes
+	 * for text-generation requests, or '' if discovery is not possible. This
+	 * mirrors what `wp_ai_client_prompt()->generate_text()` would internally
+	 * route to when no explicit model preference is provided, so it is the
+	 * closest thing the WP AI Client offers to a "connector default model".
+	 */
+	private static function resolve_first_available_model_slug(): string {
+		if ( ! class_exists( '\\WordPress\\AiClient\\AiClient' )
+			|| ! class_exists( '\\WordPress\\AiClient\\Providers\\Models\\DTO\\ModelRequirements' ) ) {
+			return '';
+		}
+
+		try {
+			$registry         = \WordPress\AiClient\AiClient::defaultRegistry();
+			$requirements     = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements( array(), array() );
+			$provider_results = $registry->findModelsMetadataForSupport( $requirements );
+		} catch ( \Throwable $e ) {
+			return '';
+		}
+
+		foreach ( $provider_results as $provider_models ) {
+			foreach ( $provider_models->getModels() as $model_meta ) {
+				$id = (string) $model_meta->getId();
+				if ( '' !== $id ) {
+					return $id;
+				}
+			}
+		}
+
+		return '';
 	}
 
 	public static function reset_context(): void {
@@ -387,11 +762,24 @@ class TranslationRuntime {
 		}
 
 		$learned = get_option( 'ai_translate_learned_context_windows', array() );
-		if ( ! is_array( $learned ) || ! isset( $learned[ $cache_key ] ) ) {
+		if ( ! is_array( $learned ) ) {
 			return 0;
 		}
 
-		return absint( $learned[ $cache_key ] );
+		if ( isset( $learned[ $cache_key ] ) ) {
+			return absint( $learned[ $cache_key ] );
+		}
+
+		// Fall back to a case-insensitive lookup so values discovered via
+		// `GET /v1/models` (stored lower-cased by
+		// ConfigurationService::probe_direct_api_context_windows()) are
+		// still found when the configured model slug uses mixed case.
+		$lower = strtolower( $cache_key );
+		if ( isset( $learned[ $lower ] ) ) {
+			return absint( $learned[ $lower ] );
+		}
+
+		return 0;
 	}
 
 	private static function remember_context_window_tokens( int $context_window_tokens ): void {
@@ -541,7 +929,183 @@ class TranslationRuntime {
 		return ! self::model_requires_strict_direct_api( $model_slug );
 	}
 
+	/**
+	 * Compute a conservative max-output-token budget for a single chunk.
+	 *
+	 * Translations rarely exceed ~2x the source length, so we cap output
+	 * generation at roughly 2x the input token estimate (4 chars/token).
+	 * This is the primary safeguard against runaway generation that was
+	 * observed live: 763 input chars producing 23.000 output chars.
+	 *
+	 * The ceiling (`MAX_OUTPUT_TOKENS_CEILING`) scales with
+	 * `MAX_TRANSLATION_CHARS` so a chunk that fills the char ceiling is
+	 * still allowed to emit a same-size translation instead of being
+	 * truncated mid-sentence (which previously surfaced as a
+	 * length-drift validator failure). Operators can tune both the
+	 * floor and the ceiling via the `ai_translate_max_output_tokens`
+	 * and `ai_translate_max_output_tokens_ceiling` filters.
+	 *
+	 * Public for unit testing.
+	 */
+	public static function compute_max_output_tokens( int $input_chars ): int {
+		// 4 chars/token average × 2x growth headroom = input_chars * 0.5 tokens.
+		$tokens = (int) ceil( max( 1, $input_chars ) * 0.5 );
+
+		$ceiling = (int) apply_filters( 'ai_translate_max_output_tokens_ceiling', self::MAX_OUTPUT_TOKENS_CEILING, $input_chars );
+		if ( $ceiling < self::MIN_OUTPUT_TOKENS ) {
+			$ceiling = self::MAX_OUTPUT_TOKENS_CEILING;
+		}
+
+		$computed = (int) min( $ceiling, max( self::MIN_OUTPUT_TOKENS, $tokens ) );
+
+		$filtered = (int) apply_filters( 'ai_translate_max_output_tokens', $computed, $input_chars, $ceiling );
+		if ( $filtered < self::MIN_OUTPUT_TOKENS ) {
+			return $computed;
+		}
+
+		return (int) min( $ceiling, $filtered );
+	}
+
+	/**
+	 * Validation error codes that should trigger an automatic retry even
+	 * when the first attempt already used the standard prompt.
+	 */
+	public static function is_retryable_validation_error_code( string $code ): bool {
+		return in_array(
+			$code,
+			array(
+				'invalid_translation_assistant_reply',
+				'invalid_translation_length_drift',
+				'invalid_translation_runaway_output',
+				'invalid_translation_structure_drift',
+				'invalid_translation_empty',
+				'invalid_translation_plain_text_missing',
+			),
+			true
+		);
+	}
+
 	private static function build_retry_prompt( string $prompt ): string {
-		return $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, and code fences exactly. Do not add explanations, bullet lists, markdown headings, or commentary.";
+		return $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, and code fences exactly. Do not add explanations, bullet lists, markdown headings, or commentary. The output length MUST be approximately the same as the input length; do not append extra paragraphs.";
+	}
+
+	/* ---------------------------------------------------------------
+	 * Rate-limit (HTTP 429) handling
+	 * ------------------------------------------------------------- */
+
+	/**
+	 * Decide whether the given transport result looks like a provider-side
+	 * rate-limit response (HTTP 429 / "too many requests" / "rate limit reached").
+	 * Works for both the WP AI Client `WP_Error` path (Groq / OpenAI / Anthropic
+	 * surface the message verbatim) and the direct-API `non_2xx_or_empty` path
+	 * when a 429 body is logged by the caller.
+	 */
+	public static function is_rate_limit_error( \WP_Error $error ): bool {
+		$code = $error->get_error_code();
+		if ( is_string( $code ) && ( false !== stripos( $code, 'rate_limit' ) || false !== stripos( $code, '429' ) ) ) {
+			return true;
+		}
+		foreach ( $error->get_error_messages() as $message ) {
+			if ( ! is_string( $message ) ) {
+				continue;
+			}
+			if ( false !== stripos( $message, '(429)' )
+				|| false !== stripos( $message, '429 ' )
+				|| false !== stripos( $message, 'too many requests' )
+				|| false !== stripos( $message, 'rate limit' )
+			) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Extract the retry-after hint (in seconds) from a 429 error, looking at:
+	 *
+	 *   - "Please try again in 2s" / "try again in 2.5s" / "try again in 1m30s"
+	 *     (Groq / OpenAI-style messages)
+	 *   - "Retry-After: N" header echoed into the message body
+	 *
+	 * Falls back to `$default_seconds` when nothing could be parsed. Always
+	 * clamped to the [RATE_LIMIT_MIN_SLEEP_SEC, RATE_LIMIT_MAX_SLEEP_SEC]
+	 * range so a misbehaving provider cannot stall a request indefinitely.
+	 */
+	public static function extract_retry_after_seconds( \WP_Error $error, float $default_seconds = 2.0 ): float {
+		$seconds = 0.0;
+		foreach ( $error->get_error_messages() as $message ) {
+			if ( ! is_string( $message ) ) {
+				continue;
+			}
+
+			// "try again in 1m30s", "try again in 30s", "try again in 2.5s".
+			if ( preg_match( '/try again in\s+(?:(\d+)m)?(\d+(?:\.\d+)?)s/i', $message, $m ) ) {
+				$seconds = ( (int) ( $m[1] ?? 0 ) ) * 60.0 + (float) $m[2];
+				break;
+			}
+
+			// "Retry-After: 2" (header-style, integer seconds).
+			if ( preg_match( '/retry-?after["\s:]+(\d+(?:\.\d+)?)/i', $message, $m ) ) {
+				$seconds = (float) $m[1];
+				break;
+			}
+		}
+
+		if ( $seconds <= 0.0 ) {
+			$seconds = $default_seconds;
+		}
+
+		// Add a small jitter so multiple parallel requests do not all wake
+		// up in the same millisecond and re-trigger the limit in lockstep.
+		$seconds += ( mt_rand( 0, 500 ) / 1000.0 );
+
+		$seconds = max( (float) self::RATE_LIMIT_MIN_SLEEP_SEC, $seconds );
+		$seconds = min( (float) self::RATE_LIMIT_MAX_SLEEP_SEC, $seconds );
+
+		return $seconds;
+	}
+
+	/**
+	 * Sleep for the interval the provider suggested, then re-run
+	 * `translate_chunk()` in place. Used by the transport-level 429 guard.
+	 * Returns the error unchanged when the retry budget is exhausted so the
+	 * caller's existing error path (validation retry / content-phase
+	 * fallback cascade) can handle it.
+	 */
+	private static function handle_rate_limit_and_retry(
+		\WP_Error $error,
+		string $text,
+		string $prompt,
+		int $validation_attempt,
+		string $model_slug
+	): mixed {
+		if ( self::$rate_limit_retry_depth >= self::RATE_LIMIT_MAX_RETRIES ) {
+			TimingLogger::log( 'ai_rate_limit_exhausted', array(
+				'model'   => $model_slug,
+				'retries' => self::$rate_limit_retry_depth,
+				'reason'  => $error->get_error_code(),
+			) );
+			return $error;
+		}
+
+		$sleep_seconds = self::extract_retry_after_seconds( $error );
+
+		self::$rate_limit_retry_depth++;
+		TimingLogger::log( 'ai_rate_limit_wait', array(
+			'model'         => $model_slug,
+			'attempt'       => self::$rate_limit_retry_depth,
+			'sleep_ms'      => (int) round( $sleep_seconds * 1000 ),
+			'retry_budget'  => self::RATE_LIMIT_MAX_RETRIES,
+		) );
+
+		// `usleep()` takes microseconds; `sleep()` only whole seconds. Use
+		// usleep so sub-second hints like "try again in 0.8s" are respected.
+		usleep( (int) round( $sleep_seconds * 1_000_000 ) );
+
+		try {
+			return self::translate_chunk( $text, $prompt, $validation_attempt );
+		} finally {
+			self::$rate_limit_retry_depth--;
+		}
 	}
 }

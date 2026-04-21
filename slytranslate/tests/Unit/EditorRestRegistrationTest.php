@@ -12,7 +12,7 @@ class EditorRestRegistrationTest extends TestCase {
 	public function test_register_editor_rest_routes_registers_expected_route_contracts(): void {
 		$registered_routes = $this->capture_registered_routes();
 
-		$this->assertCount( 8, $registered_routes );
+		$this->assertCount( 10, $registered_routes );
 
 		$routes_by_path = array();
 		foreach ( $registered_routes as $route_definition ) {
@@ -24,9 +24,11 @@ class EditorRestRegistrationTest extends TestCase {
 			'/ai-translate/get-translation-status' => array( AI_Translate::class, 'rest_execute_get_translation_status' ),
 			'/ai-translate/translation-progress'   => array( AI_Translate::class, 'rest_execute_get_translation_progress' ),
 			'/ai-translate/translate-text'         => array( AI_Translate::class, 'rest_execute_translate_text' ),
+			'/ai-translate/translate-blocks'       => array( AI_Translate::class, 'rest_execute_translate_blocks' ),
 			'/ai-translate/translate-content'      => array( AI_Translate::class, 'rest_execute_translate_content' ),
 			'/ai-translate/translate-post'         => array( AI_Translate::class, 'rest_execute_translate_content' ),
 			'/ai-translate/cancel-translation'     => array( AI_Translate::class, 'rest_cancel_translation' ),
+			'/ai-translate/available-models'       => array( AI_Translate::class, 'rest_execute_get_available_models' ),
 			'/ai-translate/user-preference'        => array( AI_Translate::class, 'rest_execute_save_user_preference' ),
 		);
 
