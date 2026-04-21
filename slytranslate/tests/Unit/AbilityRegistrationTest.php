@@ -42,7 +42,7 @@ class AbilityRegistrationTest extends TestCase {
 	public function test_register_abilities_registers_expected_ability_contracts(): void {
 		$registered_abilities = $this->capture_registered_abilities();
 
-		$this->assertCount( 7, $registered_abilities );
+		$this->assertCount( 12, $registered_abilities );
 		$this->assertSame( array_keys( $this->expected_ability_contracts() ), array_keys( $registered_abilities ) );
 		$this->assertArrayNotHasKey( 'ai-translate/translate-post', $registered_abilities );
 
@@ -75,8 +75,13 @@ class AbilityRegistrationTest extends TestCase {
 			'ai-translate/get-translation-status',
 			'ai-translate/get-untranslated',
 			'ai-translate/translate-text',
+			'ai-translate/translate-blocks',
 			'ai-translate/translate-content',
 			'ai-translate/translate-content-bulk',
+			'ai-translate/get-progress',
+			'ai-translate/cancel-translation',
+			'ai-translate/get-available-models',
+			'ai-translate/save-additional-prompt',
 		) as $slug ) {
 			$this->assertTrue( $registered_abilities[ $slug ]['permission_callback']( null ) );
 		}
@@ -319,6 +324,32 @@ class AbilityRegistrationTest extends TestCase {
 				),
 				'meta'             => $this->expected_public_mcp_meta( array( 'idempotent' => true ) ),
 			),
+			'ai-translate/translate-blocks' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_translate_blocks' ),
+				'input_schema'     => array(
+					'type'          => 'object',
+					'property_keys' => array( 'content', 'source_language', 'target_language', 'additional_prompt', 'model_slug' ),
+					'required'      => array( 'content', 'source_language', 'target_language' ),
+					'properties'    => array(
+						'content'           => array( 'type' => 'string', 'minLength' => 1 ),
+						'source_language'   => array( 'type' => 'string' ),
+						'target_language'   => array( 'type' => 'string' ),
+						'additional_prompt' => array( 'type' => 'string' ),
+						'model_slug'        => array( 'type' => 'string' ),
+					),
+				),
+				'output_schema'    => array(
+					'type'          => 'object',
+					'property_keys' => array( 'translated_content', 'source_language', 'target_language' ),
+					'required'      => array( 'translated_content' ),
+					'properties'    => array(
+						'translated_content' => array( 'type' => 'string' ),
+						'source_language'    => array( 'type' => 'string' ),
+						'target_language'    => array( 'type' => 'string' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta( array( 'idempotent' => true ) ),
+			),
 			'ai-translate/translate-content' => array(
 				'execute_callback' => array( AI_Translate::class, 'execute_translate_content' ),
 				'input_schema'     => array(
@@ -449,11 +480,92 @@ class AbilityRegistrationTest extends TestCase {
 				),
 				'meta'             => $this->expected_public_mcp_meta(),
 			),
+			'ai-translate/get-progress' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_get_progress' ),
+				'input_schema'     => array(
+					'type'          => 'object',
+					'property_keys' => array( 'post_id' ),
+					'properties'    => array(
+						'post_id' => array( 'type' => 'integer' ),
+					),
+				),
+				'output_schema'    => array(
+					'type'          => 'object',
+					'property_keys' => array( 'phase', 'percent', 'current_chunk', 'total_chunks' ),
+					'properties'    => array(
+						'phase'         => array( 'type' => 'string' ),
+						'percent'       => array( 'type' => 'integer' ),
+						'current_chunk' => array( 'type' => 'integer' ),
+						'total_chunks'  => array( 'type' => 'integer' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
+			),
+			'ai-translate/cancel-translation' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_cancel_translation' ),
+				'input_schema'     => array(
+					'type'          => 'object',
+					'property_keys' => array( 'post_id' ),
+					'properties'    => array(
+						'post_id' => array( 'type' => 'integer' ),
+					),
+				),
+				'output_schema'    => array(
+					'type'          => 'object',
+					'property_keys' => array( 'cancelled' ),
+					'required'      => array( 'cancelled' ),
+					'properties'    => array(
+						'cancelled' => array( 'type' => 'boolean' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta(),
+			),
+			'ai-translate/get-available-models' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_get_available_models' ),
+				'input_schema'     => array(
+					'type'          => 'object',
+					'property_keys' => array( 'refresh' ),
+					'properties'    => array(
+						'refresh' => array( 'type' => 'boolean' ),
+					),
+				),
+				'output_schema'    => array(
+					'type'          => 'object',
+					'property_keys' => array( 'models', 'defaultModelSlug', 'refreshed' ),
+					'required'      => array( 'models' ),
+					'properties'    => array(
+						'models'           => array( 'type' => 'array', 'items' => array( 'type' => 'object' ) ),
+						'defaultModelSlug' => array( 'type' => 'string' ),
+						'refreshed'        => array( 'type' => 'boolean' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
+			),
+			'ai-translate/save-additional-prompt' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_save_additional_prompt' ),
+				'input_schema'     => array(
+					'type'          => 'object',
+					'property_keys' => array( 'additional_prompt' ),
+					'required'      => array( 'additional_prompt' ),
+					'properties'    => array(
+						'additional_prompt' => array( 'type' => 'string', 'maxLength' => 2000 ),
+					),
+				),
+				'output_schema'    => array(
+					'type'          => 'object',
+					'property_keys' => array( 'additional_prompt' ),
+					'required'      => array( 'additional_prompt' ),
+					'properties'    => array(
+						'additional_prompt' => array( 'type' => 'string' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta( array( 'idempotent' => true ) ),
+			),
 			'ai-translate/configure' => array(
 				'execute_callback' => array( AI_Translate::class, 'execute_configure' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'prompt_template', 'prompt_addon', 'meta_keys_translate', 'meta_keys_clear', 'auto_translate_new', 'context_window_tokens', 'model_slug', 'direct_api_url' ),
+					'property_keys' => array( 'prompt_template', 'prompt_addon', 'meta_keys_translate', 'meta_keys_clear', 'auto_translate_new', 'context_window_tokens', 'model_slug', 'direct_api_url', 'force_direct_api' ),
 					'properties'    => array(
 						'prompt_template' => array(
 							'type'        => 'string',
@@ -487,6 +599,10 @@ class AbilityRegistrationTest extends TestCase {
 							'type'        => 'string',
 							'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). When set, the plugin sends translation requests directly to this endpoint instead of using the WP AI Client. Works with llama.cpp, ollama, mlx-lm, vLLM, or any OpenAI-compatible server. Leave empty to use the standard AI Client. When saving, the plugin automatically probes whether the server supports chat_template_kwargs for optimized translation.',
 						),
+						'force_direct_api' => array(
+							'type'        => 'boolean',
+							'description' => 'When true, all translations use the direct API endpoint (requires direct_api_url and model_slug). By default the direct API is only used for TranslateGemma models that require chat_template_kwargs.',
+						),
 					),
 				),
 				'output_schema'    => array(
@@ -500,6 +616,7 @@ class AbilityRegistrationTest extends TestCase {
 						'context_window_tokens',
 						'model_slug',
 						'direct_api_url',
+						'force_direct_api',
 						'direct_api_kwargs_supported',
 						'direct_api_kwargs_last_probed_at',
 						'translategemma_runtime_ready',
@@ -523,6 +640,7 @@ class AbilityRegistrationTest extends TestCase {
 						'context_window_tokens'        => array( 'type' => 'integer' ),
 						'model_slug'                   => array( 'type' => 'string' ),
 						'direct_api_url'               => array( 'type' => 'string' ),
+						'force_direct_api'             => array( 'type' => 'boolean' ),
 						'direct_api_kwargs_supported'  => array( 'type' => 'boolean' ),
 						'direct_api_kwargs_last_probed_at' => array( 'type' => 'integer' ),
 						'translategemma_runtime_ready' => array( 'type' => 'boolean' ),

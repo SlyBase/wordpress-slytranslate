@@ -317,14 +317,11 @@ class TranslationRuntime {
 		$input_chars = self::char_length( $text );
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
 
-		// Direct API only carries a single, explicit model. When no model is
-		// configured (DB option `ai_translate_model_slug` empty AND no per-call
-		// override), we MUST defer to the WordPress AI Client so its connector
-		// hierarchy (per-user preference → global default) decides which model
-		// to use. Otherwise we would either send an empty `model` field (HTTP 400
-		// on llama.cpp) or, worse, paper over the gap with whatever model the
-		// endpoint happened to load — silently overriding the user's choice.
-		if ( is_string( $direct_api_url ) && '' !== $direct_api_url && '' !== $model_slug ) {
+		// Use the direct API only when explicitly opted in: either the model
+		// requires it (TranslateGemma via chat_template_kwargs) or the user
+		// explicitly set force_direct_api='1'. The model slug must be non-empty
+		// because the direct API endpoint requires an explicit model name.
+		if ( self::should_use_direct_api( $model_slug, (string) $direct_api_url ) ) {
 			$direct_started = TimingLogger::start();
 			$result         = DirectApiTranslationClient::translate(
 				$text,
@@ -854,6 +851,26 @@ class TranslationRuntime {
 
 	public static function model_requires_strict_direct_api( string $model_slug ): bool {
 		return '' !== $model_slug && false !== strpos( strtolower( $model_slug ), 'translategemma' );
+	}
+
+	/**
+	 * Returns true when the direct API should be used for the given model
+	 * and endpoint URL.
+	 *
+	 * The direct API is activated in two cases:
+	 *  1. The model requires it (TranslateGemma via chat_template_kwargs).
+	 *  2. The user opted in via `ai_translate_force_direct_api = '1'`
+	 *     AND an explicit model slug is set (empty slug → HTTP 400 on most
+	 *     servers).
+	 */
+	private static function should_use_direct_api( string $model_slug, string $direct_api_url ): bool {
+		if ( '' === $direct_api_url ) {
+			return false;
+		}
+		if ( self::model_requires_strict_direct_api( $model_slug ) ) {
+			return true;
+		}
+		return '' !== $model_slug && '1' === get_option( 'ai_translate_force_direct_api', '0' );
 	}
 
 	public static function direct_api_kwargs_supported(): bool {

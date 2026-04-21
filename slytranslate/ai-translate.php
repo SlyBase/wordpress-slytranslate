@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.5.0
+Version: 1.5.1
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -23,6 +23,7 @@ require_once __DIR__ . '/inc/SeoPluginDetector.php';
 require_once __DIR__ . '/inc/TextSplitter.php';
 require_once __DIR__ . '/inc/TranslationValidator.php';
 require_once __DIR__ . '/inc/ConfigurationService.php';
+require_once __DIR__ . '/inc/Settings.php';
 require_once __DIR__ . '/inc/EditorBootstrap.php';
 require_once __DIR__ . '/inc/TranslationProgressTracker.php';
 require_once __DIR__ . '/inc/TimingLogger.php';
@@ -33,7 +34,6 @@ require_once __DIR__ . '/inc/MetaTranslationService.php';
 require_once __DIR__ . '/inc/TranslationQueryService.php';
 require_once __DIR__ . '/inc/PostTranslationService.php';
 require_once __DIR__ . '/inc/LegacyPolylangBridge.php';
-require_once __DIR__ . '/inc/EditorRestController.php';
 require_once __DIR__ . '/inc/AbilityRegistrar.php';
 require_once __DIR__ . '/inc/ListTableTranslation.php';
 
@@ -44,7 +44,6 @@ class AI_Translate {
 
 	private const VERSION               = '1.5.0';
 	private const EDITOR_SCRIPT_HANDLE  = 'ai-translate-editor';
-	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 
 	// Adapter singleton.
 	private static $adapter;
@@ -78,7 +77,7 @@ class AI_Translate {
 
 	public static function add_hooks(): void {
 		add_action( 'enqueue_block_editor_assets', array( static::class, 'enqueue_editor_plugin' ) );
-		add_action( 'rest_api_init', array( static::class, 'register_editor_rest_routes' ) );
+		add_action( 'admin_init',                  array( Settings::class, 'register' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
 		add_filter( 'default_title',          array( static::class, 'default_title' ), 10, 2 );
@@ -92,101 +91,7 @@ class AI_Translate {
 		EditorBootstrap::enqueue_editor_plugin();
 	}
 
-	public static function register_editor_rest_routes(): void {
-		EditorRestController::register_routes();
-	}
-
-	public static function rest_can_access_translation_abilities( \WP_REST_Request $request ): bool {
-		return self::current_user_can_access_translation_abilities();
-	}
-
-	private static function get_editor_rest_input( \WP_REST_Request $request ): array {
-		$input = $request->get_param( 'input' );
-		return is_array( $input ) ? $input : array();
-	}
-
-	/* ---------------------------------------------------------------
-	 * REST callbacks (must stay on AI_Translate – EditorRestRegistrationTest contract)
-	 * ------------------------------------------------------------- */
-
-	public static function rest_execute_get_languages( \WP_REST_Request $request ) {
-		return self::execute_get_languages();
-	}
-
-	public static function rest_execute_get_available_models( \WP_REST_Request $request ) {
-		$refresh = (bool) $request->get_param( 'refresh' );
-		$models  = EditorBootstrap::get_available_models( $refresh );
-
-		return array(
-			'models'           => $models,
-			'defaultModelSlug' => (string) get_option( 'ai_translate_model_slug', '' ),
-			'refreshed'        => $refresh,
-		);
-	}
-
-	public static function rest_execute_get_translation_status( \WP_REST_Request $request ) {
-		return self::execute_get_translation_status( self::get_editor_rest_input( $request ) );
-	}
-
-	public static function rest_execute_get_translation_progress( \WP_REST_Request $request ) {
-		$input   = self::get_editor_rest_input( $request );
-		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
-		return TranslationProgressTracker::get_progress( $post_id );
-	}
-
-	public static function rest_execute_translate_text( \WP_REST_Request $request ) {
-		return self::execute_translate_text( self::get_editor_rest_input( $request ) );
-	}
-
-	public static function rest_execute_translate_blocks( \WP_REST_Request $request ) {
-		return self::execute_translate_blocks( self::get_editor_rest_input( $request ) );
-	}
-
-	public static function rest_execute_translate_content( \WP_REST_Request $request ) {
-		// Allow long-running translations to complete server-side even when the
-		// browser navigates away or aborts the fetch (used by the
-		// "Continue in background" flow in the post-list dialog).
-		if ( function_exists( 'ignore_user_abort' ) ) {
-			ignore_user_abort( true );
-		}
-		if ( function_exists( 'set_time_limit' ) ) {
-			@set_time_limit( 0 );
-		}
-		TranslationProgressTracker::clear_cancelled();
-		$input   = self::get_editor_rest_input( $request );
-		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
-		TranslationProgressTracker::clear_progress( $post_id );
-		return self::execute_translate_content( $input );
-	}
-
-	public static function rest_cancel_translation( \WP_REST_Request $request ) {
-		TranslationProgressTracker::set_cancelled();
-
-		// Clear the per-post progress transient so the next translation start
-		// does not briefly show the cancelled job's last percentage. The bg-bar
-		// polls every 2s and would otherwise render the stale value until the
-		// new job's first set_progress() call lands.
-		$input   = self::get_editor_rest_input( $request );
-		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
-		TranslationProgressTracker::clear_progress( $post_id );
-
-		return array( 'cancelled' => true );
-	}
-
-	public static function rest_execute_save_user_preference( \WP_REST_Request $request ) {
-		$input             = self::get_editor_rest_input( $request );
-		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] )
-			? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 )
-			: '';
-
-		$user_id = get_current_user_id();
-		if ( $user_id < 1 ) {
-			return new \WP_Error( 'not_logged_in', __( 'You must be logged in to save preferences.', 'slytranslate' ) );
-		}
-
-		update_user_meta( $user_id, '_ai_translate_last_additional_prompt', $additional_prompt );
-		return array( 'additional_prompt' => $additional_prompt );
-	}
+	public static function register_editor_rest_routes(): void {}
 
 	/* ---------------------------------------------------------------
 	 * Ability execute callbacks (must stay on AI_Translate – AbilityRegistrationTest contract)
@@ -256,6 +161,19 @@ class AI_Translate {
 
 	public static function execute_translate_content( $input ) {
 		$input = is_array( $input ) ? $input : array();
+
+		// Allow long-running translations to complete server-side even when the
+		// browser navigates away or aborts the fetch (used by the
+		// "Continue in background" flow in the post-list dialog).
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			ignore_user_abort( true );
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 );
+		}
+		TranslationProgressTracker::clear_cancelled();
+		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+		TranslationProgressTracker::clear_progress( $post_id );
 
 		return TranslationRuntime::with_model_slug_override(
 			$input,
@@ -366,6 +284,7 @@ class AI_Translate {
 			'context_window_tokens'            => absint( get_option( 'ai_translate_context_window_tokens', 0 ) ),
 			'model_slug'                       => get_option( 'ai_translate_model_slug', '' ),
 			'direct_api_url'                   => get_option( 'ai_translate_direct_api_url', '' ),
+			'force_direct_api'                 => get_option( 'ai_translate_force_direct_api', '0' ) === '1',
 			'direct_api_kwargs_supported'      => get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1',
 			'direct_api_kwargs_last_probed_at' => absint( get_option( 'ai_translate_direct_api_kwargs_last_probed_at', 0 ) ),
 			'translategemma_runtime_ready'     => $translategemma_status['ready'],
@@ -380,6 +299,46 @@ class AI_Translate {
 			'effective_context_window_tokens'  => TranslationRuntime::get_effective_context_window_tokens(),
 			'effective_chunk_chars'            => TranslationRuntime::get_chunk_char_limit(),
 		);
+	}
+
+	public static function execute_get_progress( $input ): array {
+		$input   = is_array( $input ) ? $input : array();
+		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+		return TranslationProgressTracker::get_progress( $post_id );
+	}
+
+	public static function execute_cancel_translation( $input ): array {
+		TranslationProgressTracker::set_cancelled();
+		$input   = is_array( $input ) ? $input : array();
+		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+		TranslationProgressTracker::clear_progress( $post_id );
+		return array( 'cancelled' => true );
+	}
+
+	public static function execute_get_available_models( $input ): array {
+		$input   = is_array( $input ) ? $input : array();
+		$refresh = ! empty( $input['refresh'] );
+		$models  = EditorBootstrap::get_available_models( $refresh );
+		return array(
+			'models'           => $models,
+			'defaultModelSlug' => (string) get_option( 'ai_translate_model_slug', '' ),
+			'refreshed'        => $refresh,
+		);
+	}
+
+	public static function execute_save_additional_prompt( $input ) {
+		$input             = is_array( $input ) ? $input : array();
+		$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] )
+			? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 )
+			: '';
+
+		$user_id = get_current_user_id();
+		if ( $user_id < 1 ) {
+			return new \WP_Error( 'not_logged_in', __( 'You must be logged in to save preferences.', 'slytranslate' ) );
+		}
+
+		update_user_meta( $user_id, '_ai_translate_last_additional_prompt', $additional_prompt );
+		return array( 'additional_prompt' => $additional_prompt );
 	}
 
 	/* ---------------------------------------------------------------
@@ -538,6 +497,41 @@ class AI_Translate {
 		}
 		return sanitize_key( $input[ $key ] );
 	}
+
+	public static function on_activate(): void {
+		// Migrate existing options to autoload=false so they don't bloat every
+		// page load. The Settings API will continue to handle them from this point.
+		$options = array(
+			'ai_translate_prompt',
+			'ai_translate_prompt_addon',
+			'ai_translate_meta_translate',
+			'ai_translate_meta_clear',
+			'ai_translate_new_post',
+			'ai_translate_context_window_tokens',
+			'ai_translate_model_slug',
+			'ai_translate_direct_api_url',
+			'ai_translate_force_direct_api',
+			'ai_translate_direct_api_kwargs_detected',
+			'ai_translate_direct_api_kwargs_last_probed_at',
+			'ai_translate_learned_context_window_tokens',
+			'ai_translate_last_kwarg_probe_result',
+		);
+
+		foreach ( $options as $option ) {
+			$value = get_option( $option, null );
+			if ( null !== $value ) {
+				delete_option( $option );
+				add_option( $option, $value, '', false );
+			}
+		}
+	}
 }
 
-AI_Translate::add_hooks();
+add_action( 'plugins_loaded', static function () {
+	if ( ! function_exists( 'wp_ai_client_prompt' ) ) {
+		return;
+	}
+	AI_Translate::add_hooks();
+} );
+
+register_activation_hook( __FILE__, array( AI_Translate::class, 'on_activate' ) );

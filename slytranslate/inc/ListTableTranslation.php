@@ -307,7 +307,7 @@ class ListTableTranslation {
 	 * ------------------------------------------------------------- */
 
 	public static function enqueue_list_table_script(): void {
-		$rest_url   = esc_url_raw( rest_url( 'ai-translate/v1/' ) );
+		$rest_url   = esc_url_raw( rest_url( 'wp/v2/abilities/' ) );
 		$rest_nonce = wp_create_nonce( 'wp_rest' );
 
 		$strings = array(
@@ -496,7 +496,7 @@ class ListTableTranslation {
 			/* --- Overlay dialog (foreground) --- */
 
 			function pollProgress() {
-				apiPost('ai-translate/translation-progress', { input: { post_id: currentPostId } }).then(function (p) {
+				apiPost('ai-translate/get-progress/run', { input: { post_id: currentPostId } }).then(function (p) {
 					if (!isRunning) return;
 					if (p && p.phase) {
 						barEl.style.width = (p.percent || 0) + '%';
@@ -574,7 +574,7 @@ class ListTableTranslation {
 				abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
 				startPolling();
 
-				apiPost('ai-translate/translate-content', {
+				apiPost('ai-translate/translate-content/run', {
 					input: {
 						post_id: postId,
 						target_language: lang,
@@ -645,7 +645,7 @@ class ListTableTranslation {
 				// Pass post_id so the server clears the per-post progress
 				// transient on cancel, otherwise the bg-bar polls would still
 				// display the cancelled job's last percentage briefly.
-				apiPost('ai-translate/cancel-translation', { input: { post_id: currentPostId } }).catch(function () {});
+				apiPost('ai-translate/cancel-translation/run', { input: { post_id: currentPostId } }).catch(function () {});
 			});
 
 			// Background button: hand the running translation off to the global,
@@ -783,7 +783,7 @@ class ListTableTranslation {
 			function loadPickerModels(forceRefresh) {
 				pickerStatus.textContent = S.pickerLoading;
 				pickerStart.disabled = true;
-				return apiPost('ai-translate/available-models', { refresh: !!forceRefresh })
+			return apiPost('ai-translate/get-available-models/run', { input: { refresh: !!forceRefresh } })
 					.then(function (resp) {
 						var models = resp && Array.isArray(resp.models) ? resp.models : [];
 						var defaultSlug = resp && resp.defaultModelSlug ? resp.defaultModelSlug : '';
@@ -901,7 +901,7 @@ class ListTableTranslation {
 					var postId = postIds[i++];
 					var title  = getRowTitle(postId);
 					var taskId = addBgTask(postId, title, lang, langName);
-					apiPost('ai-translate/translate-content', {
+					apiPost('ai-translate/translate-content/run', {
 						input: {
 							post_id: postId,
 							target_language: lang,
@@ -1025,7 +1025,7 @@ class ListTableTranslation {
 			return;
 		}
 
-		$rest_url   = esc_url_raw( rest_url( 'ai-translate/v1/' ) );
+		$rest_url   = esc_url_raw( rest_url( 'wp/v2/abilities/' ) );
 		$rest_nonce = wp_create_nonce( 'wp_rest' );
 
 		$strings = array(
@@ -1284,7 +1284,7 @@ class ListTableTranslation {
 				if (task.status !== 'running') { return; }
 				if (!task.postId || !task.lang) { return; }
 
-				apiPost('ai-translate/get-translation-status', { input: { post_id: task.postId } })
+				apiPost('ai-translate/get-translation-status/run', { input: { post_id: task.postId } })
 					.then(function (resp) {
 						if (!resp || !Array.isArray(resp.translations)) { return; }
 						for (var i = 0; i < resp.translations.length; i++) {
@@ -1306,7 +1306,7 @@ class ListTableTranslation {
 				runningTasks.forEach(function (t) {
 					if (!t.postId) { return; }
 					var startedAt = Date.now();
-					apiPost('ai-translate/translation-progress', { input: { post_id: t.postId } })
+					apiPost('ai-translate/get-progress/run', { input: { post_id: t.postId } })
 						.then(function (p) {
 							var elapsedMs = Date.now() - startedAt;
 							if (slyDebugEnabled()) {
@@ -1408,7 +1408,7 @@ class ListTableTranslation {
 			function cancelTask(id) {
 				// The translation cancellation flag is global per-site; cancel
 				// the running translation server-side and mark this task.
-				apiPost('ai-translate/cancel-translation', {}).catch(function () {});
+				apiPost('ai-translate/cancel-translation/run', {}).catch(function () {});
 				finishTask(id, 'cancelled', '');
 			}
 

@@ -122,7 +122,7 @@
     }
 
     function getRunAbilityPath(abilityName) {
-        return getEditorRestPath(abilityName);
+        return getEditorRestPath(abilityName) + '/run';
     }
 
     function slyDebugEnabled() {
@@ -195,19 +195,8 @@
 
     function pollTranslationProgress() {
         const editorPostId = getCurrentEditorPostId();
-        const request = {
-            path: getEditorRestPath('ai-translate/translation-progress'),
-            method: 'POST',
-            data: editorPostId ? { input: { post_id: editorPostId } } : {},
-        };
-
-        if (settings && settings.restNonce) {
-            request.headers = {
-                'X-WP-Nonce': settings.restNonce,
-            };
-        }
-
-        return apiFetch(request).then(normalizeTranslationProgress);
+        return runAbility('ai-translate/get-progress', editorPostId ? { post_id: editorPostId } : {})
+            .then(normalizeTranslationProgress);
     }
 
     function formatText(template, replacements) {
@@ -389,16 +378,7 @@
     }
 
     function fetchAvailableModels(forceRefresh) {
-        const path = getEditorRestPath('ai-translate/available-models');
-        const request = {
-            path: path,
-            method: 'POST',
-            data: { refresh: !!forceRefresh },
-        };
-        if (settings && settings.restNonce) {
-            request.headers = { 'X-WP-Nonce': settings.restNonce };
-        }
-        return apiFetch(request).then(function (response) {
+        return runAbility('ai-translate/get-available-models', { refresh: !!forceRefresh }).then(function (response) {
             const models = response && Array.isArray(response.models) ? response.models : [];
             _availableModels = models;
             // If the currently selected model is no longer available, reset
@@ -764,18 +744,7 @@
             stopTranslationProgressPolling();
             setTranslationProgress(null);
             setIsTranslating(false);
-            var cancelPath = getEditorRestPath('ai-translate/cancel-translation');
-            var cancelRequest = {
-                path: cancelPath,
-                method: 'POST',
-                // Pass post_id so the server can also wipe the per-post
-                // progress transient that the bg-bar polls every 2s.
-                data: { input: { post_id: postId } }
-            };
-            if (settings && settings.restNonce) {
-                cancelRequest.headers = { 'X-WP-Nonce': settings.restNonce };
-            }
-            apiFetch(cancelRequest).catch(function () { });
+            runAbility('ai-translate/cancel-translation', { post_id: postId }).catch(function () { });
         }
 
         const statusItems = Array.isArray(statusData && statusData.translations) ? statusData.translations : [];

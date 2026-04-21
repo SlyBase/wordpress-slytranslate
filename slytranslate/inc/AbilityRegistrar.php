@@ -21,8 +21,13 @@ class AbilityRegistrar {
 		self::register_get_translation_status_ability();
 		self::register_get_untranslated_ability();
 		self::register_translate_text_ability();
+		self::register_translate_blocks_ability();
 		self::register_translate_content_ability();
 		self::register_translate_content_bulk_ability();
+		self::register_get_progress_ability();
+		self::register_cancel_translation_ability();
+		self::register_get_available_models_ability();
+		self::register_save_additional_prompt_ability();
 		self::register_configure_ability();
 	}
 
@@ -283,6 +288,148 @@ class AbilityRegistrar {
 		) );
 	}
 
+	/* --- translate-blocks ---------------------------------------- */
+
+	private static function register_translate_blocks_ability(): void {
+		wp_register_ability( 'ai-translate/translate-blocks', array(
+			'label'               => __( 'Translate Blocks', 'slytranslate' ),
+			'description'         => __( 'Translates serialised Gutenberg block content from one language to another, preserving block markup.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'content'           => array( 'type' => 'string', 'description' => 'Serialised Gutenberg block content to translate.', 'minLength' => 1 ),
+					'source_language'   => array( 'type' => 'string', 'description' => 'Source language code.' ),
+					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template.' ),
+					'model_slug'        => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation. Overrides the site-wide default.' ),
+				),
+				'required' => array( 'content', 'source_language', 'target_language' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'translated_content' => array( 'type' => 'string' ),
+					'source_language'    => array( 'type' => 'string' ),
+					'target_language'    => array( 'type' => 'string' ),
+				),
+				'required' => array( 'translated_content' ),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_translate_blocks' ),
+			'permission_callback' => array( static::class, 'permission_callback' ),
+			'meta'                => self::public_mcp_meta( array( 'idempotent' => true ) ),
+		) );
+	}
+
+	/* --- get-progress -------------------------------------------- */
+
+	private static function register_get_progress_ability(): void {
+		wp_register_ability( 'ai-translate/get-progress', array(
+			'label'               => __( 'Get Translation Progress', 'slytranslate' ),
+			'description'         => __( 'Returns the current translation progress for a running translation job.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id' => array( 'type' => 'integer', 'description' => 'The post ID whose translation progress to retrieve.' ),
+				),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'phase'         => array( 'type' => 'string' ),
+					'percent'       => array( 'type' => 'integer' ),
+					'current_chunk' => array( 'type' => 'integer' ),
+					'total_chunks'  => array( 'type' => 'integer' ),
+				),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_get_progress' ),
+			'permission_callback' => array( static::class, 'permission_callback' ),
+			'meta'                => self::public_mcp_meta( array( 'readonly' => true ) ),
+		) );
+	}
+
+	/* --- cancel-translation -------------------------------------- */
+
+	private static function register_cancel_translation_ability(): void {
+		wp_register_ability( 'ai-translate/cancel-translation', array(
+			'label'               => __( 'Cancel Translation', 'slytranslate' ),
+			'description'         => __( 'Signals the running translation job to stop and clears the progress indicator.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id' => array( 'type' => 'integer', 'description' => 'Optional post ID whose progress transient should be cleared.' ),
+				),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'cancelled' => array( 'type' => 'boolean' ),
+				),
+				'required' => array( 'cancelled' ),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_cancel_translation' ),
+			'permission_callback' => array( static::class, 'permission_callback' ),
+			'meta'                => self::public_mcp_meta(),
+		) );
+	}
+
+	/* --- get-available-models ------------------------------------ */
+
+	private static function register_get_available_models_ability(): void {
+		wp_register_ability( 'ai-translate/get-available-models', array(
+			'label'               => __( 'Get Available Models', 'slytranslate' ),
+			'description'         => __( 'Returns the list of AI models available for translation through the configured connectors.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'refresh' => array( 'type' => 'boolean', 'description' => 'When true, bypasses the transient cache and re-fetches the model list from all connectors.' ),
+				),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'models'           => array( 'type' => 'array', 'items' => array( 'type' => 'object' ) ),
+					'defaultModelSlug' => array( 'type' => 'string' ),
+					'refreshed'        => array( 'type' => 'boolean' ),
+				),
+				'required' => array( 'models' ),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_get_available_models' ),
+			'permission_callback' => array( static::class, 'permission_callback' ),
+			'meta'                => self::public_mcp_meta( array( 'readonly' => true ) ),
+		) );
+	}
+
+	/* --- save-additional-prompt ---------------------------------- */
+
+	private static function register_save_additional_prompt_ability(): void {
+		wp_register_ability( 'ai-translate/save-additional-prompt', array(
+			'label'               => __( 'Save Additional Prompt', 'slytranslate' ),
+			'description'         => __( 'Persists the per-user additional translation instructions so they are pre-filled on the next visit.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'The additional instructions to save for the current user.', 'maxLength' => 2000 ),
+				),
+				'required' => array( 'additional_prompt' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'additional_prompt' => array( 'type' => 'string' ),
+				),
+				'required' => array( 'additional_prompt' ),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_save_additional_prompt' ),
+			'permission_callback' => array( static::class, 'permission_callback' ),
+			'meta'                => self::public_mcp_meta( array( 'idempotent' => true ) ),
+		) );
+	}
+
 	/* --- configure ----------------------------------------------- */
 
 	private static function register_configure_ability(): void {
@@ -301,6 +448,7 @@ class AbilityRegistrar {
 					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.' ),
 					'model_slug'            => array( 'type' => 'string', 'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.' ),
 					'direct_api_url'        => array( 'type' => 'string', 'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). When set, the plugin sends translation requests directly to this endpoint instead of using the WP AI Client. Works with llama.cpp, ollama, mlx-lm, vLLM, or any OpenAI-compatible server. Leave empty to use the standard AI Client. When saving, the plugin automatically probes whether the server supports chat_template_kwargs for optimized translation.' ),
+					'force_direct_api'      => array( 'type' => 'boolean', 'description' => 'When true, all translations use the direct API endpoint (requires direct_api_url and model_slug). By default the direct API is only used for TranslateGemma models that require chat_template_kwargs.' ),
 				),
 			),
 			'output_schema'       => array(
@@ -314,6 +462,7 @@ class AbilityRegistrar {
 					'context_window_tokens'            => array( 'type' => 'integer' ),
 					'model_slug'                       => array( 'type' => 'string' ),
 					'direct_api_url'                   => array( 'type' => 'string' ),
+					'force_direct_api'                 => array( 'type' => 'boolean' ),
 					'direct_api_kwargs_supported'      => array( 'type' => 'boolean' ),
 					'direct_api_kwargs_last_probed_at' => array( 'type' => 'integer' ),
 					'translategemma_runtime_ready'     => array( 'type' => 'boolean' ),

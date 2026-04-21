@@ -16,29 +16,29 @@ class ConfigurationService {
 		}
 
 		if ( isset( $input['prompt_template'] ) ) {
-			update_option( 'ai_translate_prompt', sanitize_textarea_field( $input['prompt_template'] ) );
+			update_option( 'ai_translate_prompt', sanitize_textarea_field( $input['prompt_template'] ), false );
 		}
 		if ( array_key_exists( 'prompt_addon', $input ) ) {
 			$addon_value = is_string( $input['prompt_addon'] ) ? sanitize_textarea_field( $input['prompt_addon'] ) : '';
 			if ( '' === $addon_value ) {
 				delete_option( 'ai_translate_prompt_addon' );
 			} else {
-				update_option( 'ai_translate_prompt_addon', $addon_value );
+				update_option( 'ai_translate_prompt_addon', $addon_value, false );
 			}
 		}
 		if ( isset( $input['meta_keys_translate'] ) ) {
-			update_option( 'ai_translate_meta_translate', sanitize_textarea_field( $input['meta_keys_translate'] ) );
+			update_option( 'ai_translate_meta_translate', sanitize_textarea_field( $input['meta_keys_translate'] ), false );
 		}
 		if ( isset( $input['meta_keys_clear'] ) ) {
-			update_option( 'ai_translate_meta_clear', sanitize_textarea_field( $input['meta_keys_clear'] ) );
+			update_option( 'ai_translate_meta_clear', sanitize_textarea_field( $input['meta_keys_clear'] ), false );
 		}
 		if ( isset( $input['auto_translate_new'] ) ) {
-			update_option( 'ai_translate_new_post', $input['auto_translate_new'] ? '1' : '0' );
+			update_option( 'ai_translate_new_post', $input['auto_translate_new'] ? '1' : '0', false );
 		}
 		if ( isset( $input['context_window_tokens'] ) ) {
 			$context_window_tokens = min( 4000000, absint( $input['context_window_tokens'] ) );
 			if ( $context_window_tokens > 0 ) {
-				update_option( 'ai_translate_context_window_tokens', (string) $context_window_tokens );
+				update_option( 'ai_translate_context_window_tokens', (string) $context_window_tokens, false );
 			} else {
 				delete_option( 'ai_translate_context_window_tokens' );
 			}
@@ -48,8 +48,11 @@ class ConfigurationService {
 			if ( '' === $model_slug_value ) {
 				delete_option( 'ai_translate_model_slug' );
 			} else {
-				update_option( 'ai_translate_model_slug', $model_slug_value );
+				update_option( 'ai_translate_model_slug', $model_slug_value, false );
 			}
+		}
+		if ( isset( $input['force_direct_api'] ) ) {
+			update_option( 'ai_translate_force_direct_api', $input['force_direct_api'] ? '1' : '0', false );
 		}
 
 		$should_reprobe_kwargs = false;
@@ -59,7 +62,7 @@ class ConfigurationService {
 				delete_option( 'ai_translate_direct_api_kwargs_detected' );
 				delete_option( 'ai_translate_direct_api_kwargs_last_probed_at' );
 			} else {
-				update_option( 'ai_translate_direct_api_url', $validated_direct_api_url );
+				update_option( 'ai_translate_direct_api_url', $validated_direct_api_url, false );
 				$should_reprobe_kwargs = true;
 			}
 		}
@@ -76,7 +79,7 @@ class ConfigurationService {
 				get_option( 'ai_translate_direct_api_url', '' ),
 				get_option( 'ai_translate_model_slug', '' )
 			);
-			update_option( 'ai_translate_direct_api_kwargs_detected', $probe_result ? '1' : '0' );
+			update_option( 'ai_translate_direct_api_kwargs_detected', $probe_result ? '1' : '0', false );
 			update_option( 'ai_translate_direct_api_kwargs_last_probed_at', time(), false );
 
 			// Also probe the endpoint's model list for OpenAI-compatible

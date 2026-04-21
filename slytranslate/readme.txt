@@ -127,6 +127,17 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 
 == Changelog ==
 
+= 1.5.1 =
+* Architecture: removed custom `EditorRestController` and all `ai-translate/v1/` REST routes; all endpoints are now served through the WordPress Abilities API (`wp/v2/abilities/`).
+* Architecture: added 5 new abilities — `ai-translate/translate-blocks`, `ai-translate/get-progress`, `ai-translate/cancel-translation`, `ai-translate/get-available-models`, `ai-translate/save-additional-prompt`.
+* Architecture: plugin bootstrap is now guarded by `plugins_loaded` and requires `wp_ai_client_prompt` to be available before registering hooks.
+* Settings: all plugin options are now registered via the WordPress Settings API (`admin_init` + `register_setting()`), enabling sanitization callbacks and REST exposure.
+* Settings: all `update_option()` calls now pass `autoload = false` to avoid loading all options on every page request.
+* Settings: added `ai_translate_force_direct_api` option (opt-in flag). The direct API is now only activated automatically for TranslateGemma models or when this flag is explicitly set to `1`. Previously, any non-empty `direct_api_url` + `model_slug` combination triggered direct-API mode.
+* Architecture: `slytranslate/uninstall.php` added; cleans up all plugin options, user meta, and transients on plugin deletion.
+* Architecture: activation hook (`register_activation_hook`) migrates existing options to `autoload = false`.
+* Internals: `EditorBootstrap::get_editor_rest_base_path()` returns `/wp/v2/abilities/`; hard-coded `delete_transient('aipf_llamacpp_model_ids')` replaced by `do_action('slytranslate_refresh_provider_caches')`.
+
 = 1.5.0 =
 * UI: list-table row action and bulk action collapsed to a single "Translate" entry each; a unified picker dialog lets the user choose source/target language (with swap button), AI model, and additional instructions before starting.
 * UI: editor sidebar panel renamed "Translate (SlyTranslate)"; title translation is now always on (toggle removed); translation-status list simplified ("Not translated yet" / "Open" link).

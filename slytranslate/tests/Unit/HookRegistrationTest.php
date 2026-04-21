@@ -7,6 +7,7 @@ namespace AI_Translate\Tests\Unit;
 use AI_Translate\AI_Translate;
 use AI_Translate\AbilityRegistrar;
 use AI_Translate\ListTableTranslation;
+use AI_Translate\Settings;
 use Brain\Monkey\Functions;
 
 class HookRegistrationTest extends TestCase {
@@ -47,8 +48,8 @@ class HookRegistrationTest extends TestCase {
 					'accepted_args' => 1,
 				),
 				array(
-					'hook'          => 'rest_api_init',
-					'callback'      => array( AI_Translate::class, 'register_editor_rest_routes' ),
+					'hook'          => 'admin_init',
+					'callback'      => array( Settings::class, 'register' ),
 					'priority'      => 10,
 					'accepted_args' => 1,
 				),

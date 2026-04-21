@@ -17,6 +17,7 @@ function add_action( ...$args ): void {}
 function add_filter( ...$args ): void {}
 function do_action( ...$args ): void {}
 function register_rest_route( ...$args ): void {}
+function register_activation_hook( ...$args ): void {}
 function wp_register_ability( ...$args ): void {}
 function wp_register_ability_category( ...$args ): void {}
 
@@ -130,6 +131,14 @@ return $value;
 
 function get_locale(): string {
 return 'en_US';
+}
+
+function get_current_user_id(): int {
+return 0;
+}
+
+function update_user_meta( int $user_id, string $meta_key, mixed $meta_value ): bool {
+return true;
 }
 
 function get_post_status( $post = null ) {

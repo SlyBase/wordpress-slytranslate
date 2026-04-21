@@ -297,6 +297,9 @@ class TranslationTransportGuardrailTest extends TestCase {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
+				if ( 'ai_translate_force_direct_api' === $option ) {
+					return '1';
+				}
 
 				return $default;
 			}

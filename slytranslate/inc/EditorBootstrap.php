@@ -112,9 +112,11 @@ class EditorBootstrap {
 			// Without this, changing a connector's endpoint or credentials (or
 			// switching from a local llama.cpp server to e.g. Groq) would keep
 			// returning the previously fetched model list for up to 24 hours.
-			// Also drop the separate per-connector transient used by
-			// ai-provider-for-llamacpp so the /v1/models probe is re-issued.
 			if ( $force_refresh ) {
+				// Allow other plugins (e.g. ai-provider-for-llamacpp) to
+				// invalidate their own per-connector model-metadata caches.
+				do_action( 'slytranslate_refresh_provider_caches' );
+
 				foreach ( $registry->getRegisteredProviderIds() as $provider_id ) {
 					try {
 						$class_name = $registry->getProviderClassName( $provider_id );
@@ -128,7 +130,6 @@ class EditorBootstrap {
 						continue;
 					}
 				}
-				delete_transient( 'aipf_llamacpp_model_ids' );
 			}
 
 			$requirements     = new \WordPress\AiClient\Providers\Models\DTO\ModelRequirements( array(), array() );
@@ -185,7 +186,7 @@ class EditorBootstrap {
 	}
 
 	private static function get_editor_rest_base_path(): string {
-		return '/' . self::EDITOR_REST_NAMESPACE . '/';
+		return '/wp/v2/abilities/';
 	}
 
 	/**
