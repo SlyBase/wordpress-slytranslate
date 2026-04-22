@@ -82,9 +82,10 @@ class MetaTranslationService {
 		int $post_id,
 		string $to,
 		string $from,
-		string $additional_prompt
+		string $additional_prompt,
+		array $all_meta = array()
 	): mixed {
-		$meta            = get_post_meta( $post_id );
+		$meta            = ! empty( $all_meta ) ? $all_meta : get_post_meta( $post_id );
 		$processed_meta  = array();
 		$meta_key_config = self::get_effective_meta_key_config( $post_id, is_array( $meta ) ? $meta : array() );
 

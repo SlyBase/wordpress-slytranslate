@@ -105,17 +105,48 @@ class ConfigurationService {
 			return '';
 		}
 
-		$url_value = esc_url_raw( $value );
-		if ( '' === $url_value ) {
+		$url = esc_url_raw( trim( $value ) );
+		if ( '' === $url ) {
 			return '';
 		}
 
-		$scheme = strtolower( (string) wp_parse_url( $url_value, PHP_URL_SCHEME ) );
-		if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
-			return new \WP_Error( 'invalid_direct_api_url', __( 'The direct API URL must use http or https.', 'slytranslate' ) );
+		$parts  = wp_parse_url( $url );
+		$scheme = strtolower( $parts['scheme'] ?? '' );
+		$host   = strtolower( $parts['host']   ?? '' );
+
+		if ( ! in_array( $scheme, array( 'http', 'https' ), true ) || '' === $host ) {
+			return new \WP_Error( 'invalid_direct_api_url', __( 'The direct API URL must be a valid http(s) URL.', 'slytranslate' ) );
 		}
 
-		return $url_value;
+		if ( self::host_is_internal( $host ) && ! apply_filters( 'slytranslate_allow_internal_direct_api', false, $host, $url ) ) {
+			return new \WP_Error(
+				'forbidden_direct_api_url',
+				__( 'The direct API URL points to a private or loopback address. Set the slytranslate_allow_internal_direct_api filter to true if this is intentional.', 'slytranslate' )
+			);
+		}
+
+		return $url;
+	}
+
+	private static function host_is_internal( string $host ): bool {
+		$ips = filter_var( $host, FILTER_VALIDATE_IP ) ? array( $host ) : (array) @gethostbynamel( $host );
+		if ( empty( $ips ) ) {
+			return true;
+		}
+
+		foreach ( $ips as $ip ) {
+			if ( ! filter_var(
+				$ip,
+				FILTER_VALIDATE_IP,
+				FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+			) ) {
+				return true;
+			}
+			if ( in_array( $ip, array( '169.254.169.254', 'fd00:ec2::254' ), true ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public static function probe_direct_api_kwargs( string $api_url, string $model_slug ): bool {

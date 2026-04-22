@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\DirectApiTranslationClient;
 use AI_Translate\TranslationRuntime;
 use Brain\Monkey\Functions;
 
@@ -37,7 +38,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'translategemma_requires_direct_api', $result->get_error_code() );
@@ -73,7 +74,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 		);
 		Functions\when( 'wp_remote_post' )->justReturn( new \WP_Error( 'http_failed', 'boom' ) );
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'translategemma_requires_kwargs', $result->get_error_code() );
@@ -110,7 +111,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'direct_api_connection_error', $result->get_error_code() );
@@ -128,9 +129,9 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->mockSuccessfulDirectApiResponse( $captured_body );
 
 		$result = $this->invokeStatic(
-			AI_Translate::class,
-			'translate_chunk_direct_api',
-			array( 'Hello world', 'Prompt', 'translategemma-4b-it.Q4_K_M', 'http://llama.local:8080', true )
+			DirectApiTranslationClient::class,
+			'translate',
+			array( 'Hello world', 'Prompt', 'translategemma-4b-it.Q4_K_M', 'http://llama.local:8080', true, 'en', 'de' )
 		);
 
 		$this->assertSame( 'Hallo Welt', $result );
@@ -160,9 +161,9 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->mockSuccessfulDirectApiResponse( $captured_body );
 
 		$result = $this->invokeStatic(
-			AI_Translate::class,
-			'translate_chunk_direct_api',
-			array( 'Hello world', 'Prompt', 'gemma-3-4b-it', 'http://llama.local:8080', true )
+			DirectApiTranslationClient::class,
+			'translate',
+			array( 'Hello world', 'Prompt', 'gemma-3-4b-it', 'http://llama.local:8080', true, 'en', 'de' )
 		);
 
 		$this->assertSame( 'Hallo Welt', $result );
@@ -230,7 +231,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertSame( 'Hallo Welt', $result );
 
@@ -273,7 +274,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertSame( 'Hallo Welt', $result );
 
@@ -336,7 +337,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertSame( 'Hallo Welt', $result );
 		$this->assertCount( 2, $calls );
@@ -390,7 +391,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );

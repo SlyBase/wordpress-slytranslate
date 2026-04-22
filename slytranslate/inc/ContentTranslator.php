@@ -40,6 +40,33 @@ class ContentTranslator {
 	}
 
 	/**
+	 * Translate an already-parsed block tree. Avoids re-parsing when the caller
+	 * already holds the block array from a previous parse_blocks() call.
+	 *
+	 * @param array|null $blocks    Pre-parsed block array, or null to fall back to raw content parsing.
+	 * @param string     $raw       Raw post content (used when $blocks is null or empty).
+	 * @param string     $to        Target language code.
+	 * @param string     $from      Source language code.
+	 * @param string     $additional_prompt
+	 * @return string|\WP_Error
+	 */
+	public static function translate_parsed_blocks(
+		?array $blocks,
+		string $raw,
+		string $to,
+		string $from = 'en',
+		string $additional_prompt = ''
+	): mixed {
+		if ( is_array( $blocks ) && ! empty( $blocks ) ) {
+			if ( '' === trim( $raw ) ) {
+				return '';
+			}
+			return self::translate_block_sections( $blocks, $to, $from, $additional_prompt );
+		}
+		return self::translate_post_content( $raw, $to, $from, $additional_prompt );
+	}
+
+	/**
 	 * Split blocks into translatable / non-translatable runs and translate each run.
 	 * Translatable runs are further grouped into size-bounded chunks so that individual
 	 * blocks are never split across API calls.

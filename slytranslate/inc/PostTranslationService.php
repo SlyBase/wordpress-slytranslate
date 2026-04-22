@@ -44,6 +44,13 @@ class PostTranslationService {
 		if ( ! $post ) {
 			return new \WP_Error( 'post_not_found', __( 'Source post not found.', 'slytranslate' ) );
 		}
+
+		$parsed_blocks = ( function_exists( 'parse_blocks' ) && '' !== trim( (string) $post->post_content ) )
+			? parse_blocks( $post->post_content )
+			: null;
+
+		$all_meta = function_exists( 'get_post_meta' ) ? get_post_meta( $post_id ) : array();
+		$all_meta = is_array( $all_meta ) ? $all_meta : array();
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			return new \WP_Error( 'forbidden_post', __( 'You are not allowed to translate this content item.', 'slytranslate' ) );
 		}
@@ -95,8 +102,10 @@ class PostTranslationService {
 			'overwrite' => $overwrite ? 1 : 0,
 		) );
 
-		$content_units = self::estimate_content_translation_units( $post->post_content );
-		$meta_units    = self::estimate_meta_translation_units( $post_id );
+		$content_units = ( is_array( $parsed_blocks ) && ! empty( $parsed_blocks ) )
+			? self::estimate_units_from_blocks( $parsed_blocks )
+			: self::estimate_content_translation_units( $post->post_content );
+		$meta_units    = self::estimate_meta_translation_units( $post_id, $all_meta );
 
 		if ( $translate_title ) {
 			TranslationProgressTracker::register_phase_units( 'title', self::char_length( $post->post_title ) );
@@ -145,7 +154,7 @@ class PostTranslationService {
 
 			TimingLogger::log( 'phase_start', array( 'phase' => 'content', 'chars' => self::char_length( $post->post_content ) ) );
 			$phase_started = TimingLogger::start();
-			$content = ContentTranslator::translate_post_content( $post->post_content, $to, $from, $additional_prompt );
+			$content = ContentTranslator::translate_parsed_blocks( $parsed_blocks, $post->post_content, $to, $from, $additional_prompt );
 			if ( is_wp_error( $content ) ) {
 				TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $content->get_error_code() ) );
 				self::log_job_end( $post_id, $job_started_at, false );
@@ -182,7 +191,7 @@ class PostTranslationService {
 			TranslationProgressTracker::mark_phase( 'meta' );
 			TimingLogger::log( 'phase_start', array( 'phase' => 'meta' ) );
 			$phase_started = TimingLogger::start();
-			$processed_meta = MetaTranslationService::prepare_translation_meta( $post_id, $to, $from, $additional_prompt );
+			$processed_meta = MetaTranslationService::prepare_translation_meta( $post_id, $to, $from, $additional_prompt, $all_meta );
 			if ( is_wp_error( $processed_meta ) ) {
 				TimingLogger::log( 'phase_end', array( 'phase' => 'meta', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $processed_meta->get_error_code() ) );
 				self::log_job_end( $post_id, $job_started_at, false );
@@ -266,11 +275,14 @@ class PostTranslationService {
 			return self::char_length( $content );
 		}
 
+		return self::estimate_units_from_blocks( $blocks );
+	}
+
+	private static function estimate_units_from_blocks( array $blocks ): int {
 		$units = 0;
 		foreach ( $blocks as $block ) {
 			$units += self::estimate_block_units( $block );
 		}
-
 		return $units;
 	}
 
@@ -290,12 +302,12 @@ class PostTranslationService {
 		return $units;
 	}
 
-	private static function estimate_meta_translation_units( int $post_id ): int {
+	private static function estimate_meta_translation_units( int $post_id, array $all_meta = array() ): int {
 		if ( ! function_exists( 'get_post_meta' ) ) {
 			return 0;
 		}
 
-		$meta = get_post_meta( $post_id );
+		$meta = ! empty( $all_meta ) ? $all_meta : get_post_meta( $post_id );
 		if ( ! is_array( $meta ) || empty( $meta ) ) {
 			return 0;
 		}

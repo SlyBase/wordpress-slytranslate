@@ -23,7 +23,7 @@ class TranslationOutputValidationTest extends TestCase {
 		$source_text = 'WordPress AI - MCP setup and auto translation';
 		$translated  = "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure\n* Good examples\n\n**Suggestions for improvement:**\n* Add more detail";
 
-		$result = $this->invokeStatic( AI_Translate::class, 'validate_translated_output', array( $source_text, $translated ) );
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated ) );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
@@ -33,7 +33,7 @@ class TranslationOutputValidationTest extends TestCase {
 		$source_text = "<!-- wp:paragraph -->\n<p>See https://example.com for details.</p>\n<!-- /wp:paragraph -->";
 		$translated  = '<p>Weitere Informationen folgen bald.</p>';
 
-		$result = $this->invokeStatic( AI_Translate::class, 'validate_translated_output', array( $source_text, $translated ) );
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated ) );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'invalid_translation_structure_drift', $result->get_error_code() );
@@ -43,7 +43,7 @@ class TranslationOutputValidationTest extends TestCase {
 		$source_text = "<!-- wp:paragraph -->\n<p>See https://example.com for details.</p>\n<!-- /wp:paragraph -->";
 		$translated  = "<!-- wp:paragraph -->\n<p>Siehe https://example.com für Details.</p>\n<!-- /wp:paragraph -->";
 
-		$result = $this->invokeStatic( AI_Translate::class, 'validate_translated_output', array( $source_text, $translated ) );
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated ) );
 
 		$this->assertNull( $result );
 	}
@@ -236,7 +236,7 @@ class TranslationOutputValidationTest extends TestCase {
 				}
 			);
 
-			$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( $source, 'Translate this.' ) );
+			$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( $source, 'Translate this.' ) );
 
 			$this->assertSame( $expected, $result, 'Pseudo-tag output should be unwrapped: ' . $model_output );
 		}
@@ -298,7 +298,7 @@ class TranslationOutputValidationTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_chunk', array( 'Clean title', 'Translate this.' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Clean title', 'Translate this.' ) );
 
 		$this->assertSame( 'Ein sauberer Titel', $result );
 		$this->assertCount( 2, $prompts );

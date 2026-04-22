@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.5.1
+Version: 1.5.2
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -17,33 +17,12 @@ namespace AI_Translate;
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-require_once __DIR__ . '/inc/TranslationPluginAdapter.php';
-require_once __DIR__ . '/inc/PolylangAdapter.php';
-require_once __DIR__ . '/inc/SeoPluginDetector.php';
-require_once __DIR__ . '/inc/TextSplitter.php';
-require_once __DIR__ . '/inc/TranslationValidator.php';
-require_once __DIR__ . '/inc/ConfigurationService.php';
-require_once __DIR__ . '/inc/Settings.php';
-require_once __DIR__ . '/inc/EditorBootstrap.php';
-require_once __DIR__ . '/inc/TranslationProgressTracker.php';
-require_once __DIR__ . '/inc/TimingLogger.php';
-require_once __DIR__ . '/inc/DirectApiTranslationClient.php';
-require_once __DIR__ . '/inc/TranslationRuntime.php';
-require_once __DIR__ . '/inc/ContentTranslator.php';
-require_once __DIR__ . '/inc/MetaTranslationService.php';
-require_once __DIR__ . '/inc/TranslationQueryService.php';
-require_once __DIR__ . '/inc/PostTranslationService.php';
-require_once __DIR__ . '/inc/LegacyPolylangBridge.php';
-require_once __DIR__ . '/inc/AbilityRegistrar.php';
-require_once __DIR__ . '/inc/ListTableTranslation.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 class AI_Translate {
 
 	// Default prompt template – referenced by TranslationRuntime::build_prompt().
-	public static $PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting and embedded media. Only return the new content.';
-
-	private const VERSION               = '1.5.0';
-	private const EDITOR_SCRIPT_HANDLE  = 'ai-translate-editor';
+	private const DEFAULT_PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting and embedded media. Only return the new content.';
 
 	// Adapter singleton.
 	private static $adapter;
@@ -51,6 +30,10 @@ class AI_Translate {
 	/* ---------------------------------------------------------------
 	 * Adapter
 	 * ------------------------------------------------------------- */
+
+	public static function get_default_prompt(): string {
+		return (string) apply_filters( 'slytranslate_default_prompt_template', self::DEFAULT_PROMPT );
+	}
 
 	public static function get_adapter(): ?TranslationPluginAdapter {
 		if ( null === self::$adapter ) {
@@ -76,19 +59,14 @@ class AI_Translate {
 	 * ------------------------------------------------------------- */
 
 	public static function add_hooks(): void {
-		add_action( 'enqueue_block_editor_assets', array( static::class, 'enqueue_editor_plugin' ) );
+		add_action( 'enqueue_block_editor_assets', array( EditorBootstrap::class, 'enqueue_editor_plugin' ) );
 		add_action( 'admin_init',                  array( Settings::class, 'register' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
-		add_filter( 'default_title',          array( static::class, 'default_title' ), 10, 2 );
-		add_filter( 'default_content',        array( static::class, 'default_content' ), 10, 2 );
-		add_filter( 'default_excerpt',        array( static::class, 'default_excerpt' ), 10, 2 );
-		add_filter( 'pll_translate_post_meta', array( static::class, 'pll_translate_post_meta' ), 10, 3 );
+		if ( '1' === get_option( 'ai_translate_new_post', '0' ) ) {
+			LegacyPolylangBridge::register_hooks();
+		}
 		ListTableTranslation::add_hooks();
-	}
-
-	public static function enqueue_editor_plugin(): void {
-		EditorBootstrap::enqueue_editor_plugin();
 	}
 
 	public static function register_editor_rest_routes(): void {}
@@ -168,8 +146,8 @@ class AI_Translate {
 		if ( function_exists( 'ignore_user_abort' ) ) {
 			ignore_user_abort( true );
 		}
-		if ( function_exists( 'set_time_limit' ) ) {
-			@set_time_limit( 0 );
+		if ( function_exists( 'set_time_limit' ) && ! ini_get( 'safe_mode' ) ) {
+			set_time_limit( (int) apply_filters( 'slytranslate_max_request_seconds', 600 ) );
 		}
 		TranslationProgressTracker::clear_cancelled();
 		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
@@ -185,6 +163,9 @@ class AI_Translate {
 				if ( is_wp_error( $target_language ) ) { return $target_language; }
 
 				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
+				if ( ! current_user_can( 'edit_others_posts' ) ) {
+					$additional_prompt = '';
+				}
 				$result            = self::translate_post( $post_id, $target_language, self::get_optional_sanitized_key_input( $input, 'post_status' ), $input['overwrite'] ?? false, $input['translate_title'] ?? true, $additional_prompt );
 				if ( is_wp_error( $result ) ) { return $result; }
 
@@ -224,6 +205,10 @@ class AI_Translate {
 				$failed    = 0;
 				$skipped   = 0;
 				$overwrite = ! empty( $input['overwrite'] );
+				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
+				if ( ! current_user_can( 'edit_others_posts' ) ) {
+					$additional_prompt = '';
+				}
 
 				foreach ( $post_ids as $post_id ) {
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
@@ -246,7 +231,7 @@ class AI_Translate {
 						continue;
 					}
 
-					$result = self::translate_post( $post_id, $target_language, self::get_optional_sanitized_key_input( $input, 'post_status' ), $overwrite, $input['translate_title'] ?? true );
+					$result = self::translate_post( $post_id, $target_language, self::get_optional_sanitized_key_input( $input, 'post_status' ), $overwrite, $input['translate_title'] ?? true, $additional_prompt );
 					if ( is_wp_error( $result ) ) {
 						$failed++;
 						$results[] = array( 'source_post_id' => $post_id, 'translated_post_id' => 0, 'status' => 'failed', 'error' => $result->get_error_message(), 'edit_link' => '' );
@@ -276,7 +261,7 @@ class AI_Translate {
 		$translategemma_status = TranslationRuntime::get_translategemma_runtime_status();
 
 		return array(
-			'prompt_template'                  => get_option( 'ai_translate_prompt', self::$PROMPT ),
+			'prompt_template'                  => get_option( 'ai_translate_prompt', self::get_default_prompt() ),
 			'prompt_addon'                     => get_option( 'ai_translate_prompt_addon', '' ),
 			'meta_keys_translate'              => get_option( 'ai_translate_meta_translate', '' ),
 			'meta_keys_clear'                  => get_option( 'ai_translate_meta_clear', '' ),
@@ -375,82 +360,6 @@ class AI_Translate {
 
 	public static function pll_translate_post_meta( $value, $key, $lang ) {
 		return LegacyPolylangBridge::pll_translate_post_meta( $value, $key, $lang );
-	}
-
-	/* ---------------------------------------------------------------
-	 * Private thin wrappers – referenced by unit tests via invokeStatic()
-	 * ------------------------------------------------------------- */
-
-	private static function get_translation_progress(): array {
-		return TranslationProgressTracker::get_progress();
-	}
-
-	private static function mark_translation_phase( string $phase ): void {
-		TranslationProgressTracker::mark_phase( $phase );
-	}
-
-	private static function translate_with_chunk_limit( string $text, string $prompt, int $chunk_char_limit, int $attempt = 0, ?int $previous_chunk_count = null ) {
-		return TranslationRuntime::translate_with_chunk_limit( $text, $prompt, $chunk_char_limit, $attempt, $previous_chunk_count );
-	}
-
-	private static function translate_chunk( string $text, string $prompt, int $validation_attempt = 0 ) {
-		return TranslationRuntime::translate_chunk( $text, $prompt, $validation_attempt );
-	}
-
-	private static function translate_chunk_direct_api( string $text, string $prompt, string $model_slug, string $api_url, bool $kwargs_supported ) {
-		return DirectApiTranslationClient::translate( $text, $prompt, $model_slug, $api_url, $kwargs_supported, TranslationRuntime::get_source_lang(), TranslationRuntime::get_target_lang() );
-	}
-
-	private static function get_translation_chunk_char_limit_from_context_window( int $context_window_tokens ): int {
-		return TranslationRuntime::get_chunk_char_limit_from_context_window( $context_window_tokens );
-	}
-
-	private static function extract_context_window_tokens_from_error( \WP_Error $error ): int {
-		return TranslationRuntime::extract_context_window_tokens_from_error( $error );
-	}
-
-	private static function validate_translated_output( string $source_text, string $translated_text ) {
-		return TranslationValidator::validate( $source_text, $translated_text );
-	}
-
-	private static function should_skip_block_translation( array $block ): bool {
-		return ContentTranslator::should_skip_block( $block );
-	}
-
-	private static function should_translate_block_fragment( string $fragment ): bool {
-		return ContentTranslator::should_translate_fragment( $fragment );
-	}
-
-	private static function normalize_bulk_limit( $limit ): int {
-		return TranslationQueryService::normalize_limit( $limit );
-	}
-
-	private static function split_text_for_translation( string $text, int $max_chars ): array {
-		return TextSplitter::split_text_for_translation( $text, $max_chars );
-	}
-
-	private static function split_segment_for_translation( string $segment, int $max_chars ): array {
-		return TextSplitter::split_segment_for_translation( $segment, $max_chars );
-	}
-
-	private static function hard_split_text( string $text, int $max_chars ): array {
-		return TextSplitter::hard_split_text( $text, $max_chars );
-	}
-
-	private static function meta_translate( int $post_id = 0 ) {
-		return MetaTranslationService::meta_translate( $post_id );
-	}
-
-	private static function meta_clear( int $post_id = 0 ) {
-		return MetaTranslationService::meta_clear( $post_id );
-	}
-
-	private static function normalize_translation_post_status( $requested_status, \WP_Post $post ): string {
-		return PostTranslationService::normalize_post_status( $requested_status, $post );
-	}
-
-	private static function build_translation_status_entry( string $language_code, int $translated_post_id ): array {
-		return TranslationQueryService::build_translation_status_entry( $language_code, $translated_post_id );
 	}
 
 	/* ---------------------------------------------------------------

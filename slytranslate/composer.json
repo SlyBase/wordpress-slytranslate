@@ -11,6 +11,11 @@
     "brain/monkey": "^2.6",
     "mockery/mockery": "^1.6"
   },
+  "autoload": {
+    "psr-4": {
+      "AI_Translate\\": "inc/"
+    }
+  },
   "autoload-dev": {
     "psr-4": {
       "AI_Translate\\Tests\\": "tests/"

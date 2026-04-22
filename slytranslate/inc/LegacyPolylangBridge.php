@@ -18,6 +18,17 @@ class LegacyPolylangBridge {
 	private static $context_loaded  = false;
 
 	/* ---------------------------------------------------------------
+	 * Hook registration
+	 * ------------------------------------------------------------- */
+
+	public static function register_hooks(): void {
+		add_filter( 'default_title',          array( static::class, 'default_title' ), 10, 2 );
+		add_filter( 'default_content',        array( static::class, 'default_content' ), 10, 2 );
+		add_filter( 'default_excerpt',        array( static::class, 'default_excerpt' ), 10, 2 );
+		add_filter( 'pll_translate_post_meta', array( static::class, 'pll_translate_post_meta' ), 10, 3 );
+	}
+
+	/* ---------------------------------------------------------------
 	 * WordPress filter hooks
 	 * ------------------------------------------------------------- */
 

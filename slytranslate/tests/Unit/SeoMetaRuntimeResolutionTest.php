@@ -70,8 +70,8 @@ class SeoMetaRuntimeResolutionTest extends TestCase {
 			}
 		);
 
-		$translate = $this->invokeStatic( AI_Translate::class, 'meta_translate', array( 475 ) );
-		$clear     = $this->invokeStatic( AI_Translate::class, 'meta_clear', array( 475 ) );
+		$translate = $this->invokeStatic( MetaTranslationService::class, 'meta_translate', array( 475 ) );
+		$clear     = $this->invokeStatic( MetaTranslationService::class, 'meta_clear', array( 475 ) );
 
 		$this->assertContains( '_tsf_title', $translate );
 		$this->assertContains( '_genesis_title', $translate );

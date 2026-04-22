@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.5.0
+Stable tag: 1.5.2
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -126,6 +126,27 @@ The running translation is handed off automatically to the same global backgroun
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= 1.5.2 =
+* Security: SSRF allowlist for direct API URL with slytranslate_allow_internal_direct_api filter (1.1)
+* Security: error_log calls guarded by WP_DEBUG (1.2)
+* Security: additional_prompt capability-gated to edit_others_posts (1.4)
+* Security: set_time_limit capped via slytranslate_max_request_seconds filter, no longer disabled entirely (1.5)
+* Security: Direct API error body snippet logged only under WP_DEBUG, stripped and capped at 120 chars (1.6)
+* Security: wp_unslash applied to $_GET reads in single-translate handler (1.7)
+* Security: Default prompt template moved to private const with slytranslate_default_prompt_template filter (1.8)
+* Performance: parse_blocks() called only once per post translation (2.1)
+* Performance: get_post_meta() called only once per post translation (2.2)
+* Performance: Polling backoff in foreground dialog and background bar (2.3)
+* Performance: Background task bar only rendered when active/recent jobs exist (2.4)
+* Performance: PSR-4 autoloader via Composer, replaces 18 synchronous require_once calls (2.5)
+* Legacy: Inline JS for list-table dialog and background bar extracted to dedicated asset files (1.3)
+* Legacy: Test-only wrapper methods removed from AI_Translate; tests now call service classes directly (3.1)
+* Legacy: Duplicate /translate-post REST alias removed (3.2)
+* Legacy: Version, REST namespace and editor script handle consolidated in Plugin::class constants (3.3)
+* Legacy: LegacyPolylangBridge hooks registered conditionally when auto-translate-new is enabled (3.4)
+* Legacy: Legacy ai_translate_to_<lang> bulk action gated behind slytranslate_legacy_bulk_actions_enabled filter (3.5)
+* Legacy: enqueue_editor_plugin wrapper stub removed from AI_Translate (3.6)
 
 = 1.5.1 =
 * Architecture: removed custom `EditorRestController` and all `ai-translate/v1/` REST routes; all endpoints are now served through the WordPress Abilities API (`wp/v2/abilities/`).

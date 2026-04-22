@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\TranslationQueryService;
 use Brain\Monkey\Functions;
 
 class TranslationStatusAccessTest extends TestCase {
@@ -30,7 +31,7 @@ class TranslationStatusAccessTest extends TestCase {
 			}
 		);
 
-		$result = $this->invokeStatic( AI_Translate::class, 'build_translation_status_entry', array( 'de', 42 ) );
+		$result = $this->invokeStatic( TranslationQueryService::class, 'build_translation_status_entry', array( 'de', 42 ) );
 
 		$this->assertSame( 'de', $result['lang'] );
 		$this->assertTrue( $result['exists'] );
@@ -61,7 +62,7 @@ class TranslationStatusAccessTest extends TestCase {
 		);
 		Functions\when( 'get_edit_post_link' )->justReturn( 'https://example.com/wp-admin/post.php?post=42&action=edit' );
 
-		$result = $this->invokeStatic( AI_Translate::class, 'build_translation_status_entry', array( 'de', 42 ) );
+		$result = $this->invokeStatic( TranslationQueryService::class, 'build_translation_status_entry', array( 'de', 42 ) );
 
 		$this->assertSame( 42, $result['post_id'] );
 		$this->assertSame( 'German translation', $result['title'] );

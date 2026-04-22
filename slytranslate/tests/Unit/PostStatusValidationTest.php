@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\PostTranslationService;
 use Brain\Monkey\Functions;
 
 /**
@@ -21,8 +22,8 @@ class PostStatusValidationTest extends TestCase {
 
 	private function normalize( mixed $requested, \WP_Post $post ): string {
 		return $this->invokeStatic(
-			AI_Translate::class,
-			'normalize_translation_post_status',
+			PostTranslationService::class,
+			'normalize_post_status',
 			[ $requested, $post ]
 		);
 	}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\TextSplitter;
 use AI_Translate\MetaTranslationService;
 use AI_Translate\TranslationProgressTracker;
 use AI_Translate\TranslationPluginAdapter;
@@ -26,7 +27,7 @@ class TranslationProgressTest extends TestCase {
 		Functions\when( 'get_current_user_id' )->justReturn( 17 );
 		Functions\when( 'get_transient' )->justReturn( false );
 
-		$result = $this->invokeStatic( AI_Translate::class, 'get_translation_progress' );
+		$result = $this->invokeStatic( TranslationProgressTracker::class, 'get_progress' );
 
 		$this->assertSame(
 			array(
@@ -42,7 +43,7 @@ class TranslationProgressTest extends TestCase {
 	public function test_translate_with_chunk_limit_updates_progress_after_each_content_chunk(): void {
 		$text            = implode( "\n\n", array_fill( 0, 4, str_repeat( 'word ', 80 ) ) );
 		$chunk_char_limit = 1200;
-		$chunks          = $this->invokeStatic( AI_Translate::class, 'split_text_for_translation', array( $text, $chunk_char_limit ) );
+		$chunks          = $this->invokeStatic( TextSplitter::class, 'split_text_for_translation', array( $text, $chunk_char_limit ) );
 		$chunk_count     = count( $chunks );
 		$progress_calls  = array();
 
@@ -104,8 +105,8 @@ class TranslationProgressTest extends TestCase {
 			)
 		);
 
-		$this->invokeStatic( AI_Translate::class, 'mark_translation_phase', array( 'content' ) );
-		$result = $this->invokeStatic( AI_Translate::class, 'translate_with_chunk_limit', array( $text, 'Prompt', $chunk_char_limit ) );
+		$this->invokeStatic( TranslationProgressTracker::class, 'mark_phase', array( 'content' ) );
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_with_chunk_limit', array( $text, 'Prompt', $chunk_char_limit ) );
 
 		$this->assertSame( $text, $result );
 

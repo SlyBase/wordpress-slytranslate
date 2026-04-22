@@ -6,25 +6,22 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class EditorBootstrap {
 
-	private const VERSION              = '1.5.0';
-	private const EDITOR_SCRIPT_HANDLE = 'ai-translate-editor';
-	private const EDITOR_REST_NAMESPACE = 'ai-translate/v1';
 	private const AVAILABLE_MODELS_TRANSIENT = 'ai_translate_available_models';
 
 	public static function enqueue_editor_plugin(): void {
 		wp_enqueue_script(
-			self::EDITOR_SCRIPT_HANDLE,
+			Plugin::EDITOR_SCRIPT,
 			plugins_url( 'assets/editor-plugin.js', dirname( __DIR__ ) . '/ai-translate.php' ),
 			array( 'wp-api-fetch', 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-editor', 'wp-element', 'wp-plugins', 'wp-rich-text' ),
 			self::get_editor_script_version(),
 			true
 		);
 
-		wp_localize_script( self::EDITOR_SCRIPT_HANDLE, 'aiTranslateEditor', self::get_bootstrap_data() );
+		wp_localize_script( Plugin::EDITOR_SCRIPT, 'aiTranslateEditor', self::get_bootstrap_data() );
 
 		if ( function_exists( 'wp_set_script_translations' ) ) {
 			wp_set_script_translations(
-				self::EDITOR_SCRIPT_HANDLE,
+				Plugin::EDITOR_SCRIPT,
 				'slytranslate',
 				plugin_dir_path( dirname( __DIR__ ) . '/ai-translate.php' ) . 'languages'
 			);
@@ -166,10 +163,10 @@ class EditorBootstrap {
 		$script_mtime = file_exists( $script_path ) ? filemtime( $script_path ) : false;
 
 		if ( false === $script_mtime ) {
-			return self::VERSION;
+			return Plugin::VERSION;
 		}
 
-		return self::VERSION . '.' . (string) $script_mtime;
+		return Plugin::VERSION . '.' . (string) $script_mtime;
 	}
 
 	private static function get_editor_default_source_language(): string {

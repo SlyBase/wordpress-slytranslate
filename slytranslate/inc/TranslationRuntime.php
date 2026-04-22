@@ -120,7 +120,7 @@ class TranslationRuntime {
 	 * ------------------------------------------------------------- */
 
 	public static function build_prompt( string $to, string $from = 'en', string $additional_prompt = '' ): string {
-		$template    = get_option( 'ai_translate_prompt', AI_Translate::$PROMPT );
+		$template    = get_option( 'ai_translate_prompt', AI_Translate::get_default_prompt() );
 		$base_prompt = str_replace(
 			array( '{FROM_CODE}', '{TO_CODE}' ),
 			array( $from, $to ),

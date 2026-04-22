@@ -129,24 +129,21 @@ class DirectApiTranslationClient {
 			'ok'          => $code >= 200 && $code < 300,
 		) );
 		if ( $code < 200 || $code >= 300 ) {
-			// Surface the first slice of the response body for diagnosis.
-			// The endpoint is operator-controlled (configured direct_api_url) so
-			// the body should not contain end-user PII; we still cap and strip
-			// to avoid runaway log growth.
-			$body_snippet = is_string( $body_text ) ? $body_text : '';
-			if ( '' !== $body_snippet ) {
-				$body_snippet = preg_replace( '/\s+/', ' ', $body_snippet );
-				$body_snippet = is_string( $body_snippet ) ? $body_snippet : '';
-				$body_snippet = function_exists( 'mb_substr' )
-					? mb_substr( $body_snippet, 0, 240, 'UTF-8' )
-					: substr( $body_snippet, 0, 240 );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				$body_snippet = is_string( $body_text ) ? wp_strip_all_tags( $body_text ) : '';
+				if ( '' !== $body_snippet ) {
+					$body_snippet = preg_replace( '/\s+/', ' ', $body_snippet );
+					$body_snippet = is_string( $body_snippet )
+						? ( function_exists( 'mb_substr' ) ? mb_substr( $body_snippet, 0, 120, 'UTF-8' ) : substr( $body_snippet, 0, 120 ) )
+						: '';
+				}
+				TimingLogger::log( 'direct_api_error_body', array(
+					'status'   => (int) $code,
+					'endpoint' => $endpoint,
+					'model'    => $model_slug,
+					'body'     => $body_snippet,
+				) );
 			}
-			TimingLogger::log( 'direct_api_error_body', array(
-				'status'   => (int) $code,
-				'endpoint' => $endpoint,
-				'model'    => $model_slug,
-				'body'     => $body_snippet,
-			) );
 
 			// Expose HTTP 429 responses as a structured WP_Error so the
 			// runtime's rate-limit guard can parse the provider's
@@ -164,7 +161,14 @@ class DirectApiTranslationClient {
 					$retry_after_header = (string) $headers['retry-after'];
 				}
 
-				$detail = $body_snippet;
+				$rate_limit_body = is_string( $body_text ) ? wp_strip_all_tags( $body_text ) : '';
+				if ( '' !== $rate_limit_body ) {
+					$rate_limit_body = preg_replace( '/\s+/', ' ', $rate_limit_body );
+					$rate_limit_body = is_string( $rate_limit_body )
+						? ( function_exists( 'mb_substr' ) ? mb_substr( $rate_limit_body, 0, 120, 'UTF-8' ) : substr( $rate_limit_body, 0, 120 ) )
+						: '';
+				}
+				$detail = $rate_limit_body;
 				if ( '' !== $retry_after_header ) {
 					$detail .= sprintf( ' [Retry-After: %s]', $retry_after_header );
 				}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\ContentTranslator;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -19,7 +20,7 @@ class BlockTranslationTest extends TestCase {
 	#[DataProvider( 'provideSkippedBlockNames' )]
 	public function test_skips_code_like_block_types( string $blockName ): void {
 		$block  = [ 'blockName' => $blockName, 'attrs' => [] ];
-		$result = $this->invokeStatic( AI_Translate::class, 'should_skip_block_translation', [ $block ] );
+		$result = $this->invokeStatic( ContentTranslator::class, 'should_skip_block', [ $block ] );
 		$this->assertTrue( $result );
 	}
 
@@ -36,37 +37,37 @@ return [
 
 public function test_does_not_skip_regular_paragraph_block(): void {
 $block  = [ 'blockName' => 'core/paragraph', 'attrs' => [] ];
-$result = $this->invokeStatic( AI_Translate::class, 'should_skip_block_translation', [ $block ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_skip_block', [ $block ] );
 $this->assertFalse( $result );
 }
 
 public function test_does_not_skip_heading_block(): void {
 $block  = [ 'blockName' => 'core/heading', 'attrs' => [] ];
-$result = $this->invokeStatic( AI_Translate::class, 'should_skip_block_translation', [ $block ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_skip_block', [ $block ] );
 $this->assertFalse( $result );
 }
 
 public function test_skips_block_with_code_attr(): void {
 $block  = [ 'blockName' => 'some/custom', 'attrs' => [ 'code' => 'echo "hi";' ] ];
-$result = $this->invokeStatic( AI_Translate::class, 'should_skip_block_translation', [ $block ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_skip_block', [ $block ] );
 $this->assertTrue( $result );
 }
 
 public function test_skips_block_with_codehtml_attr(): void {
 $block  = [ 'blockName' => 'some/custom', 'attrs' => [ 'codeHTML' => '<b>bold</b>' ] ];
-$result = $this->invokeStatic( AI_Translate::class, 'should_skip_block_translation', [ $block ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_skip_block', [ $block ] );
 $this->assertTrue( $result );
 }
 
 public function test_does_not_skip_block_with_non_code_attrs(): void {
 $block  = [ 'blockName' => 'core/image', 'attrs' => [ 'url' => 'http://example.com/img.png' ] ];
-$result = $this->invokeStatic( AI_Translate::class, 'should_skip_block_translation', [ $block ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_skip_block', [ $block ] );
 $this->assertFalse( $result );
 }
 
 public function test_handles_missing_block_name_gracefully(): void {
 $block  = [ 'attrs' => [] ];
-$result = $this->invokeStatic( AI_Translate::class, 'should_skip_block_translation', [ $block ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_skip_block', [ $block ] );
 $this->assertFalse( $result );
 }
 
@@ -75,28 +76,28 @@ $this->assertFalse( $result );
 // -----------------------------------------------------------------------
 
 public function test_translates_fragment_with_plain_text(): void {
-$result = $this->invokeStatic( AI_Translate::class, 'should_translate_block_fragment', [ 'Hello world' ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_translate_fragment', [ 'Hello world' ] );
 $this->assertTrue( $result );
 }
 
 public function test_translates_fragment_with_html(): void {
-$result = $this->invokeStatic( AI_Translate::class, 'should_translate_block_fragment', [ '<p>Translate me</p>' ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_translate_fragment', [ '<p>Translate me</p>' ] );
 $this->assertTrue( $result );
 }
 
 public function test_skips_empty_fragment(): void {
-$result = $this->invokeStatic( AI_Translate::class, 'should_translate_block_fragment', [ '' ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_translate_fragment', [ '' ] );
 $this->assertFalse( $result );
 }
 
 public function test_skips_whitespace_only_fragment(): void {
-$result = $this->invokeStatic( AI_Translate::class, 'should_translate_block_fragment', [ '   ' ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_translate_fragment', [ '   ' ] );
 $this->assertFalse( $result );
 }
 
 public function test_skips_fragment_with_only_html_tags_no_text(): void {
 // After stripping all tags, only whitespace remains.
-$result = $this->invokeStatic( AI_Translate::class, 'should_translate_block_fragment', [ '<br /><hr />' ] );
+$result = $this->invokeStatic( ContentTranslator::class, 'should_translate_fragment', [ '<br /><hr />' ] );
 $this->assertFalse( $result );
 }
 }
