@@ -45,13 +45,16 @@ class EditorBootstrap {
 				'modelLabel'                => __( 'AI model', 'slytranslate' ),
 				'refreshModelsButton'       => __( 'Refresh model list', 'slytranslate' ),
 				'panelTitle'                => __( 'Translate (SlyTranslate)', 'slytranslate' ),
+				'pickerTitle'               => __( 'Translate', 'slytranslate' ),
 				'sourceLanguageLabel'       => __( 'Source language', 'slytranslate' ),
+				'sourceLanguageManagedHint' => __( 'The source language is managed by your language plugin.', 'slytranslate' ),
 				'targetLanguageLabel'       => __( 'Target language', 'slytranslate' ),
 				'swapLanguagesButton'       => __( 'Swap source and target language', 'slytranslate' ),
 				'overwriteLabel'            => __( 'Overwrite existing translation', 'slytranslate' ),
 				'translateTitleLabel'       => __( 'Translate title', 'slytranslate' ),
 				'additionalPromptLabel'     => __( 'Additional instructions (optional)', 'slytranslate' ),
 				'additionalPromptHelp'      => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
+				'pickerStartButton'         => __( 'Start translation', 'slytranslate' ),
 				'translateButton'           => __( 'Translate now', 'slytranslate' ),
 				'cancelTranslationButton'   => __( 'Cancel translation', 'slytranslate' ),
 				'progressTitle'             => __( 'Translating title...', 'slytranslate' ),
@@ -183,7 +186,7 @@ class EditorBootstrap {
 	}
 
 	private static function get_editor_rest_base_path(): string {
-		return '/wp/v2/abilities/';
+		return '/' . Plugin::REST_NAMESPACE . '/';
 	}
 
 	/**

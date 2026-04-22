@@ -6,7 +6,6 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\ContentTranslator;
 use AI_Translate\TranslationProgressTracker;
-use Brain\Monkey\Functions;
 
 class ContentTranslationListFastPathTest extends TestCase {
 
@@ -18,8 +17,8 @@ class ContentTranslationListFastPathTest extends TestCase {
 	public function test_single_list_wrapper_uses_recursive_fast_path_before_group_translation(): void {
 		$calls = array();
 
-		Functions\when( 'get_current_user_id' )->justReturn( 1 );
-		Functions\when( 'serialize_blocks' )->alias(
+		$this->stubWpFunctionReturn( 'get_current_user_id', 1 );
+		$this->stubWpFunction( 'serialize_blocks',
 			static function ( array $blocks ): string {
 				$block = $blocks[0] ?? array();
 				$name  = $block['blockName'] ?? '';
@@ -35,7 +34,7 @@ class ContentTranslationListFastPathTest extends TestCase {
 				return '';
 			}
 		);
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function ( string $text ) use ( &$calls ) {
 				$calls[] = $text;
 

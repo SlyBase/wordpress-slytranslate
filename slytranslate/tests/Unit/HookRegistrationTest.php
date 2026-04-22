@@ -10,7 +10,6 @@ use AI_Translate\EditorBootstrap;
 use AI_Translate\LegacyPolylangBridge;
 use AI_Translate\ListTableTranslation;
 use AI_Translate\Settings;
-use Brain\Monkey\Functions;
 
 class HookRegistrationTest extends TestCase {
 
@@ -18,7 +17,8 @@ class HookRegistrationTest extends TestCase {
 		$registered_actions = array();
 		$registered_filters = array();
 
-		Functions\when( 'add_action' )->alias(
+		$this->stubWpFunction(
+			'add_action',
 			static function ( string $hook, $callback, int $priority = 10, int $accepted_args = 1 ) use ( &$registered_actions ): void {
 				$registered_actions[] = array(
 					'hook'          => $hook,
@@ -28,7 +28,8 @@ class HookRegistrationTest extends TestCase {
 				);
 			}
 		);
-		Functions\when( 'add_filter' )->alias(
+		$this->stubWpFunction(
+			'add_filter',
 			static function ( string $hook, $callback, int $priority = 10, int $accepted_args = 1 ) use ( &$registered_filters ): void {
 				$registered_filters[] = array(
 					'hook'          => $hook,
@@ -38,7 +39,7 @@ class HookRegistrationTest extends TestCase {
 				);
 			}
 		);
-		Functions\when( 'get_option' )->justReturn( '1' );
+		$this->stubWpFunctionReturn( 'get_option', '1' );
 
 		AI_Translate::add_hooks();
 
@@ -53,6 +54,12 @@ class HookRegistrationTest extends TestCase {
 				array(
 					'hook'          => 'admin_init',
 					'callback'      => array( Settings::class, 'register' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'hook'          => 'rest_api_init',
+					'callback'      => array( AI_Translate::class, 'register_editor_rest_routes' ),
 					'priority'      => 10,
 					'accepted_args' => 1,
 				),
@@ -132,13 +139,14 @@ class HookRegistrationTest extends TestCase {
 	public function test_polylang_hooks_not_registered_when_feature_disabled(): void {
 		$registered_filters = array();
 
-		Functions\when( 'add_action' )->alias( static function() {} );
-		Functions\when( 'add_filter' )->alias(
+		$this->stubWpFunction( 'add_action', static function () {} );
+		$this->stubWpFunction(
+			'add_filter',
 			static function ( string $hook, $callback, int $priority = 10, int $accepted_args = 1 ) use ( &$registered_filters ): void {
 				$registered_filters[] = array( 'hook' => $hook, 'callback' => $callback );
 			}
 		);
-		Functions\when( 'get_option' )->justReturn( '0' );
+		$this->stubWpFunctionReturn( 'get_option', '0' );
 
 		AI_Translate::add_hooks();
 

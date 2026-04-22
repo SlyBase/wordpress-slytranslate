@@ -6,7 +6,6 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\MetaTranslationService;
-use Brain\Monkey\Functions;
 
 /**
  * Tests for post-aware SEO meta resolution in AI_Translate.
@@ -37,7 +36,7 @@ class SeoMetaRuntimeResolutionTest extends TestCase {
 			)
 		);
 
-		Functions\when( 'apply_filters' )->alias(
+		$this->stubWpFunction( 'apply_filters',
 			static function ( string $tag, $value, ...$args ) {
 				return $value;
 			}
@@ -45,7 +44,7 @@ class SeoMetaRuntimeResolutionTest extends TestCase {
 	}
 
 	public function test_post_aware_meta_resolution_merges_active_runtime_and_user_meta_keys(): void {
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( string $option, $default = false ) {
 				if ( 'ai_translate_meta_translate' === $option ) {
 					return '_custom_translate';
@@ -59,7 +58,7 @@ class SeoMetaRuntimeResolutionTest extends TestCase {
 			}
 		);
 
-		Functions\when( 'get_post_meta' )->alias(
+		$this->stubWpFunction( 'get_post_meta',
 			static function ( int $post_id, ...$args ) {
 				return array(
 					'_genesis_title'       => array( 'English Genesis title' ),

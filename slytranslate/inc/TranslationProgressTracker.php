@@ -63,6 +63,19 @@ class TranslationProgressTracker {
 	 * Progress read / write (transient-backed)
 	 * ------------------------------------------------------------- */
 
+	/**
+	 * Whether the current user has started a translation job recently enough
+	 * that the background-task bar should be rendered on the admin screen.
+	 * Returns true if the transient set by initialize_context() is still alive.
+	 */
+	public static function user_has_recent_job(): bool {
+		$user_id = get_current_user_id();
+		if ( $user_id < 1 ) {
+			return false;
+		}
+		return false !== get_transient( 'ai_translate_bg_user_' . $user_id );
+	}
+
 	public static function get_progress( int $post_id = 0 ): array {
 		$transient_key = self::get_transient_key( $post_id );
 		if ( null === $transient_key ) {
@@ -167,6 +180,13 @@ class TranslationProgressTracker {
 			'total_units'     => 0,
 			'completed_units' => 0,
 		);
+
+		// Mark that this user has a recent job so the background bar can be
+		// conditionally rendered on subsequent admin screens.
+		$user_id = get_current_user_id();
+		if ( $user_id > 0 ) {
+			set_transient( 'ai_translate_bg_user_' . $user_id, 1, self::PROGRESS_TTL_SECONDS );
+		}
 	}
 
 	public static function clear_context(): void {

@@ -6,7 +6,6 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\PostTranslationService;
-use Brain\Monkey\Functions;
 
 /**
  * Tests for AI_Translate::normalize_translation_post_status().
@@ -29,7 +28,7 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_returns_valid_requested_status(): void {
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'draft' ] );
 		$result = $this->normalize( 'publish', $post );
@@ -37,7 +36,7 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_returns_draft_as_valid_requested_status(): void {
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'publish' ] );
 		$result = $this->normalize( 'draft', $post );
@@ -45,8 +44,8 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_rejects_trash_falls_back_to_source(): void {
-		Functions\when( 'get_post_status' )->justReturn( 'publish' );
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'get_post_status', 'publish' );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'publish' ] );
 		$result = $this->normalize( 'trash', $post );
@@ -54,8 +53,8 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_rejects_auto_draft_falls_back_to_source(): void {
-		Functions\when( 'get_post_status' )->justReturn( 'draft' );
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'get_post_status', 'draft' );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'draft' ] );
 		$result = $this->normalize( 'auto-draft', $post );
@@ -63,8 +62,8 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_rejects_inherit_falls_back_to_source(): void {
-		Functions\when( 'get_post_status' )->justReturn( 'pending' );
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'get_post_status', 'pending' );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'pending' ] );
 		$result = $this->normalize( 'inherit', $post );
@@ -72,8 +71,8 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_null_requested_falls_back_to_source(): void {
-		Functions\when( 'get_post_status' )->justReturn( 'publish' );
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'get_post_status', 'publish' );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'publish' ] );
 		$result = $this->normalize( null, $post );
@@ -81,8 +80,8 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_source_trash_falls_back_to_draft(): void {
-		Functions\when( 'get_post_status' )->justReturn( 'trash' );
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'get_post_status', 'trash' );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'trash' ] );
 		$result = $this->normalize( 'trash', $post );
@@ -90,9 +89,9 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_unregistered_requested_status_falls_back_to_source(): void {
-		Functions\when( 'get_post_status' )->justReturn( 'publish' );
+		$this->stubWpFunctionReturn( 'get_post_status', 'publish' );
 		// 'nonexistent_status' is unknown; 'publish' is valid — use a callback.
-		Functions\when( 'post_status_exists' )->alias(
+		$this->stubWpFunction( 'post_status_exists',
 			static function ( string $status ): bool {
 				return 'publish' === $status;
 			}
@@ -104,8 +103,8 @@ class PostStatusValidationTest extends TestCase {
 	}
 
 	public function test_empty_string_requested_falls_back_to_source(): void {
-		Functions\when( 'get_post_status' )->justReturn( 'draft' );
-		Functions\when( 'post_status_exists' )->justReturn( true );
+		$this->stubWpFunctionReturn( 'get_post_status', 'draft' );
+		$this->stubWpFunctionReturn( 'post_status_exists', true );
 
 		$post   = new \WP_Post( [ 'post_status' => 'draft' ] );
 		$result = $this->normalize( '', $post );

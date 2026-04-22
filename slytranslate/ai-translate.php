@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.5.2
+Version: 1.5.3
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -61,6 +61,7 @@ class AI_Translate {
 	public static function add_hooks(): void {
 		add_action( 'enqueue_block_editor_assets', array( EditorBootstrap::class, 'enqueue_editor_plugin' ) );
 		add_action( 'admin_init',                  array( Settings::class, 'register' ) );
+		add_action( 'rest_api_init', array( self::class, 'register_editor_rest_routes' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
 		if ( '1' === get_option( 'ai_translate_new_post', '0' ) ) {
@@ -69,7 +70,118 @@ class AI_Translate {
 		ListTableTranslation::add_hooks();
 	}
 
-	public static function register_editor_rest_routes(): void {}
+	public static function register_editor_rest_routes(): void {
+		$translation_permission = static function (): bool {
+			return self::current_user_can_access_translation_abilities();
+		};
+
+		$admin_permission = static function (): bool {
+			return current_user_can( 'manage_options' );
+		};
+
+		$routes = array(
+			'/ai-translate/get-languages/run'         => array(
+				'callback'            => array( self::class, 'execute_get_languages' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/get-translation-status/run' => array(
+				'callback'            => array( self::class, 'execute_get_translation_status' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/get-untranslated/run'      => array(
+				'callback'            => array( self::class, 'execute_get_untranslated' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/translate-text/run'        => array(
+				'callback'            => array( self::class, 'execute_translate_text' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/translate-blocks/run'      => array(
+				'callback'            => array( self::class, 'execute_translate_blocks' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/translate-content/run'     => array(
+				'callback'            => array( self::class, 'execute_translate_content' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/translate-content-bulk/run' => array(
+				'callback'            => array( self::class, 'execute_translate_posts' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/configure/run'             => array(
+				'callback'            => array( self::class, 'execute_configure' ),
+				'permission_callback' => $admin_permission,
+			),
+			'/ai-translate/get-progress/run'          => array(
+				'callback'            => array( self::class, 'execute_get_progress' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/cancel-translation/run'    => array(
+				'callback'            => array( self::class, 'execute_cancel_translation' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/get-available-models/run'  => array(
+				'callback'            => array( self::class, 'execute_get_available_models' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/save-additional-prompt/run' => array(
+				'callback'            => array( self::class, 'execute_save_additional_prompt' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/user-preference/run'       => array(
+				'callback'            => array( self::class, 'execute_save_additional_prompt' ),
+				'permission_callback' => $translation_permission,
+			),
+		);
+
+		foreach ( $routes as $route => $config ) {
+			register_rest_route(
+				Plugin::REST_NAMESPACE,
+				$route,
+				array(
+					'methods'             => 'POST',
+					'callback'            => static function ( $request ) use ( $config ) {
+						$input = self::get_rest_route_input( $request );
+						return call_user_func( $config['callback'], $input );
+					},
+					'permission_callback' => $config['permission_callback'],
+				)
+			);
+		}
+	}
+
+	private static function get_rest_route_input( $request ): array {
+		if ( ! is_object( $request ) ) {
+			return array();
+		}
+
+		$payload = null;
+		if ( method_exists( $request, 'get_json_params' ) ) {
+			$payload = $request->get_json_params();
+		}
+
+		if ( is_array( $payload ) ) {
+			if ( isset( $payload['input'] ) && is_array( $payload['input'] ) ) {
+				return $payload['input'];
+			}
+
+			return $payload;
+		}
+
+		if ( method_exists( $request, 'get_param' ) ) {
+			$input = $request->get_param( 'input' );
+			if ( is_array( $input ) ) {
+				return $input;
+			}
+		}
+
+		if ( method_exists( $request, 'get_params' ) ) {
+			$params = $request->get_params();
+			return is_array( $params ) ? $params : array();
+		}
+
+		return array();
+	}
 
 	/* ---------------------------------------------------------------
 	 * Ability execute callbacks (must stay on AI_Translate – AbilityRegistrationTest contract)

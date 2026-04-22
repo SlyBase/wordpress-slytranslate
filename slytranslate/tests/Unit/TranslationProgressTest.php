@@ -10,7 +10,6 @@ use AI_Translate\MetaTranslationService;
 use AI_Translate\TranslationProgressTracker;
 use AI_Translate\TranslationPluginAdapter;
 use AI_Translate\TranslationRuntime;
-use Brain\Monkey\Functions;
 
 class TranslationProgressTest extends TestCase {
 
@@ -24,8 +23,8 @@ class TranslationProgressTest extends TestCase {
 	}
 
 	public function test_get_translation_progress_returns_default_payload_without_saved_state(): void {
-		Functions\when( 'get_current_user_id' )->justReturn( 17 );
-		Functions\when( 'get_transient' )->justReturn( false );
+		$this->stubWpFunctionReturn( 'get_current_user_id', 17 );
+		$this->stubWpFunctionReturn( 'get_transient', false );
 
 		$result = $this->invokeStatic( TranslationProgressTracker::class, 'get_progress' );
 
@@ -49,14 +48,14 @@ class TranslationProgressTest extends TestCase {
 
 		$this->assertGreaterThan( 1, $chunk_count );
 
-		Functions\when( 'get_current_user_id' )->justReturn( 17 );
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunctionReturn( 'get_current_user_id', 17 );
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				return $default;
 			}
 		);
-		Functions\when( 'get_transient' )->justReturn( false );
-		Functions\when( 'set_transient' )->alias(
+		$this->stubWpFunctionReturn( 'get_transient', false );
+		$this->stubWpFunction( 'set_transient',
 			static function ( $key, $value, $ttl ) use ( &$progress_calls ) {
 				if ( is_string( $key ) && str_starts_with( $key, 'ai_translate_progress_' ) ) {
 					$progress_calls[] = $value;
@@ -65,7 +64,7 @@ class TranslationProgressTest extends TestCase {
 				return true;
 			}
 		);
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function ( $input_text ) {
 				return new class( $input_text ) {
 					private string $input_text;
@@ -178,27 +177,27 @@ class TranslationProgressTest extends TestCase {
 			}
 		};
 
-		Functions\when( 'get_current_user_id' )->justReturn( 17 );
-		Functions\when( 'current_user_can' )->justReturn( true );
-		Functions\when( 'post_type_exists' )->justReturn( true );
-		Functions\when( 'get_post' )->alias(
+		$this->stubWpFunctionReturn( 'get_current_user_id', 17 );
+		$this->stubWpFunctionReturn( 'current_user_can', true );
+		$this->stubWpFunctionReturn( 'post_type_exists', true );
+		$this->stubWpFunction( 'get_post',
 			static function ( $post_id ) use ( $source_post ) {
 				return 42 === (int) $post_id ? $source_post : null;
 			}
 		);
-		Functions\when( 'get_post_meta' )->justReturn( array() );
-		Functions\when( 'get_transient' )->alias(
+		$this->stubWpFunctionReturn( 'get_post_meta', array() );
+		$this->stubWpFunction( 'get_transient',
 			static function ( $key ) use ( &$transients ) {
 				return $transients[ $key ] ?? false;
 			}
 		);
-		Functions\when( 'set_transient' )->alias(
+		$this->stubWpFunction( 'set_transient',
 			static function ( $key, $value ) use ( &$transients ) {
 				$transients[ $key ] = $value;
 				return true;
 			}
 		);
-		Functions\when( 'delete_transient' )->alias(
+		$this->stubWpFunction( 'delete_transient',
 			static function ( $key ) use ( &$transients ) {
 				unset( $transients[ $key ] );
 				return true;

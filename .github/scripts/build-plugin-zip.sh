@@ -21,14 +21,21 @@ rm -f "$output_zip_path"
 
 rsync -a \
 	--exclude='.DS_Store' \
-	--exclude='composer.json' \
-	--exclude='composer.lock' \
 	--exclude='phpunit.xml.dist' \
 	--exclude='tests/' \
 	--exclude='vendor/' \
 	--exclude='.gitignore' \
 	--exclude='.phpunit.result.cache' \
 	"$plugin_dir/" "$staging_root/slytranslate/"
+
+composer install \
+	--no-dev \
+	--optimize-autoloader \
+	--no-interaction \
+	--prefer-dist \
+	--working-dir="$staging_root/slytranslate"
+
+rm -f "$staging_root/slytranslate/composer.json" "$staging_root/slytranslate/composer.lock"
 
 (
 	cd "$staging_root"

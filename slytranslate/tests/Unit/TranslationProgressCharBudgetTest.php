@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\TranslationProgressTracker;
-use Brain\Monkey\Functions;
 
 /**
  * Verifies the character-budget progress model: phase budgets registered
@@ -20,13 +19,13 @@ class TranslationProgressCharBudgetTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->transients = array();
-		Functions\when( 'get_current_user_id' )->justReturn( 42 );
-		Functions\when( 'get_transient' )->alias(
+		$this->stubWpFunctionReturn( 'get_current_user_id', 42 );
+		$this->stubWpFunction( 'get_transient',
 			function ( $key ) {
 				return $this->transients[ $key ] ?? false;
 			}
 		);
-		Functions\when( 'set_transient' )->alias(
+		$this->stubWpFunction( 'set_transient',
 			function ( $key, $value, $ttl = 0 ) {
 				$this->transients[ $key ] = $value;
 				return true;

@@ -125,6 +125,143 @@
         return getEditorRestPath(abilityName) + '/run';
     }
 
+    function buildLanguageOptions(languages) {
+        return languages.map(function (language) {
+            return {
+                label: language.name + ' (' + language.code + ')',
+                value: language.code,
+            };
+        });
+    }
+
+    function renderLanguageSelectField(config) {
+        var options = buildLanguageOptions(config.options || []);
+
+        return createElement(
+            Fragment,
+            null,
+            createElement(
+                'label',
+                {
+                    htmlFor: config.id,
+                    style: {
+                        gridArea: config.labelArea,
+                        display: 'block',
+                        fontSize: '12px',
+                        lineHeight: '1.4',
+                        color: '#50575e',
+                    },
+                },
+                config.label
+            ),
+            createElement(
+                'select',
+                {
+                    id: config.id,
+                    value: config.value,
+                    disabled: options.length < 1,
+                    onChange: function (event) {
+                        config.onChange(event.target.value);
+                    },
+                    className: 'components-select-control__input',
+                    style: {
+                        gridArea: config.controlArea,
+                        width: '100%',
+                        minWidth: 0,
+                        height: '40px',
+                        minHeight: '40px',
+                    },
+                },
+                options.length ? options.map(function (option) {
+                    return createElement('option', { key: option.value, value: option.value }, option.label);
+                }) : createElement('option', { value: '' }, '')
+            )
+        );
+    }
+
+    function renderLanguagePairControls(config) {
+        var languages = Array.isArray(config.languages) ? config.languages : [];
+        var targetLanguages = Array.isArray(config.targetLanguages) ? config.targetLanguages : [];
+
+        if (!languages.length) {
+            return null;
+        }
+
+        return createElement(
+            'div',
+            {
+                style: {
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) 40px minmax(0, 1fr)',
+                    gridTemplateAreas: "'source-label switch-label target-label' 'source-control switch-control target-control'",
+                    columnGap: '14px',
+                    rowGap: '6px',
+                    alignItems: 'start',
+                    marginBottom: '12px',
+                },
+            },
+            renderLanguageSelectField({
+                id: config.sourceId || 'slytranslate-source-language',
+                label: text('sourceLanguageLabel', 'Source language'),
+                labelArea: 'source-label',
+                controlArea: 'source-control',
+                value: config.sourceLanguage,
+                onChange: config.onSourceChange,
+                options: languages,
+            }),
+            createElement('div', {
+                'aria-hidden': true,
+                style: {
+                    gridArea: 'switch-label',
+                    display: 'block',
+                    fontSize: '12px',
+                    lineHeight: '1.4',
+                    visibility: 'hidden',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                },
+            }, '\u00a0'),
+            createElement(
+                'div',
+                {
+                    style: {
+                        gridArea: 'switch-control',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        alignSelf: 'center',
+                    },
+                },
+                createElement(Button, {
+                    icon: 'controls-repeat',
+                    variant: 'tertiary',
+                    label: text('swapLanguagesButton', 'Swap source and target language'),
+                    showTooltip: true,
+                    disabled: !config.sourceLanguage || !config.targetLanguage,
+                    onClick: config.onSwap,
+                    style: {
+                        width: '40px',
+                        minWidth: '40px',
+                        height: '40px',
+                        minHeight: '40px',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0',
+                    },
+                })
+            ),
+            renderLanguageSelectField({
+                id: config.targetId || 'slytranslate-target-language',
+                label: text('targetLanguageLabel', 'Target language'),
+                labelArea: 'target-label',
+                controlArea: 'target-control',
+                value: config.targetLanguage,
+                onChange: config.onTargetChange,
+                options: targetLanguages,
+            })
+        );
+    }
+
     function slyDebugEnabled() {
         return !!(typeof window !== 'undefined' && window.SLY_TRANSLATE_DEBUG);
     }
@@ -353,6 +490,17 @@
 
     // Module-level cache so both Sidebar and Toolbar share the latest value within a page session.
     let _lastAdditionalPrompt = settings && settings.lastAdditionalPrompt ? settings.lastAdditionalPrompt : '';
+    try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+            const storedAdditionalPrompt = window.localStorage.getItem('aiTranslateLastAdditionalPrompt') || '';
+            if (storedAdditionalPrompt) {
+                _lastAdditionalPrompt = storedAdditionalPrompt;
+            } else if (_lastAdditionalPrompt) {
+                window.localStorage.setItem('aiTranslateLastAdditionalPrompt', _lastAdditionalPrompt);
+            }
+        }
+    } catch (error) {
+    }
 
     // Module-level model slug shared between Sidebar and Selection modal.
     // _availableModels is mutable so the sidebar's "refresh models" button
@@ -439,7 +587,14 @@
     function saveAdditionalPromptPreference(additionalPrompt) {
         _lastAdditionalPrompt = typeof additionalPrompt === 'string' ? additionalPrompt : '';
 
-        const path = getRunAbilityPath('ai-translate/user-preference');
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem('aiTranslateLastAdditionalPrompt', _lastAdditionalPrompt);
+            }
+        } catch (error) {
+        }
+
+        const path = getRunAbilityPath('ai-translate/save-additional-prompt');
         const request = {
             path: path,
             method: 'POST',
@@ -756,7 +911,21 @@
                 title: text('panelTitle', 'AI Translation with SlyTranslate'),
                 icon: 'translation',
             },
-            sourceLanguage ? createElement('p', null, createElement('strong', null, text('sourceLanguageLabel', 'Source language') + ': '), sourceLanguage) : null,
+            sourceLanguage ? createElement(
+                'div',
+                { style: { marginBottom: '12px' } },
+                createElement(
+                    'p',
+                    { style: { margin: 0 } },
+                    createElement('strong', null, text('sourceLanguageLabel', 'Source language') + ': '),
+                    getLanguageDisplayName(sourceLanguage)
+                ),
+                createElement(
+                    'p',
+                    { style: { margin: '4px 0 0', fontSize: '12px', color: '#50575e' } },
+                    text('sourceLanguageManagedHint', 'The source language is managed by your language plugin.')
+                )
+            ) : null,
             !postId ? createElement(Notice, { status: 'warning', isDismissible: false }, text('saveFirstNotice', 'Save the content before creating a translation.')) : null,
             postContext.isDirty ? createElement(Notice, { status: 'warning', isDismissible: false }, text('saveChangesNotice', 'Save your latest changes before translating so the translation uses the current content.')) : null,
             errorMessage ? createElement(Notice, { status: 'error', isDismissible: true, onRemove: function () { setErrorMessage(''); } }, errorMessage) : null,
@@ -771,21 +940,6 @@
                 )
             ) : null,
             isRefreshing ? createElement('p', null, createElement(Spinner, null), ' ', text('loadingStatus', 'Loading translation status...')) : null,
-            createElement(
-                'div',
-                { style: { marginTop: '20px', marginBottom: '20px' } },
-                createElement(
-                    'div',
-                    { style: { marginTop: '8px' } },
-                    createElement(TextareaControl, {
-                        label: text('additionalPromptLabel', 'Additional instructions (optional)'),
-                        help: text('additionalPromptHelp', 'Supplements the site-wide translation instructions. Example: Use informal language.'),
-                        value: additionalPrompt,
-                        onChange: setAdditionalPrompt,
-                        rows: 3,
-                    })
-                )
-            ),
             availableLanguages.length ? createElement(
                 'div',
                 { style: { marginTop: '4px', marginBottom: '20px' } },
@@ -806,7 +960,7 @@
                 { style: { marginTop: '4px', marginBottom: '20px' } },
                 createElement(
                     'div',
-                    { style: { display: 'flex', gap: '6px', alignItems: 'flex-end' } },
+                    { style: { display: 'flex', gap: '6px', alignItems: 'flex-end', width: '100%' } },
                     createElement(
                         'div',
                         { style: { flex: 1, minWidth: 0 } },
@@ -828,9 +982,21 @@
                         onClick: handleRefreshModels,
                         disabled: isRefreshingModels,
                         isBusy: isRefreshingModels,
+                        style: { flexShrink: 0, width: '36px', minWidth: '36px', padding: '0', justifyContent: 'center' },
                     })
                 )
             ) : null,
+            createElement(
+                'div',
+                { style: { marginTop: '4px', marginBottom: '12px' } },
+                createElement(TextareaControl, {
+                    label: text('additionalPromptLabel', 'Additional instructions (optional)'),
+                    help: text('additionalPromptHelp', 'Supplements the site-wide translation instructions. Example: Use informal language.'),
+                    value: additionalPrompt,
+                    onChange: setAdditionalPrompt,
+                    rows: 3,
+                })
+            ),
             (modelSlug || '').toLowerCase().indexOf('translategemma') !== -1 ? createElement(
                 Notice,
                 { status: 'warning', isDismissible: false, style: { marginBottom: '12px' } },
@@ -892,12 +1058,12 @@
                 ) : null
             ),
             statusItems.length ? createElement(
-                Fragment,
-                null,
-                createElement('p', null, createElement('strong', null, text('translationStatusLabel', 'Translation status'))),
+                'div',
+                { style: { textAlign: 'left' } },
+                createElement('p', { style: { margin: '0 0 4px', textAlign: 'left' } }, createElement('strong', null, text('translationStatusLabel', 'Translation status'))),
                 createElement(
                     'ul',
-                    { style: { margin: 0, paddingLeft: '18px' } },
+                    { style: { margin: 0, paddingLeft: '18px', textAlign: 'left' } },
                     statusItems.map(function (translation) {
                         const matchingLanguage = languages.find(function (language) {
                             return language.code === translation.lang;
@@ -1098,66 +1264,43 @@
             createElement(RichTextToolbarButton, {
                 name: 'unknown',
                 icon: 'translation',
-                title: text('translateSelectionButton', 'Translate (SlyTranslate)'),
+                title: text('pickerTitle', 'Translate'),
                 onClick: openDialog,
                 isDisabled: !hasSelection,
             }),
             isOpen && Modal ? createElement(
                 Modal,
                 {
-                    title: text('translateSelectionTitle', 'Translate selected text with SlyTranslate'),
+                    title: text('pickerTitle', 'Translate'),
                     onRequestClose: closeDialog,
                     shouldCloseOnClickOutside: !isTranslating,
                     shouldCloseOnEsc: !isTranslating,
                 },
                 errorMessage ? createElement(Notice, { status: 'error', isDismissible: true, onRemove: function () { setErrorMessage(''); } }, errorMessage) : null,
-                languages.length ? createElement(SelectControl, {
-                    label: text('sourceLanguageLabel', 'Source language'),
-                    value: sourceLanguage,
-                    onChange: function (nextSourceLanguage) {
+                renderLanguagePairControls({
+                    languages: languages,
+                    targetLanguages: availableTargetLanguages,
+                    sourceId: 'slytranslate-inline-source-language',
+                    targetId: 'slytranslate-inline-target-language',
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    onSourceChange: function (nextSourceLanguage) {
                         setSourceLanguage(nextSourceLanguage);
                         setTargetLanguage(function (currentTargetLanguage) {
                             return resolveSelectionTargetLanguage(languages, nextSourceLanguage, currentTargetLanguage);
                         });
                     },
-                    options: languages.map(function (language) {
-                        return {
-                            label: language.name + ' (' + language.code + ')',
-                            value: language.code,
-                        };
-                    }),
-                }) : null,
-                (languages.length && availableTargetLanguages.length) ? createElement(
-                    'div',
-                    { style: { margin: '4px 0 8px' } },
-                    createElement(Button, {
-                        icon: 'controls-repeat',
-                        variant: 'tertiary',
-                        label: text('swapLanguagesButton', 'Swap source and target language'),
-                        showTooltip: true,
-                        disabled: !sourceLanguage || !targetLanguage,
-                        onClick: function () {
-                            if (!sourceLanguage || !targetLanguage) { return; }
-                            var nextSource = targetLanguage;
-                            var nextTarget = sourceLanguage;
-                            setSourceLanguage(nextSource);
-                            setTargetLanguage(resolveSelectionTargetLanguage(languages, nextSource, nextTarget));
-                        },
-                    })
-                ) : null,
-                availableTargetLanguages.length ? createElement(SelectControl, {
-                    label: text('targetLanguageLabel', 'Target language'),
-                    value: targetLanguage,
-                    onChange: function (nextTargetLanguage) {
+                    onTargetChange: function (nextTargetLanguage) {
                         setTargetLanguage(nextTargetLanguage);
                     },
-                    options: availableTargetLanguages.map(function (language) {
-                        return {
-                            label: language.name + ' (' + language.code + ')',
-                            value: language.code,
-                        };
-                    }),
-                }) : null,
+                    onSwap: function () {
+                        if (!sourceLanguage || !targetLanguage) { return; }
+                        var nextSource = targetLanguage;
+                        var nextTarget = sourceLanguage;
+                        setSourceLanguage(nextSource);
+                        setTargetLanguage(resolveSelectionTargetLanguage(languages, nextSource, nextTarget));
+                    },
+                }),
                 createElement(TextareaControl, {
                     label: text('additionalPromptLabel', 'Additional instructions (optional)'),
                     help: text('additionalPromptHelp', 'Supplements the site-wide translation instructions. Example: Use informal language.'),
@@ -1174,7 +1317,7 @@
                     'div',
                     { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' } },
                     !isTranslating ? createElement(Button, { variant: 'secondary', onClick: closeDialog }, text('cancelButton', 'Cancel')) : null,
-                    createElement(Button, { variant: 'primary', onClick: isTranslating ? handleCancelSelection : handleTranslateSelection, disabled: isTranslating ? false : (!sourceLanguage || !targetLanguage || !selectedText.trim()), isBusy: isTranslating }, isTranslating ? text('cancelTranslationButton', 'Cancel translation') : text('translateSelectionButton', 'Translate with SlyTranslate'))
+                    createElement(Button, { variant: 'primary', onClick: isTranslating ? handleCancelSelection : handleTranslateSelection, disabled: isTranslating ? false : (!sourceLanguage || !targetLanguage || !selectedText.trim()), isBusy: isTranslating }, isTranslating ? text('cancelTranslationButton', 'Cancel translation') : text('pickerStartButton', 'Start translation'))
                 )
             ) : null
         );
@@ -1355,57 +1498,40 @@
                 null,
                 createElement(PluginBlockSettingsMenuItem, {
                     icon: 'translation',
-                    label: text('translateSelectionButton', 'Translate (SlyTranslate)'),
+                    label: text('pickerTitle', 'Translate'),
                     onClick: openBlockTranslateDialog,
                 }),
                 isOpen && Modal ? createElement(
                     Modal,
                     {
-                        title: text('translateSelectionTitle', 'Translate selected text with SlyTranslate'),
+                        title: text('pickerTitle', 'Translate'),
                         onRequestClose: closeBlockDialog,
                         shouldCloseOnClickOutside: !isTranslating,
                         shouldCloseOnEsc: !isTranslating,
                     },
                     errorMessage ? createElement(Notice, { status: 'error', isDismissible: true, onRemove: function () { setErrorMessage(''); } }, errorMessage) : null,
-                    languages.length ? createElement(SelectControl, {
-                        label: text('sourceLanguageLabel', 'Source language'),
-                        value: sourceLanguage,
-                        onChange: function (nextSourceLanguage) {
+                    renderLanguagePairControls({
+                        languages: languages,
+                        targetLanguages: availableTargetLanguages,
+                        sourceId: 'slytranslate-block-source-language',
+                        targetId: 'slytranslate-block-target-language',
+                        sourceLanguage: sourceLanguage,
+                        targetLanguage: targetLanguage,
+                        onSourceChange: function (nextSourceLanguage) {
                             setSourceLanguage(nextSourceLanguage);
                             setTargetLanguage(function (currentTargetLanguage) {
                                 return resolveSelectionTargetLanguage(languages, nextSourceLanguage, currentTargetLanguage);
                             });
                         },
-                        options: languages.map(function (language) {
-                            return { label: language.name + ' (' + language.code + ')', value: language.code };
-                        }),
-                    }) : null,
-                    (languages.length && availableTargetLanguages.length) ? createElement(
-                        'div',
-                        { style: { margin: '4px 0 8px' } },
-                        createElement(Button, {
-                            icon: 'controls-repeat',
-                            variant: 'tertiary',
-                            label: text('swapLanguagesButton', 'Swap source and target language'),
-                            showTooltip: true,
-                            disabled: !sourceLanguage || !targetLanguage,
-                            onClick: function () {
-                                if (!sourceLanguage || !targetLanguage) { return; }
-                                var nextSource = targetLanguage;
-                                var nextTarget = sourceLanguage;
-                                setSourceLanguage(nextSource);
-                                setTargetLanguage(resolveSelectionTargetLanguage(languages, nextSource, nextTarget));
-                            },
-                        })
-                    ) : null,
-                    availableTargetLanguages.length ? createElement(SelectControl, {
-                        label: text('targetLanguageLabel', 'Target language'),
-                        value: targetLanguage,
-                        onChange: function (nextTargetLanguage) { setTargetLanguage(nextTargetLanguage); },
-                        options: availableTargetLanguages.map(function (language) {
-                            return { label: language.name + ' (' + language.code + ')', value: language.code };
-                        }),
-                    }) : null,
+                        onTargetChange: function (nextTargetLanguage) { setTargetLanguage(nextTargetLanguage); },
+                        onSwap: function () {
+                            if (!sourceLanguage || !targetLanguage) { return; }
+                            var nextSource = targetLanguage;
+                            var nextTarget = sourceLanguage;
+                            setSourceLanguage(nextSource);
+                            setTargetLanguage(resolveSelectionTargetLanguage(languages, nextSource, nextTarget));
+                        },
+                    }),
                     createElement(TextareaControl, {
                         label: text('additionalPromptLabel', 'Additional instructions (optional)'),
                         help: text('additionalPromptHelp', 'Supplements the site-wide translation instructions. Example: Use informal language.'),
@@ -1422,7 +1548,7 @@
                             onClick: isTranslating ? handleCancelBlockTranslation : handleTranslateBlocks,
                             disabled: isTranslating ? false : (!sourceLanguage || !targetLanguage),
                             isBusy: isTranslating,
-                        }, isTranslating ? text('cancelTranslationButton', 'Cancel translation') : text('translateButton', 'Translate now'))
+                        }, isTranslating ? text('cancelTranslationButton', 'Cancel translation') : text('pickerStartButton', 'Start translation'))
                     )
                 ) : null
             );
@@ -1435,7 +1561,7 @@
 
     if (selectionFeatureAvailable) {
         registerFormatType('ai-translate/translate-selection', {
-            title: text('translateSelectionButton', 'Translate with SlyTranslate'),
+            title: text('pickerTitle', 'Translate'),
             tagName: 'span',
             className: 'slytranslate-selection-action',
             edit: TranslateSelectionControl,

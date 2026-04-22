@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
-use Brain\Monkey\Functions;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -30,8 +29,8 @@ class MetaKeyFilteringTest extends TestCase {
 
 	#[DataProvider( 'provideInternalMetaKeys' )]
 	public function test_internal_meta_keys_are_excluded( string $key ): void {
-		Functions\when( 'get_post_meta' )->justReturn( [ $key => [ 'some_value' ] ] );
-		Functions\when( 'maybe_unserialize' )->alias( fn( $v ) => $v );
+		$this->stubWpFunctionReturn( 'get_post_meta', [ $key => [ 'some_value' ] ] );
+		$this->stubWpFunction( 'maybe_unserialize', fn( $v ) => $v );
 
 		$result = $this->invokeStatic( AI_Translate::class, 'filter_translate_post_meta', [ [ $key => 'some_value' ] ] );
 		$this->assertArrayNotHasKey( $key, $result );

@@ -7,13 +7,15 @@ SlyTranslate exposes translation workflows as reusable WordPress abilities, so t
 ## Highlights
 
 - Translate arbitrary text with `ai-translate/translate-text`
+- Translate serialized Gutenberg blocks with `ai-translate/translate-blocks`
 - Translate posts, pages, and custom post types with `ai-translate/translate-content`
 - Bulk-translate multiple entries with `ai-translate/translate-content-bulk`
-- Inspect translation status and untranslated content
+- Inspect translation status, untranslated content, and live translation progress
 - Translate SEO title and description fields for major SEO plugins, including legacy Genesis meta on mixed or migrated sites
 - Use a block-editor sidebar for content translation workflows, including a model selector
 - Real-time translation progress bar with phase and chunk tracking in the editor sidebar
 - Translate selected text inline in the editor, even without a translation plugin
+- Cancel running translations, refresh the available model list, and persist per-user additional instructions across editor flows
 - Connect directly to any OpenAI-compatible endpoint for models that need `chat_template_kwargs` (e.g. TranslateGemma)
 - Expose abilities over REST and MCP-friendly discovery
 
@@ -31,20 +33,25 @@ It uses the WordPress AI Client for model access, so connector setup happens cen
 | `ai-translate/get-translation-status` | Show which translations exist for a content item |
 | `ai-translate/get-untranslated` | Find posts, pages, or CPT entries still missing a target translation |
 | `ai-translate/translate-text` | Translate arbitrary text between languages; accepts optional `model_slug` per request |
+| `ai-translate/translate-blocks` | Translate serialized Gutenberg block content while preserving block markup; accepts optional `additional_prompt` and `model_slug` per request |
 | `ai-translate/translate-content` | Create or update a translated content item; accepts optional `model_slug` per request |
 | `ai-translate/translate-content-bulk` | Bulk-translate multiple content items; accepts optional `model_slug` per request |
-| `ai-translate/configure` | Read or update plugin settings (prompt, model, direct API URL, context window, SEO meta keys, direct API diagnostics) |
+| `ai-translate/get-progress` | Return the current progress state for a running content translation job |
+| `ai-translate/cancel-translation` | Signal a running translation to stop and clear its progress state |
+| `ai-translate/get-available-models` | List models exposed by the configured AI connectors; can bypass the cached model list |
+| `ai-translate/save-additional-prompt` | Persist the current user's Additional instructions value for reuse in editor and list-table flows |
+| `ai-translate/configure` | Read or update plugin settings (prompt template, prompt add-on, model, direct API URL, optional force-direct-API mode, context window, SEO meta keys, and direct API diagnostics) |
 
 ## Editor Experience
 
 SlyTranslate adds two editor-facing workflows:
 
 - An AI Translate document panel for content translation when a translation plugin is active, including a live progress bar and a Translate now / Cancel translation toggle during active jobs
-- A Translate with SlyTranslate action for highlighted text inside supported rich-text fields
+- Inline selected-text and block translation dialogs that reuse the sidebar's active model selection and the same side-by-side source/target picker layout as the post/page translation dialog, including a vertically flush swap control
 
-Both workflows include a model dropdown that lists all models registered with the WordPress AI Client. The selection persists in `localStorage` and defaults to the site-wide connector model.
+The sidebar includes a model dropdown that lists all models registered with the WordPress AI Client. The selection persists across the editor and is reused by the inline and block translation dialogs without showing a second model picker there.
 
-Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. If the running dialog is dismissed or the user leaves the current wp-admin screen mid-translation, the job is handed off automatically to that background bar so progress and the eventually created draft stay visible.
+Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. The dialog loads the same live model list as the editor sidebar and pre-fills Additional instructions from the saved per-user preference. If the running dialog is dismissed or the user leaves the current wp-admin screen mid-translation, the job is handed off automatically to that background bar so progress and the eventually created draft stay visible.
 
 During full-content translations, the sidebar polls a lightweight REST endpoint and shows the current phase plus chunk progress for long content, so editors can see whether the plugin is translating the title, content, excerpt, metadata, or saving the translated post.
 
@@ -56,20 +63,19 @@ SlyTranslate uses the WordPress AI Client via `wp_ai_client_prompt()`. That mean
 
 ### Recommended for Local LLMs
 
-For local models or self-hosted inference servers, use **Ultimate AI Connector for Compatible Endpoints**:
+For local llama.cpp-based models, use **AI Provider for llama.cpp**.
 
-https://wordpress.org/plugins/ultimate-ai-connector-compatible-endpoints/
+For other local or self-hosted OpenAI-compatible LLM endpoints, use **Ultimate AI Connector for Compatible Endpoints**.
 
-That connector is a good fit if you want to use:
+AI Provider for llama.cpp is a good fit if you want to use:
 
-- Ollama
-- LM Studio
-- LocalAI
-- vLLM
-- text-generation-webui
-- Other OpenAI-compatible `/v1/chat/completions` endpoints
+- llama.cpp
 
-Configure the endpoint once in Settings > Connectors and SlyTranslate can use the discovered models through the normal WordPress AI Client flow.
+Configure it once in Settings > Connectors and SlyTranslate can use the discovered llama.cpp models through the normal WordPress AI Client flow.
+
+Ultimate AI Connector for Compatible Endpoints is a good fit for endpoints such as Ollama, LM Studio, LocalAI, vLLM, text-generation-webui, and other compatible `/v1/chat/completions` servers.
+
+For other self-hosted OpenAI-compatible endpoints, you can also use SlyTranslate's optional `direct_api_url` setting.
 
 ### Direct API (for Advanced Models)
 
@@ -134,10 +140,10 @@ Supported SEO integrations include:
 
 1. Ensure WordPress 7.0+ and PHP 8.1+ are running.
 2. Install and activate an AI connector plugin and configure it in Settings > Connectors.
-3. For local LLMs, install "Ultimate AI Connector for Compatible Endpoints" and point it at Ollama, LM Studio, LocalAI, vLLM, or another compatible endpoint.
+3. For local llama.cpp-based LLMs, install "AI Provider for llama.cpp" and connect it in Settings > Connectors. For other OpenAI-compatible local/self-hosted endpoints, install "Ultimate AI Connector for Compatible Endpoints".
 4. Optional for translated content workflows across posts, pages, and custom post types: install and activate Polylang.
 5. Optional for MCP discovery: install and activate the WordPress MCP Adapter.
-6. Copy the `slytranslate` directory into `/wp-content/plugins/`.
+6. Copy the `slytranslate` directory into `/wp-content/plugins/`. The plugin currently still needs to be installed manually until the WordPress.org plugin directory listing is approved (pending).
 7. Activate SlyTranslate - AI Translation Abilities.
 
 ## REST and MCP
@@ -162,7 +168,7 @@ All abilities are exposed through the WordPress Abilities API and can be invoked
 
 Yes, for text translation.
 
-`ai-translate/translate-text` works without a translation plugin, and the inline selected-text editor action is available for that workflow. Content translation workflows such as `translate-content` and `translate-content-bulk` still require a translation plugin, currently Polylang.
+`ai-translate/translate-text` and `ai-translate/translate-blocks` work without a translation plugin, and the inline selected-text editor action is available for that workflow. Content translation workflows such as `translate-content`, `translate-content-bulk`, `get-languages`, `get-translation-status`, and `get-untranslated` still require a translation plugin, currently Polylang.
 
 ### Can I translate pages or custom post types?
 
@@ -173,6 +179,8 @@ Yes.
 ### What happens if I close the post list translation dialog or leave the page mid-translation?
 
 The running translation is handed off automatically to the same global background-task bar that the explicit `Continue in background` action uses. That keeps progress visible across wp-admin screens and avoids the confusing case where the translated draft appears a few seconds later without any visible running task.
+
+The same dialog also reuses your saved Additional instructions and the current model selection from the editor sidebar, so the list-table flow starts with the same translation defaults.
 
 ### Where do I configure prompts?
 

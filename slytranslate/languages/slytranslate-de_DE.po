@@ -21,6 +21,9 @@ msgstr "Übersetze diesen Beitrag, diese Seite oder diesen benutzerdefinierten I
 msgid "Source language"
 msgstr "Ausgangssprache"
 
+msgid "The source language is managed by your language plugin."
+msgstr "Die Ausgangssprache wird von deinem Sprachplugin gesteuert."
+
 msgid "Content type"
 msgstr "Inhaltstyp"
 

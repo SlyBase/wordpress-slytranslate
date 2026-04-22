@@ -7,7 +7,6 @@ namespace AI_Translate\Tests\Unit;
 use AI_Translate\AI_Translate;
 use AI_Translate\DirectApiTranslationClient;
 use AI_Translate\TranslationRuntime;
-use Brain\Monkey\Functions;
 
 class TranslationTransportGuardrailTest extends TestCase {
 
@@ -28,7 +27,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			'direct_api_url' => '',
 		) );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
@@ -57,7 +56,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			'direct_api_url' => 'http://llama.local:8080',
 		) );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
@@ -66,13 +65,13 @@ class TranslationTransportGuardrailTest extends TestCase {
 				return $default;
 			}
 		);
-		Functions\when( 'update_option' )->alias(
+		$this->stubWpFunction( 'update_option',
 			static function ( $option, $value, $autoload = null ) use ( &$updated_options ) {
 				$updated_options[ $option ] = $value;
 				return true;
 			}
 		);
-		Functions\when( 'wp_remote_post' )->justReturn( new \WP_Error( 'http_failed', 'boom' ) );
+		$this->stubWpFunctionReturn( 'wp_remote_post', new \WP_Error( 'http_failed', 'boom' ) );
 
 		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
@@ -95,7 +94,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '1';
@@ -104,8 +103,8 @@ class TranslationTransportGuardrailTest extends TestCase {
 				return $default;
 			}
 		);
-		Functions\when( 'wp_remote_post' )->justReturn( new \WP_Error( 'http_failed', 'boom' ) );
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunctionReturn( 'wp_remote_post', new \WP_Error( 'http_failed', 'boom' ) );
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function () {
 				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached for TranslateGemma direct API failures.' );
 			}
@@ -189,7 +188,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			'direct_api_url' => 'http://llama.local:8080',
 		) );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
@@ -199,11 +198,11 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 		// Non-connection failure (4xx) returns null → falls through to wp_ai_client.
-		Functions\when( 'wp_remote_post' )->justReturn( array(
+		$this->stubWpFunctionReturn( 'wp_remote_post', array(
 			'response' => array( 'code' => 502 ),
 			'body'     => '',
 		) );
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function ( string $text ) {
 				return new class( $text ) {
 					private string $text;
@@ -253,7 +252,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			'direct_api_url' => 'http://llama.local:8080',
 		) );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
@@ -262,8 +261,8 @@ class TranslationTransportGuardrailTest extends TestCase {
 				return $default;
 			}
 		);
-		Functions\when( 'wp_remote_post' )->justReturn( new \WP_Error( 'http_failed', 'Connection refused' ) );
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunctionReturn( 'wp_remote_post', new \WP_Error( 'http_failed', 'Connection refused' ) );
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function () {
 				return new class {
 					public function using_system_instruction( string $prompt ) { return $this; }
@@ -293,7 +292,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			'direct_api_url' => 'http://llama.local:8080',
 		) );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
@@ -305,12 +304,12 @@ class TranslationTransportGuardrailTest extends TestCase {
 				return $default;
 			}
 		);
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function () {
 				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached when direct API retries succeed.' );
 			}
 		);
-		Functions\when( 'wp_remote_post' )->alias(
+		$this->stubWpFunction( 'wp_remote_post',
 			static function ( string $endpoint, array $args ) use ( &$call_count, &$calls ) {
 				++$call_count;
 				$decoded_body = json_decode( $args['body'] ?? '', true );
@@ -358,7 +357,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '1';
@@ -367,12 +366,12 @@ class TranslationTransportGuardrailTest extends TestCase {
 				return $default;
 			}
 		);
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function () {
 				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached after invalid TranslateGemma direct API output.' );
 			}
 		);
-		Functions\when( 'wp_remote_post' )->alias(
+		$this->stubWpFunction( 'wp_remote_post',
 			static function (): array {
 				return array(
 					'response' => array( 'code' => 200 ),
@@ -402,7 +401,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 	}
 
 	private function mockSuccessfulDirectApiResponse( array &$captured_body, string $translated_text = 'Hallo Welt' ): void {
-		Functions\when( 'wp_remote_post' )->alias(
+		$this->stubWpFunction( 'wp_remote_post',
 			static function ( string $endpoint, array $args ) use ( &$captured_body, $translated_text ) {
 				$decoded_body  = json_decode( $args['body'] ?? '', true );
 				$captured_body = is_array( $decoded_body ) ? $decoded_body : array();

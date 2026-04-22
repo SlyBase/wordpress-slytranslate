@@ -7,7 +7,6 @@ namespace AI_Translate\Tests\Unit;
 use AI_Translate\AI_Translate;
 use AI_Translate\TranslationRuntime;
 use AI_Translate\TranslationValidator;
-use Brain\Monkey\Functions;
 
 class TranslationOutputValidationTest extends TestCase {
 
@@ -210,7 +209,7 @@ class TranslationOutputValidationTest extends TestCase {
 				'direct_api_url' => '',
 			) );
 
-			Functions\when( 'get_option' )->alias(
+			$this->stubWpFunction( 'get_option',
 				static function ( $option, $default = false ) {
 					if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 						return '0';
@@ -219,7 +218,7 @@ class TranslationOutputValidationTest extends TestCase {
 				}
 			);
 
-			Functions\when( 'wp_ai_client_prompt' )->alias(
+			$this->stubWpFunction( 'wp_ai_client_prompt',
 				static function ( string $text ) use ( $model_output ) {
 					return new class( $model_output ) {
 						private string $reply;
@@ -252,7 +251,7 @@ class TranslationOutputValidationTest extends TestCase {
 			'direct_api_url' => '',
 		) );
 
-		Functions\when( 'get_option' )->alias(
+		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
@@ -261,7 +260,7 @@ class TranslationOutputValidationTest extends TestCase {
 				return $default;
 			}
 		);
-		Functions\when( 'wp_ai_client_prompt' )->alias(
+		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function ( string $text ) use ( &$call_count, &$prompts ) {
 				return new class( $call_count, $prompts ) {
 					private int $call_count;

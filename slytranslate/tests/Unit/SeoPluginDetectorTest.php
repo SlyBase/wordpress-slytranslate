@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\SeoPluginDetector;
-use Brain\Monkey\Functions;
 
 /**
  * Tests for SeoPluginDetector plugin config and runtime resolution helpers.
@@ -15,7 +14,7 @@ class SeoPluginDetectorTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 
-		Functions\when( 'apply_filters' )->alias(
+		$this->stubWpFunction( 'apply_filters',
 			static function ( string $tag, $value, ...$args ) {
 				return $value;
 			}
@@ -43,7 +42,7 @@ class SeoPluginDetectorTest extends TestCase {
 	}
 
 	public function test_filtered_plugin_config_applies_meta_filters(): void {
-		Functions\when( 'apply_filters' )->alias(
+		$this->stubWpFunction( 'apply_filters',
 			static function ( string $tag, $value, ...$args ) {
 				if ( 'ai_translate_seo_meta_translate' === $tag && 'genesis' === ( $args[0] ?? '' ) ) {
 					return array_merge( $value, array( '_genesis_custom_title' ) );

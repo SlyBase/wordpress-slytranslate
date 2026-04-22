@@ -5,24 +5,31 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use PHPUnit\Framework\TestCase as PHPUnitTestCase;
-use Brain\Monkey;
 
 /**
  * Base test case for all AI_Translate unit tests.
  *
- * Provides Brain Monkey setup/teardown and a helper for invoking private
- * static methods via reflection.
+ * Provides lightweight WordPress function stubs and a helper for invoking
+ * private static methods via reflection.
  */
 abstract class TestCase extends PHPUnitTestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
-		Monkey\setUp();
+		\slytranslate_test_reset_function_overrides();
 	}
 
 	protected function tearDown(): void {
-		Monkey\tearDown();
+		\slytranslate_test_reset_function_overrides();
 		parent::tearDown();
+	}
+
+	protected function stubWpFunction( string $function_name, callable $callback ): void {
+		\slytranslate_test_set_function_behavior( $function_name, $callback );
+	}
+
+	protected function stubWpFunctionReturn( string $function_name, mixed $value ): void {
+		\slytranslate_test_set_function_return( $function_name, $value );
 	}
 
 	/**

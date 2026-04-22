@@ -6,19 +6,11 @@ declare(strict_types=1);
 define( 'ABSPATH', dirname( __DIR__ ) . '/' );
 define( 'MINUTE_IN_SECONDS', 60 );
 
-// ---------------------------------------------------------------------------
-// Load Patchwork FIRST — it must register its stream wrapper before any
-// user-land PHP files (stubs, plugin files) are included so it can intercept
-// and redefine those functions per-test via Brain Monkey.
-// ---------------------------------------------------------------------------
-require_once __DIR__ . '/../vendor/antecedent/patchwork/Patchwork.php';
-
-// Load Composer autoloader (Brain Monkey, PHPUnit, etc.).
+// Load Composer autoloader (PHPUnit, etc.).
 require_once __DIR__ . '/../vendor/autoload.php';
 
 // ---------------------------------------------------------------------------
-// WP_Error stub class (defined here, not in a separate file, because
-// Patchwork does not need to redefine classes — only functions).
+// WP_Error stub class (defined here, not in a separate file).
 // ---------------------------------------------------------------------------
 if ( ! class_exists( 'WP_Error' ) ) {
 	class WP_Error {
@@ -121,8 +113,7 @@ if ( ! class_exists( 'WP_REST_Request' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// WordPress function stubs — required AFTER autoload so Patchwork can patch
-// them per test via Brain Monkey.
+// WordPress function stubs with lightweight per-test overrides.
 // ---------------------------------------------------------------------------
 require_once __DIR__ . '/stubs/wp-stubs.php';
 

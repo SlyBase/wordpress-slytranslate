@@ -8,7 +8,6 @@ zip_entries="$(unzip -Z1 "$zip_file")"
 unzip -tq "$zip_file"
 
 blacklist_patterns=(
-	'^slytranslate/vendor/'
 	'^slytranslate/tests/'
 	'^slytranslate/composer\.json$'
 	'^slytranslate/composer\.lock$'
@@ -28,6 +27,7 @@ done
 required_files=(
 	'slytranslate/ai-translate.php'
 	'slytranslate/readme.txt'
+	'slytranslate/vendor/autoload.php'
 )
 
 for required_file in "${required_files[@]}"; do

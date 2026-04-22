@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
  * and Plugin::EDITOR_SCRIPT instead of duplicating the strings.
  */
 final class Plugin {
-	public const VERSION        = '1.5.2';
+	public const VERSION        = '1.5.3';
 	public const REST_NAMESPACE = 'ai-translate/v1';
 	public const EDITOR_SCRIPT  = 'ai-translate-editor';
 }

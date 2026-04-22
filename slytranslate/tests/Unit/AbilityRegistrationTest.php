@@ -6,14 +6,13 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\AbilityRegistrar;
-use Brain\Monkey\Functions;
 
 class AbilityRegistrationTest extends TestCase {
 
 	public function test_register_ability_category_registers_expected_category_contract(): void {
 		$registered_categories = array();
 
-		Functions\when( 'wp_register_ability_category' )->alias(
+		$this->stubWpFunction( 'wp_register_ability_category',
 			static function ( string $slug, array $args ) use ( &$registered_categories ): void {
 				$registered_categories[] = array(
 					'slug' => $slug,
@@ -61,7 +60,7 @@ class AbilityRegistrationTest extends TestCase {
 	public function test_ability_permission_callbacks_follow_translation_and_admin_capabilities(): void {
 		$granted_capabilities = array();
 
-		Functions\when( 'current_user_can' )->alias(
+		$this->stubWpFunction( 'current_user_can',
 			static function ( string $capability, ...$args ) use ( &$granted_capabilities ): bool {
 				return in_array( $capability, $granted_capabilities, true );
 			}
@@ -147,7 +146,7 @@ class AbilityRegistrationTest extends TestCase {
 	private function capture_registered_abilities(): array {
 		$registered_abilities = array();
 
-		Functions\when( 'wp_register_ability' )->alias(
+		$this->stubWpFunction( 'wp_register_ability',
 			static function ( string $slug, array $args ) use ( &$registered_abilities ): void {
 				$registered_abilities[ $slug ] = $args;
 			}

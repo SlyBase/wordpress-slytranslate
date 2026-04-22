@@ -6,7 +6,6 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\TranslationQueryService;
-use Brain\Monkey\Functions;
 
 class TranslationStatusAccessTest extends TestCase {
 
@@ -19,13 +18,13 @@ class TranslationStatusAccessTest extends TestCase {
 			)
 		);
 
-		Functions\when( 'get_post' )->alias(
+		$this->stubWpFunction( 'get_post',
 			static function ( int $post_id ) use ( $translated_post ) {
 				return 42 === $post_id ? $translated_post : null;
 			}
 		);
-		Functions\when( 'current_user_can' )->justReturn( false );
-		Functions\when( 'get_edit_post_link' )->alias(
+		$this->stubWpFunctionReturn( 'current_user_can', false );
+		$this->stubWpFunction( 'get_edit_post_link',
 			static function (): string {
 				throw new \RuntimeException( 'get_edit_post_link must not be called without access.' );
 			}
@@ -50,17 +49,17 @@ class TranslationStatusAccessTest extends TestCase {
 			)
 		);
 
-		Functions\when( 'get_post' )->alias(
+		$this->stubWpFunction( 'get_post',
 			static function ( int $post_id ) use ( $translated_post ) {
 				return 42 === $post_id ? $translated_post : null;
 			}
 		);
-		Functions\when( 'current_user_can' )->alias(
+		$this->stubWpFunction( 'current_user_can',
 			static function ( string $capability ): bool {
 				return 'read_post' === $capability;
 			}
 		);
-		Functions\when( 'get_edit_post_link' )->justReturn( 'https://example.com/wp-admin/post.php?post=42&action=edit' );
+		$this->stubWpFunctionReturn( 'get_edit_post_link', 'https://example.com/wp-admin/post.php?post=42&action=edit' );
 
 		$result = $this->invokeStatic( TranslationQueryService::class, 'build_translation_status_entry', array( 'de', 42 ) );
 
