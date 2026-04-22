@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.5.3
+Stable tag: 1.5.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -45,7 +45,6 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. During active content translations, the panel shows a live progress bar with phase and chunk tracking, and the main action button toggles from **Translate now** to **Cancel translation**. The inline selected-text action and the block-translation dialog reuse that same model selection, show the source/target language pickers side by side with a swap button, and keep the picker columns visually flush at the top and bottom like the post/page translation flow.
 * Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. The dialog loads the same live model list as the editor sidebar and pre-fills **Additional instructions** from the saved per-user preference, so the list-table flow and editor panel stay in sync. If the running dialog is dismissed or the user leaves the admin page mid-translation, the job is handed off automatically to the background bar so progress and the eventually created draft remain visible instead of appearing unexpectedly later.
 * All abilities are exposed via the REST API (`/wp-abilities/v1/`) and marked public for MCP Adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`.
-* Polylang auto-translate hooks are preserved for backward compatibility — creating a new translation in Polylang still triggers automatic translation.
 * Plugin labels and descriptions are translation-ready and include a bundled German (`de_DE`) translation.
 
 **Requirements:**
@@ -135,6 +134,12 @@ The running translation is handed off automatically to the same global backgroun
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= 1.5.4 =
+* i18n: added missing translators comments for placeholder-based list-table status strings.
+* Security: legacy bulk-action admin notices now carry and verify a dedicated notice nonce before reading result counters.
+* Dev: replaced mt_rand() jitter with wp_rand(), documented intentional debug-only logging/time-limit calls for PHPCS, prefixed uninstall variables, and kept composer.json in the distributed plugin ZIP.
+* Cleanup: removed unreleased Polylang auto-translate legacy hooks and bridge code.
 
 = 1.5.3 =
 * i18n: added German translation for "The source language is managed by your language plugin." hint text.

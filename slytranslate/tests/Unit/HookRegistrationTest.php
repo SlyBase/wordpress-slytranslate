@@ -7,7 +7,6 @@ namespace AI_Translate\Tests\Unit;
 use AI_Translate\AI_Translate;
 use AI_Translate\AbilityRegistrar;
 use AI_Translate\EditorBootstrap;
-use AI_Translate\LegacyPolylangBridge;
 use AI_Translate\ListTableTranslation;
 use AI_Translate\Settings;
 
@@ -15,7 +14,6 @@ class HookRegistrationTest extends TestCase {
 
 	public function test_add_hooks_registers_expected_editor_and_ability_hooks(): void {
 		$registered_actions = array();
-		$registered_filters = array();
 
 		$this->stubWpFunction(
 			'add_action',
@@ -28,18 +26,6 @@ class HookRegistrationTest extends TestCase {
 				);
 			}
 		);
-		$this->stubWpFunction(
-			'add_filter',
-			static function ( string $hook, $callback, int $priority = 10, int $accepted_args = 1 ) use ( &$registered_filters ): void {
-				$registered_filters[] = array(
-					'hook'          => $hook,
-					'callback'      => $callback,
-					'priority'      => $priority,
-					'accepted_args' => $accepted_args,
-				);
-			}
-		);
-		$this->stubWpFunctionReturn( 'get_option', '1' );
 
 		AI_Translate::add_hooks();
 
@@ -102,58 +88,7 @@ class HookRegistrationTest extends TestCase {
 			),
 			$registered_actions
 		);
-		$this->assertSame(
-			array(
-				array(
-					'hook'          => 'default_title',
-					'callback'      => array( LegacyPolylangBridge::class, 'default_title' ),
-					'priority'      => 10,
-					'accepted_args' => 2,
-				),
-				array(
-					'hook'          => 'default_content',
-					'callback'      => array( LegacyPolylangBridge::class, 'default_content' ),
-					'priority'      => 10,
-					'accepted_args' => 2,
-				),
-				array(
-					'hook'          => 'default_excerpt',
-					'callback'      => array( LegacyPolylangBridge::class, 'default_excerpt' ),
-					'priority'      => 10,
-					'accepted_args' => 2,
-				),
-				array(
-					'hook'          => 'pll_translate_post_meta',
-					'callback'      => array( LegacyPolylangBridge::class, 'pll_translate_post_meta' ),
-					'priority'      => 10,
-					'accepted_args' => 3,
-				),
-			),
-			$registered_filters
-		);
 
 		$this->assertNotContains( 'plugins_loaded', array_column( $registered_actions, 'hook' ) );
-		$this->assertNotContains( 'the_content', array_column( $registered_filters, 'hook' ) );
-	}
-
-	public function test_polylang_hooks_not_registered_when_feature_disabled(): void {
-		$registered_filters = array();
-
-		$this->stubWpFunction( 'add_action', static function () {} );
-		$this->stubWpFunction(
-			'add_filter',
-			static function ( string $hook, $callback, int $priority = 10, int $accepted_args = 1 ) use ( &$registered_filters ): void {
-				$registered_filters[] = array( 'hook' => $hook, 'callback' => $callback );
-			}
-		);
-		$this->stubWpFunctionReturn( 'get_option', '0' );
-
-		AI_Translate::add_hooks();
-
-		$filter_hooks = array_column( $registered_filters, 'hook' );
-		$this->assertNotContains( 'default_title', $filter_hooks );
-		$this->assertNotContains( 'default_content', $filter_hooks );
-		$this->assertNotContains( 'default_excerpt', $filter_hooks );
-		$this->assertNotContains( 'pll_translate_post_meta', $filter_hooks );
 	}
 }

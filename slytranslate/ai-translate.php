@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.5.3
+Version: 1.5.4
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -64,9 +64,6 @@ class AI_Translate {
 		add_action( 'rest_api_init', array( self::class, 'register_editor_rest_routes' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
-		if ( '1' === get_option( 'ai_translate_new_post', '0' ) ) {
-			LegacyPolylangBridge::register_hooks();
-		}
 		ListTableTranslation::add_hooks();
 	}
 
@@ -259,6 +256,7 @@ class AI_Translate {
 			ignore_user_abort( true );
 		}
 		if ( function_exists( 'set_time_limit' ) && ! ini_get( 'safe_mode' ) ) {
+			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- bounded runtime extension is required for long-running server-side translations.
 			set_time_limit( (int) apply_filters( 'slytranslate_max_request_seconds', 600 ) );
 		}
 		TranslationProgressTracker::clear_cancelled();
@@ -452,26 +450,6 @@ class AI_Translate {
 
 	public static function prompt( $to, $from = 'en', $additional_prompt = '' ) {
 		return TranslationRuntime::build_prompt( $to, $from, $additional_prompt );
-	}
-
-	/* ---------------------------------------------------------------
-	 * Polylang backward-compat filter callbacks
-	 * ------------------------------------------------------------- */
-
-	public static function default_title( $title, $post ) {
-		return LegacyPolylangBridge::default_title( $title, $post );
-	}
-
-	public static function default_content( $content, $post ) {
-		return LegacyPolylangBridge::default_content( $content, $post );
-	}
-
-	public static function default_excerpt( $excerpt, $post ) {
-		return LegacyPolylangBridge::default_excerpt( $excerpt, $post );
-	}
-
-	public static function pll_translate_post_meta( $value, $key, $lang ) {
-		return LegacyPolylangBridge::pll_translate_post_meta( $value, $key, $lang );
 	}
 
 	/* ---------------------------------------------------------------

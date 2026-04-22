@@ -3,7 +3,7 @@
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 // Remove all plugin options.
-$options = array(
+$slytranslate_options = array(
 	'ai_translate_prompt',
 	'ai_translate_prompt_addon',
 	'ai_translate_meta_translate',
@@ -19,8 +19,8 @@ $options = array(
 	'ai_translate_learned_context_windows',
 );
 
-foreach ( $options as $option ) {
-	delete_option( $option );
+foreach ( $slytranslate_options as $slytranslate_option ) {
+	delete_option( $slytranslate_option );
 }
 
 // Remove per-user additional-prompt preferences.

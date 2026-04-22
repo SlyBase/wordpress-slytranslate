@@ -9,7 +9,6 @@ unzip -tq "$zip_file"
 
 blacklist_patterns=(
 	'^slytranslate/tests/'
-	'^slytranslate/composer\.json$'
 	'^slytranslate/composer\.lock$'
 	'^slytranslate/phpunit\.xml\.dist$'
 	'^slytranslate/\.gitignore$'
@@ -26,6 +25,7 @@ done
 
 required_files=(
 	'slytranslate/ai-translate.php'
+	'slytranslate/composer.json'
 	'slytranslate/readme.txt'
 	'slytranslate/vendor/autoload.php'
 )

@@ -1074,7 +1074,7 @@ class TranslationRuntime {
 
 		// Add a small jitter so multiple parallel requests do not all wake
 		// up in the same millisecond and re-trigger the limit in lockstep.
-		$seconds += ( mt_rand( 0, 500 ) / 1000.0 );
+		$seconds += ( wp_rand( 0, 500 ) / 1000.0 );
 
 		$seconds = max( (float) self::RATE_LIMIT_MIN_SLEEP_SEC, $seconds );
 		$seconds = min( (float) self::RATE_LIMIT_MAX_SLEEP_SEC, $seconds );

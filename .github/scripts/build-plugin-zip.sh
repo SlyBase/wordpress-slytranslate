@@ -35,7 +35,7 @@ composer install \
 	--prefer-dist \
 	--working-dir="$staging_root/slytranslate"
 
-rm -f "$staging_root/slytranslate/composer.json" "$staging_root/slytranslate/composer.lock"
+rm -f "$staging_root/slytranslate/composer.lock"
 
 (
 	cd "$staging_root"

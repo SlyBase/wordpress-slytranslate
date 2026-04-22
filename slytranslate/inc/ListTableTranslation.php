@@ -194,6 +194,7 @@ class ListTableTranslation {
 				'ai_translate_bulk_ok'      => $ok,
 				'ai_translate_bulk_skipped' => $skipped,
 				'ai_translate_bulk_errors'  => $errors,
+				'ai_translate_notice_nonce' => wp_create_nonce( 'ai_translate_bulk_notice' ),
 			),
 			$redirect_url
 		);
@@ -271,6 +272,12 @@ class ListTableTranslation {
 			return;
 		}
 
+		$notice_nonce = sanitize_text_field( wp_unslash( $_GET['ai_translate_notice_nonce'] ?? '' ) );
+		if ( '' === $notice_nonce || ! wp_verify_nonce( $notice_nonce, 'ai_translate_bulk_notice' ) ) {
+			// phpcs:enable WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+
 		$bulk_skipped = absint( $_GET['ai_translate_bulk_skipped'] ?? 0 );
 		$bulk_errors  = absint( $_GET['ai_translate_bulk_errors']  ?? 0 );
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
@@ -321,11 +328,13 @@ class ListTableTranslation {
 
 		$strings = array(
 			'translating'      => esc_html__( 'Translating...', 'slytranslate' ),
+			/* translators: %s: target language name */
 			'translatingTo'    => esc_html__( 'Translating to %s...', 'slytranslate' ),
 			'cancel'           => esc_html__( 'Cancel translation', 'slytranslate' ),
 			'background'       => esc_html__( 'Continue in background', 'slytranslate' ),
 			'close'            => esc_html__( 'Close', 'slytranslate' ),
 			'success'          => esc_html__( 'Translation completed successfully.', 'slytranslate' ),
+			/* translators: %s: error message */
 			'error'            => esc_html__( 'Translation failed: %s', 'slytranslate' ),
 			'cancelled'        => esc_html__( 'Translation cancelled.', 'slytranslate' ),
 			'backgroundNotice' => esc_html__( 'Translation continues in the background. You can navigate away.', 'slytranslate' ),
@@ -338,6 +347,7 @@ class ListTableTranslation {
 			'done'             => esc_html__( 'Done', 'slytranslate' ),
 			'failed'           => esc_html__( 'Failed', 'slytranslate' ),
 			'pickerTitle'      => esc_html__( 'Translate', 'slytranslate' ),
+			/* translators: %d: number of selected items */
 			'pickerTitleBulk'  => esc_html__( 'Translate %d items', 'slytranslate' ),
 			'pickerModelLabel' => esc_html__( 'AI model', 'slytranslate' ),
 			'pickerSourceLabel' => esc_html__( 'Source language', 'slytranslate' ),
@@ -352,7 +362,9 @@ class ListTableTranslation {
 			'pickerNoModels'   => esc_html__( 'No AI models are available. Configure a connector under Settings → Connectors first.', 'slytranslate' ),
 			'pickerAutoOption' => esc_html__( 'Connector default', 'slytranslate' ),
 			'pickerNoSelection' => esc_html__( 'Please select at least one item before translating.', 'slytranslate' ),
+			/* translators: 1: current item number, 2: total item count */
 			'bulkProgress'     => esc_html__( 'Translating item %1$d of %2$d...', 'slytranslate' ),
+			/* translators: 1: translated item count, 2: skipped item count, 3: failed item count */
 			'bulkDone'         => esc_html__( 'Bulk translation complete: %1$d translated, %2$d skipped, %3$d failed.', 'slytranslate' ),
 		);
 
@@ -1063,6 +1075,7 @@ class ListTableTranslation {
 		$rest_nonce = wp_create_nonce( 'wp_rest' );
 
 		$strings = array(
+			/* translators: %s: target language name */
 			'translatingTo'   => esc_html__( 'Translating to %s...', 'slytranslate' ),
 			'cancel'          => esc_html__( 'Cancel translation', 'slytranslate' ),
 			'success'         => esc_html__( 'Translation completed successfully.', 'slytranslate' ),

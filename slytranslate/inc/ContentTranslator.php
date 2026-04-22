@@ -309,11 +309,10 @@ class ContentTranslator {
 			) );
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				$preview = mb_substr( preg_replace( '/\s+/', ' ', $single_serialized ) ?? '', 0, 200 );
-				error_log( sprintf(
-					'[SlyTranslate] keeping block in source language after validation failure (%s): blockName=%s preview=%s',
-					$reason,
-					$block['blockName'] ?? '(unknown)',
-					$preview
+				TimingLogger::log( 'content_block_kept_in_source_debug', array(
+					'reason'     => $reason,
+					'block_name' => $block['blockName'] ?? '(unknown)',
+					'preview'    => $preview,
 				) );
 			}
 			return $single_serialized;
@@ -527,10 +526,16 @@ class ContentTranslator {
 						if ( ! self::has_inline_formatting_loss( $inner_html, $retry_reconstructed ) ) {
 							$translated_inner = $retry_reconstructed;
 						} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( '[SlyTranslate] inline formatting still lost after strict retry; keeping best-effort translation. preview=' . mb_substr( preg_replace( '/\s+/', ' ', $translated_inner ) ?? '', 0, 200 ) );
+							TimingLogger::log( 'inline_formatting_loss_debug', array(
+								'context' => 'single_wrapper_strict_retry_kept_best_effort',
+								'preview' => mb_substr( preg_replace( '/\s+/', ' ', $translated_inner ) ?? '', 0, 200 ),
+							) );
 						}
 					} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( '[SlyTranslate] inline formatting strict retry failed; keeping best-effort translation. preview=' . mb_substr( preg_replace( '/\s+/', ' ', $translated_inner ) ?? '', 0, 200 ) );
+						TimingLogger::log( 'inline_formatting_loss_debug', array(
+							'context' => 'single_wrapper_strict_retry_failed',
+							'preview' => mb_substr( preg_replace( '/\s+/', ' ', $translated_inner ) ?? '', 0, 200 ),
+						) );
 					}
 				}
 
@@ -559,7 +564,10 @@ class ContentTranslator {
 				) {
 					$translated_inner = $retry_inline;
 				} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[SlyTranslate] inline formatting still lost after strict retry; keeping best-effort translation. preview=' . mb_substr( preg_replace( '/\s+/', ' ', (string) $translated_inner ) ?? '', 0, 200 ) );
+					TimingLogger::log( 'inline_formatting_loss_debug', array(
+						'context' => 'inner_html_strict_retry_kept_best_effort',
+						'preview' => mb_substr( preg_replace( '/\s+/', ' ', (string) $translated_inner ) ?? '', 0, 200 ),
+					) );
 				}
 			}
 

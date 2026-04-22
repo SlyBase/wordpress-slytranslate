@@ -135,15 +135,13 @@ class TranslationProgressTracker {
 		);
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( sprintf(
-				'[SlyTranslate progress] post=%d phase=%s chunk=%d/%d percent=%d%% units=%d/%d',
-				$post_id,
-				$phase,
-				$current_chunk,
-				$total_chunks,
-				self::calculate_percent( $phase ),
-				is_array( self::$context ) ? absint( self::$context['completed_units'] ?? 0 ) : 0,
-				is_array( self::$context ) ? absint( self::$context['total_units'] ?? 0 ) : 0
+			TimingLogger::log( 'progress', array(
+				'post'            => $post_id,
+				'phase'           => $phase,
+				'chunk'           => $current_chunk . '/' . $total_chunks,
+				'percent'         => self::calculate_percent( $phase ),
+				'completed_units' => is_array( self::$context ) ? absint( self::$context['completed_units'] ?? 0 ) : 0,
+				'total_units'     => is_array( self::$context ) ? absint( self::$context['total_units'] ?? 0 ) : 0,
 			) );
 		}
 	}

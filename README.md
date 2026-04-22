@@ -126,7 +126,6 @@ Supported SEO integrations include:
 - Block content is parsed before translation: code blocks are skipped and consecutive translatable blocks are batched together for efficiency
 - Exposes abilities over REST at `/wp-abilities/v1/`
 - Marks abilities as public for MCP adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`
-- Keeps Polylang auto-translate hooks for backward compatibility
 
 ## Requirements
 
