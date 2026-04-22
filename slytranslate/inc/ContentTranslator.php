@@ -455,8 +455,8 @@ class ContentTranslator {
 		// "translate, do not expand" hint the validator's length_drift check
 		// then kills the call, burning two extra AI calls and ultimately
 		// leaves the block in the source language.
-		$plain_text_hint  = 'The input is a short text snippet from a single Gutenberg block. Translate it 1:1 and return ONLY the translated text — no explanations, no commentary, no extra paragraphs. Keep the output length roughly proportional to the input.';
-		$block_inner_hint = 'The input is the inner content of a single Gutenberg block. Translate only the visible text, preserve ALL HTML tags verbatim (including inline tags like <em>, <strong>, <code>, <a>, <kbd>), and keep the output length roughly proportional to the input. Return ONLY the translated HTML — no explanations, commentary, or extra paragraphs.';
+		$plain_text_hint  = 'The input is a short text snippet from a single Gutenberg block. Translate it 1:1 and return ONLY the translated text — no explanations, no commentary, no extra paragraphs. Preserve source symbols and math notation; do not rewrite Unicode symbols as LaTeX or ASCII. Keep the output length roughly proportional to the input.';
+		$block_inner_hint = 'The input is the inner content of a single Gutenberg block. Translate only the visible text, preserve ALL HTML tags verbatim (including inline tags like <em>, <strong>, <code>, <a>, <kbd>), preserve source symbols and math notation, and keep the output length roughly proportional to the input. Return ONLY the translated HTML — no explanations, commentary, or extra paragraphs.';
 		$plain_text_prompt  = trim( $additional_prompt . "\n\n" . $plain_text_hint );
 		$block_inner_prompt = trim( $additional_prompt . "\n\n" . $block_inner_hint );
 

@@ -585,6 +585,7 @@ class TranslationRuntime {
 		int $validation_attempt
 	): mixed {
 		$translated_text  = self::unwrap_pseudo_tag_translation( $source_text, $translated_text );
+		$translated_text  = TranslationValidator::normalize_symbol_notation( $source_text, $translated_text );
 		$validation_error = TranslationValidator::validate( $source_text, $translated_text );
 		if ( is_wp_error( $validation_error ) ) {
 			self::record_validation_failure_diagnostics( $validation_error );
@@ -1092,7 +1093,7 @@ class TranslationRuntime {
 	}
 
 	private static function build_retry_prompt( string $prompt ): string {
-		return $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, and code fences exactly. Do not add explanations, bullet lists, markdown headings, or commentary. The output length MUST be approximately the same as the input length; do not append extra paragraphs.";
+		return $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, code fences, and source symbols exactly. Do not rewrite Unicode symbols or math notation as LaTeX or ASCII. Do not add explanations, bullet lists, markdown headings, or commentary. The output length MUST be approximately the same as the input length; do not append extra paragraphs.";
 	}
 
 	/* ---------------------------------------------------------------

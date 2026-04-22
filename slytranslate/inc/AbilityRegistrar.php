@@ -56,7 +56,7 @@ class AbilityRegistrar {
 	private static function register_get_languages_ability(): void {
 		wp_register_ability( 'ai-translate/get-languages', array(
 			'label'               => __( 'Get Languages', 'slytranslate' ),
-			'description'         => __( 'Returns all languages available for translation.', 'slytranslate' ),
+			'description'         => __( 'Returns all languages available for translation. Call this before a translation when the target language code is unknown.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -84,7 +84,7 @@ class AbilityRegistrar {
 	private static function register_get_translation_status_ability(): void {
 		wp_register_ability( 'ai-translate/get-translation-status', array(
 			'label'               => __( 'Get Translation Status', 'slytranslate' ),
-			'description'         => __( 'Returns the translation status for a post, page, or custom post type entry.', 'slytranslate' ),
+			'description'         => __( 'Returns the translation status for a post, page, or custom post type entry. Use this before translate-content when you need to inspect existing target posts or decide whether overwrite should be enabled.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -127,7 +127,7 @@ class AbilityRegistrar {
 	private static function register_get_untranslated_ability(): void {
 		wp_register_ability( 'ai-translate/get-untranslated', array(
 			'label'               => __( 'Get Untranslated Content', 'slytranslate' ),
-			'description'         => __( 'Lists posts, pages, or custom post types that do not yet have a translation in the requested language.', 'slytranslate' ),
+			'description'         => __( 'Lists posts, pages, or custom post types that do not yet have a translation in the requested language. Use this to collect candidates before calling translate-content-bulk.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -172,7 +172,7 @@ class AbilityRegistrar {
 	private static function register_translate_text_ability(): void {
 		wp_register_ability( 'ai-translate/translate-text', array(
 			'label'               => __( 'Translate Text', 'slytranslate' ),
-			'description'         => __( 'Translates arbitrary text from one language to another using the WordPress AI Client.', 'slytranslate' ),
+			'description'         => __( 'Translates arbitrary text from one language to another using the configured translation runtime. This does not create or update WordPress posts.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -180,7 +180,7 @@ class AbilityRegistrar {
 					'text'              => array( 'type' => 'string', 'description' => 'The text to translate.', 'minLength' => 1 ),
 					'source_language'   => array( 'type' => 'string', 'description' => 'Source language code.' ),
 					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
-					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.' ),
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.', 'maxLength' => 2000 ),
 					'model_slug'        => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation. Overrides the site-wide default.' ),
 				),
 				'required' => array( 'text', 'source_language', 'target_language' ),
@@ -205,7 +205,7 @@ class AbilityRegistrar {
 	private static function register_translate_content_ability(): void {
 		wp_register_ability( 'ai-translate/translate-content', array(
 			'label'               => __( 'Translate Content', 'slytranslate' ),
-			'description'         => __( 'Translates a post, page, or custom post type entry and creates or updates the translation.', 'slytranslate' ),
+			'description'         => __( 'Translates one post, page, or custom post type entry and creates or updates exactly one target translation post.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -215,7 +215,7 @@ class AbilityRegistrar {
 					'post_status'       => array( 'type' => 'string', 'description' => 'Optional post status for the translated item. Defaults to the source status when possible.' ),
 					'translate_title'   => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),
 					'overwrite'         => array( 'type' => 'boolean', 'description' => 'Overwrite existing translation.', 'default' => false ),
-					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.' ),
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.', 'maxLength' => 2000 ),
 					'model_slug'        => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation. Overrides the site-wide default.' ),
 				),
 				'required' => array( 'post_id', 'target_language' ),
@@ -244,18 +244,19 @@ class AbilityRegistrar {
 	private static function register_translate_content_bulk_ability(): void {
 		wp_register_ability( 'ai-translate/translate-content-bulk', array(
 			'label'               => __( 'Translate Content (Bulk)', 'slytranslate' ),
-			'description'         => __( 'Translates multiple posts, pages, or custom post type entries. Continues on individual failures.', 'slytranslate' ),
+			'description'         => __( 'Translates multiple posts, pages, or custom post type entries. Choose exactly one source selector: pass post_ids for explicit items, or pass post_type with an optional limit to query candidates. If both are provided, post_ids take precedence. Continues on individual failures.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
-					'post_ids'        => array( 'type' => 'array', 'description' => 'Array of post IDs to translate.', 'items' => array( 'type' => 'integer' ), 'minItems' => 1, 'maxItems' => 50 ),
-					'post_type'       => array( 'type' => 'string', 'description' => 'Optional post type to translate in bulk when post_ids are not provided.' ),
+					'post_ids'        => array( 'type' => 'array', 'description' => 'Array of post IDs to translate. Use this when the exact source posts are already known.', 'items' => array( 'type' => 'integer' ), 'minItems' => 1, 'maxItems' => 50 ),
+					'post_type'       => array( 'type' => 'string', 'description' => 'Optional post type used to discover source posts when post_ids are not provided.' ),
 					'limit'           => array( 'type' => 'integer', 'description' => 'Maximum number of items to fetch when post_type is used.', 'default' => 20, 'minimum' => 1, 'maximum' => 50 ),
 					'target_language' => array( 'type' => 'string', 'description' => 'Target language code.' ),
 					'post_status'     => array( 'type' => 'string', 'description' => 'Optional post status for the translated items. Defaults to the source status when possible.' ),
 					'translate_title' => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),
 					'overwrite'       => array( 'type' => 'boolean', 'description' => 'Overwrite existing translations.', 'default' => false ),
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on for every item in the batch.', 'maxLength' => 2000 ),
 					'model_slug'      => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation batch. Overrides the site-wide default.' ),
 				),
 				'required' => array( 'target_language' ),
@@ -293,7 +294,7 @@ class AbilityRegistrar {
 	private static function register_translate_blocks_ability(): void {
 		wp_register_ability( 'ai-translate/translate-blocks', array(
 			'label'               => __( 'Translate Blocks', 'slytranslate' ),
-			'description'         => __( 'Translates serialised Gutenberg block content from one language to another, preserving block markup.', 'slytranslate' ),
+			'description'         => __( 'Translates serialised Gutenberg block content from one language to another while preserving block markup. Use this for raw block content, not for creating translated posts.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -301,7 +302,7 @@ class AbilityRegistrar {
 					'content'           => array( 'type' => 'string', 'description' => 'Serialised Gutenberg block content to translate.', 'minLength' => 1 ),
 					'source_language'   => array( 'type' => 'string', 'description' => 'Source language code.' ),
 					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
-					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template.' ),
+					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.', 'maxLength' => 2000 ),
 					'model_slug'        => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation. Overrides the site-wide default.' ),
 				),
 				'required' => array( 'content', 'source_language', 'target_language' ),
@@ -326,7 +327,7 @@ class AbilityRegistrar {
 	private static function register_get_progress_ability(): void {
 		wp_register_ability( 'ai-translate/get-progress', array(
 			'label'               => __( 'Get Translation Progress', 'slytranslate' ),
-			'description'         => __( 'Returns the current translation progress for a running translation job.', 'slytranslate' ),
+			'description'         => __( 'Returns the current translation progress for a running translation job. Pass post_id when you want the progress state for a specific content item.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -354,7 +355,7 @@ class AbilityRegistrar {
 	private static function register_cancel_translation_ability(): void {
 		wp_register_ability( 'ai-translate/cancel-translation', array(
 			'label'               => __( 'Cancel Translation', 'slytranslate' ),
-			'description'         => __( 'Signals the running translation job to stop and clears the progress indicator.', 'slytranslate' ),
+			'description'         => __( 'Signals the running translation job to stop and clears the progress indicator. Pass post_id when you also want that post-specific progress state cleared immediately.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -380,7 +381,7 @@ class AbilityRegistrar {
 	private static function register_get_available_models_ability(): void {
 		wp_register_ability( 'ai-translate/get-available-models', array(
 			'label'               => __( 'Get Available Models', 'slytranslate' ),
-			'description'         => __( 'Returns the list of AI models available for translation through the configured connectors.', 'slytranslate' ),
+			'description'         => __( 'Returns the list of AI models available for translation through the configured connectors. Call this before setting model_slug when the available model identifiers are unknown.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -408,7 +409,7 @@ class AbilityRegistrar {
 	private static function register_save_additional_prompt_ability(): void {
 		wp_register_ability( 'ai-translate/save-additional-prompt', array(
 			'label'               => __( 'Save Additional Prompt', 'slytranslate' ),
-			'description'         => __( 'Persists the per-user additional translation instructions so they are pre-filled on the next visit.', 'slytranslate' ),
+			'description'         => __( 'Persists the per-user additional translation instructions so they are pre-filled on the next visit. This stores a UI preference and does not start a translation by itself.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -435,17 +436,17 @@ class AbilityRegistrar {
 	private static function register_configure_ability(): void {
 		wp_register_ability( 'ai-translate/configure', array(
 			'label'               => __( 'Configure AI Translate', 'slytranslate' ),
-			'description'         => __( 'Read or update AI Translate settings, including prompt template, meta keys, SEO defaults, and auto-translate behavior.', 'slytranslate' ),
+			'description'         => __( 'Reads or updates site-wide AI Translate settings. Call with an empty object to inspect current defaults. Use translate-* abilities for per-request overrides and configure only for persistent site-wide changes.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
 					'prompt_template'       => array( 'type' => 'string', 'description' => 'Translation prompt template. Use {FROM_CODE} and {TO_CODE} as placeholders.' ),
 					'prompt_addon'          => array( 'type' => 'string', 'description' => 'Optional site-wide addition always appended after the prompt template. Applied to every translation request.' ),
-					'meta_keys_translate'   => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to translate.' ),
-					'meta_keys_clear'       => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to clear.' ),
+					'meta_keys_translate'   => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to translate. Use a plain string, not an array.' ),
+					'meta_keys_clear'       => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to clear. Use a plain string, not an array.' ),
 					'auto_translate_new'    => array( 'type' => 'boolean', 'description' => 'Auto-translate new translation posts in Polylang.' ),
-					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.' ),
+					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.', 'minimum' => 0, 'maximum' => 4000000 ),
 					'model_slug'            => array( 'type' => 'string', 'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.' ),
 					'direct_api_url'        => array( 'type' => 'string', 'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). When set, the plugin sends translation requests directly to this endpoint instead of using the WP AI Client. Works with llama.cpp, ollama, mlx-lm, vLLM, or any OpenAI-compatible server. Leave empty to use the standard AI Client. When saving, the plugin automatically probes whether the server supports chat_template_kwargs for optimized translation.' ),
 					'force_direct_api'      => array( 'type' => 'boolean', 'description' => 'When true, all translations use the direct API endpoint (requires direct_api_url and model_slug). By default the direct API is only used for TranslateGemma models that require chat_template_kwargs.' ),

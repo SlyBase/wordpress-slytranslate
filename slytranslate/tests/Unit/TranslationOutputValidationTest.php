@@ -241,6 +241,32 @@ class TranslationOutputValidationTest extends TestCase {
 		}
 	}
 
+	public function test_finalize_translated_chunk_normalizes_latex_arrow_sequences_for_unicode_arrow_sources(): void {
+		$source_text = 'Die Schleife „Code → Dokumentation → Mehrsprachigkeit“ bricht genau dort ab.';
+		$translated  = 'The loop "Code $\rightarrow$ Documentation $\rightarrow$ Multilingualism" breaks right there.';
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'finalize_translated_chunk',
+			array( $source_text, $translated, 'gpt-4o', 'Translate this.', 0 )
+		);
+
+		$this->assertSame(
+			'The loop "Code → Documentation → Multilingualism" breaks right there.',
+			$result
+		);
+	}
+
+	public function test_validator_rejects_latex_arrow_drift_when_source_uses_unicode_arrow(): void {
+		$source_text = 'Die Schleife „Code → Dokumentation → Mehrsprachigkeit“ bricht genau dort ab.';
+		$translated  = 'The loop "Code $\rightarrow$ Documentation $\rightarrow$ Multilingualism" breaks right there.';
+
+		$result = TranslationValidator::validate( $source_text, $translated );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_symbol_drift', $result->get_error_code() );
+	}
+
 	public function test_translate_chunk_retries_once_for_standard_models_after_invalid_output(): void {
 		$call_count = 0;
 		$prompts    = array();

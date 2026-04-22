@@ -43,4 +43,43 @@ class AbilityInputValidationTest extends TestCase {
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'missing_target_language', $result->get_error_code() );
 	}
+
+	public function test_execute_translate_posts_rejects_missing_post_selection(): void {
+		$adapter = new class() implements \AI_Translate\TranslationPluginAdapter {
+			public function is_available(): bool {
+				return true;
+			}
+
+			public function get_languages(): array {
+				return array( 'de' => 'Deutsch' );
+			}
+
+			public function get_post_language( int $post_id ): ?string {
+				return 'en';
+			}
+
+			public function get_post_translations( int $post_id ): array {
+				return array();
+			}
+
+			public function create_translation( int $source_post_id, string $target_lang, array $data ) {
+				return 0;
+			}
+
+			public function link_translation( int $source_post_id, int $translated_post_id, string $target_lang ): bool {
+				return true;
+			}
+		};
+
+		$this->setStaticProperty( AI_Translate::class, 'adapter', $adapter );
+
+		$result = AI_Translate::execute_translate_posts(
+			array(
+				'target_language' => 'de',
+			)
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'missing_post_selection', $result->get_error_code() );
+	}
 }

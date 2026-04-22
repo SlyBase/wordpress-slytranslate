@@ -304,6 +304,7 @@ class AbilityRegistrationTest extends TestCase {
 						'additional_prompt' => array(
 							'type'        => 'string',
 							'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.',
+							'maxLength'   => 2000,
 						),
 						'model_slug' => array(
 							'type'        => 'string',
@@ -333,7 +334,7 @@ class AbilityRegistrationTest extends TestCase {
 						'content'           => array( 'type' => 'string', 'minLength' => 1 ),
 						'source_language'   => array( 'type' => 'string' ),
 						'target_language'   => array( 'type' => 'string' ),
-						'additional_prompt' => array( 'type' => 'string' ),
+						'additional_prompt' => array( 'type' => 'string', 'maxLength' => 2000 ),
 						'model_slug'        => array( 'type' => 'string' ),
 					),
 				),
@@ -381,6 +382,7 @@ class AbilityRegistrationTest extends TestCase {
 						'additional_prompt' => array(
 							'type'        => 'string',
 							'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on.',
+							'maxLength'   => 2000,
 						),
 						'model_slug' => array(
 							'type'        => 'string',
@@ -408,19 +410,19 @@ class AbilityRegistrationTest extends TestCase {
 				'execute_callback' => array( AI_Translate::class, 'execute_translate_posts' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'post_ids', 'post_type', 'limit', 'target_language', 'post_status', 'translate_title', 'overwrite', 'model_slug' ),
+					'property_keys' => array( 'post_ids', 'post_type', 'limit', 'target_language', 'post_status', 'translate_title', 'overwrite', 'additional_prompt', 'model_slug' ),
 					'required'      => array( 'target_language' ),
 					'properties'    => array(
 						'post_ids' => array(
 							'type'        => 'array',
-							'description' => 'Array of post IDs to translate.',
+							'description' => 'Array of post IDs to translate. Use this when the exact source posts are already known.',
 							'minItems'    => 1,
 							'maxItems'    => 50,
 							'items'       => array( 'type' => 'integer' ),
 						),
 						'post_type' => array(
 							'type'        => 'string',
-							'description' => 'Optional post type to translate in bulk when post_ids are not provided.',
+							'description' => 'Optional post type used to discover source posts when post_ids are not provided.',
 						),
 						'limit' => array(
 							'type'        => 'integer',
@@ -446,6 +448,11 @@ class AbilityRegistrationTest extends TestCase {
 							'type'        => 'boolean',
 							'description' => 'Overwrite existing translations.',
 							'default'     => false,
+						),
+						'additional_prompt' => array(
+							'type'        => 'string',
+							'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on for every item in the batch.',
+							'maxLength'   => 2000,
 						),
 						'model_slug' => array(
 							'type'        => 'string',
@@ -576,11 +583,11 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'meta_keys_translate' => array(
 							'type'        => 'string',
-							'description' => 'Whitespace-separated list of meta keys to translate.',
+							'description' => 'Whitespace-separated list of meta keys to translate. Use a plain string, not an array.',
 						),
 						'meta_keys_clear' => array(
 							'type'        => 'string',
-							'description' => 'Whitespace-separated list of meta keys to clear.',
+							'description' => 'Whitespace-separated list of meta keys to clear. Use a plain string, not an array.',
 						),
 						'auto_translate_new' => array(
 							'type'        => 'boolean',
@@ -589,6 +596,8 @@ class AbilityRegistrationTest extends TestCase {
 						'context_window_tokens' => array(
 							'type'        => 'integer',
 							'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.',
+							'minimum'     => 0,
+							'maximum'     => 4000000,
 						),
 						'model_slug' => array(
 							'type'        => 'string',

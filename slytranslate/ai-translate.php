@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.5.5
+Version: 1.5.6
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 7.0
@@ -22,7 +22,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 class AI_Translate {
 
 	// Default prompt template – referenced by TranslationRuntime::build_prompt().
-	private const DEFAULT_PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting and embedded media. Only return the new content.';
+	private const DEFAULT_PROMPT = 'Translate the content from {FROM_CODE} to {TO_CODE} preserving html, formatting, embedded media, and source symbols. Do not rewrite Unicode symbols or math notation as LaTeX or ASCII. Only return the new content.';
 
 	// Adapter singleton.
 	private static $adapter;

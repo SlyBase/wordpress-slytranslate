@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.5.5
+Stable tag: 1.5.6
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -23,7 +23,7 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * **ai-translate/translate-text** – Translates arbitrary text between languages.
 * **ai-translate/translate-blocks** – Translates serialized Gutenberg block content while preserving block structure.
 * **ai-translate/translate-content** – Translates a post, page, or custom post type entry and creates or updates the translation.
-* **ai-translate/translate-content-bulk** – Bulk-translates multiple entries at once (either by explicit IDs or by post type, max 50).
+* **ai-translate/translate-content-bulk** – Bulk-translates multiple entries at once (either by explicit IDs or by post type, max 50) and also accepts per-request additional instructions.
 * **ai-translate/get-progress** – Returns the current progress for a running content translation job.
 * **ai-translate/cancel-translation** – Cancels a running translation job and clears its progress indicator.
 * **ai-translate/get-available-models** – Lists translation models exposed by the configured AI connectors, with optional cache refresh.
@@ -37,7 +37,7 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * For other local or self-hosted OpenAI-compatible LLM endpoints (for example Ollama, LM Studio, LocalAI, or vLLM), we recommend **Ultimate AI Connector for Compatible Endpoints**: https://wordpress.org/plugins/ultimate-ai-connector-compatible-endpoints/
 * Optional **Direct API** path (`direct_api_url`): connect directly to any OpenAI-compatible endpoint without the WordPress AI Client. Standard instruct/chat models still fall back automatically when the direct call fails. TranslateGemma is handled fail-safe instead: if no direct API URL is configured, if `chat_template_kwargs` support cannot be confirmed, or if the direct call fails, SlyTranslate returns an error instead of silently falling back. The `ai-translate/configure` response includes probe diagnostics such as the last kwargs probe timestamp, the TranslateGemma runtime status, and the last transport diagnostic snapshot with requested/effective model slug plus the last error code/message.
 * Long content is translated in chunks. The plugin derives a safe chunk size from the active model, learns tighter limits from provider error messages, retries automatically with a smaller chunk on context-window errors, and supports a manual context window token override.
-* Translated outputs are validated before they are accepted. SlyTranslate rejects empty/chatty assistant-style answers, implausibly long title-like responses, and structure drift such as missing HTML tags, Gutenberg block comments, URLs, or code fences. For standard instruct/chat models, the plugin retries once with stricter output instructions before failing.
+* Translated outputs are validated before they are accepted. SlyTranslate rejects empty/chatty assistant-style answers, implausibly long title-like responses, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure drift such as missing HTML tags, Gutenberg block comments, URLs, or code fences. For standard instruct/chat models, the plugin retries once with stricter output instructions before failing.
 * Editor REST requests require a structured `input` payload, and translation-status responses only expose target-post details such as title and edit link when the current user can access that translation.
 * Block content is parsed before translation: code and preformatted blocks are skipped, and consecutive translatable blocks are batched together for efficiency.
 * Translation plugin support via an adapter interface. Currently supports **Polylang**, including posts, pages, custom post types, and associated taxonomies. Additional adapters (WPML, TranslatePress, etc.) can be added.
@@ -45,6 +45,7 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. During active content translations, the panel shows a live progress bar with phase and chunk tracking, and the main action button toggles from **Translate now** to **Cancel translation**. The inline selected-text action and the block-translation dialog reuse that same model selection, show the source/target language pickers side by side with a swap button, and keep the picker columns visually flush at the top and bottom like the post/page translation flow.
 * Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. The dialog loads the same live model list as the editor sidebar and pre-fills **Additional instructions** from the saved per-user preference, so the list-table flow and editor panel stay in sync. If the running dialog is dismissed or the user leaves the admin page mid-translation, the job is handed off automatically to the background bar so progress and the eventually created draft remain visible instead of appearing unexpectedly later.
 * All abilities are exposed via the REST API (`/wp-abilities/v1/`) and marked public for MCP Adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`.
+* For MCP clients, the ability schema describes the business payload. Some clients wrap calls in transport-specific `parameters` or `input` objects, but the SlyTranslate-specific fields are always the ones defined on the ability itself.
 * Plugin labels and descriptions are translation-ready and include a bundled German (`de_DE`) translation.
 
 **Requirements:**
@@ -76,16 +77,18 @@ API keys are managed centrally in WordPress via Settings > Connectors. This plug
 
 Use the `ai-translate/configure` ability via the REST API or any tool that supports WordPress Abilities. The `prompt_template` field sets the base instructions including language pair placeholders (`{FROM_CODE}`, `{TO_CODE}`). The `prompt_addon` field adds a site-wide addition that is always appended after the template — useful for global style requirements such as formal language or domain-specific vocabulary.
 
+Call `ai-translate/configure` with an empty object if you only want to read the current site-wide defaults without changing anything.
+
 
 = How do I add per-request translation instructions? =
 
-The `ai-translate/translate-text`, `ai-translate/translate-blocks`, and `ai-translate/translate-content` abilities accept an optional `additional_prompt` field. This text is appended after the prompt template and the site-wide add-on, so it can override or extend the defaults just for that request. In wp-admin, the **AI Translate** panel, the selected-text/block translation dialogs, and the post/page list-table picker share that saved per-user value, so recurring style preferences are pre-filled across the translation UI.
+The `ai-translate/translate-text`, `ai-translate/translate-blocks`, `ai-translate/translate-content`, and `ai-translate/translate-content-bulk` abilities accept an optional `additional_prompt` field. This text is appended after the prompt template and the site-wide add-on, so it can override or extend the defaults just for that request. In wp-admin, the **AI Translate** panel, the selected-text/block translation dialogs, and the post/page list-table picker share that saved per-user value, so recurring style preferences are pre-filled across the translation UI.
 
 = What is the difference between prompt_template, prompt_addon, and additional_prompt? =
 
 * **prompt_template** — the base translation instruction including `{FROM_CODE}` and `{TO_CODE}` placeholders. Managed by `ai-translate/configure`, requires `manage_options` capability.
 * **prompt_addon** — a site-wide addition always appended after the template. Also managed by `ai-translate/configure` and admin-only. Use this for global requirements that apply to every translation on the site.
-* **additional_prompt** (per-request) — an optional field on `translate-text`, `translate-blocks`, and `translate-content`. Appended last, after the template and the site-wide add-on. Available to any user who can run translation abilities. In the block editor this is the **Additional instructions** textarea; the last used value is stored per user.
+* **additional_prompt** (per-request) — an optional field on `translate-text`, `translate-blocks`, `translate-content`, and `translate-content-bulk`. Appended last, after the template and the site-wide add-on. Available to any user who can run translation abilities. In the block editor this is the **Additional instructions** textarea; the last used value is stored per user.
 
 = How do I tune chunking for large posts? =
 
@@ -111,11 +114,23 @@ A custom Jinja chat template is required on the llama.cpp side to make this work
 
 = What happens if a model returns a chat answer instead of a translation? =
 
-SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
+SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
 
 = Can I translate pages or custom post types? =
 
 Yes. The `translate-content`, `translate-content-bulk`, `get-translation-status`, and `get-untranslated` abilities work with any Polylang-enabled post type, including pages and custom post types.
+
+= What is the best MCP call order for an LLM? =
+
+Use the read-only abilities to remove ambiguity before mutating content:
+
+* Call `ai-translate/get-languages` when the target language code is not known yet.
+* Call `ai-translate/get-available-models` before sending `model_slug` if the available identifiers are unknown or the connector has changed.
+* Call `ai-translate/get-translation-status` before `ai-translate/translate-content` when you need to inspect existing target posts or decide whether `overwrite` should be true.
+* Call `ai-translate/get-untranslated` before `ai-translate/translate-content-bulk` when you do not already know the source post IDs.
+* Call `ai-translate/configure` with an empty object to read persistent defaults; use `model_slug` and `additional_prompt` on `translate-*` abilities for one-off overrides.
+
+For `ai-translate/translate-content-bulk`, choose one source selector: either `post_ids` or `post_type` with an optional `limit`. If both are sent, the plugin uses `post_ids` and ignores `post_type`.
 
 = How do SEO plugin fields get translated? =
 
@@ -136,6 +151,17 @@ The running translation is handed off automatically to the same global backgroun
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= Unreleased =
+* Dev: added a repository instruction that blocks Autopilot completion until local validation, a versioned beta commit, Build and Deploy Plugin ZIP, and a WordPress MCP translation smoke test for post 1109 have all succeeded.
+
+= 1.5.6 =
+* MCP: sharpened public ability descriptions so discovery now hints at the intended read-only preparation flow before mutating translation calls.
+* MCP: `ai-translate/translate-content-bulk` now documents its real source-selection contract more explicitly and exposes the already-supported `additional_prompt` input in the public ability schema.
+* MCP: `ai-translate/configure` now documents the empty-object read pattern and clearer field guidance for persistent site-wide settings such as meta key strings and context-window overrides.
+* Docs: README, plugin readme, and workflow guidance now include clearer MCP call-order hints and canonical payload examples for common LLM-driven translation flows.
+* Tests: ability contract coverage now protects the sharper MCP schema details, and bulk translation validation now asserts the missing post-selection error path.
+* Translation quality: source-aware symbol preservation now keeps Unicode arrows and similar math symbols from being rewritten as LaTeX notation, with a matching validation guard and no extra model round-trip in the success path.
 
 = 1.5.5 =
 * Diagnostics: `ai-translate/configure` now returns `last_transport_diagnostics`, exposing the last runtime transport, requested/effective model slug, fallback flag, and the last captured error code/message for connector or direct-API failures.

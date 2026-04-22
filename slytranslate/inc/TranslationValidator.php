@@ -6,6 +6,19 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class TranslationValidator {
 
+	private const PROTECTED_SYMBOL_SEQUENCE_MAP = array(
+		'→' => array( '$\\rightarrow$', '\\rightarrow' ),
+		'←' => array( '$\\leftarrow$', '\\leftarrow' ),
+		'↔' => array( '$\\leftrightarrow$', '\\leftrightarrow' ),
+		'⇒' => array( '$\\Rightarrow$', '\\Rightarrow' ),
+		'⇐' => array( '$\\Leftarrow$', '\\Leftarrow' ),
+		'⇔' => array( '$\\Leftrightarrow$', '\\Leftrightarrow' ),
+		'×' => array( '$\\times$', '\\times' ),
+		'÷' => array( '$\\div$', '\\div' ),
+		'≤' => array( '$\\leq$', '\\leq' ),
+		'≥' => array( '$\\geq$', '\\geq' ),
+	);
+
 	private const MAX_SHORT_TEXT_RESPONSE_RATIO = 4;
 
 	/**
@@ -81,6 +94,13 @@ class TranslationValidator {
 			);
 		}
 
+		if ( self::has_symbol_translation_drift( $source_text, $translated_text ) ) {
+			return new \WP_Error(
+				'invalid_translation_symbol_drift',
+				__( 'The translated output rewrote source symbols into a different notation such as LaTeX instead of preserving them.', 'slytranslate' )
+			);
+		}
+
 		if ( self::has_structural_translation_drift( $source_text, $translated_text ) ) {
 			return new \WP_Error(
 				'invalid_translation_structure_drift',
@@ -89,6 +109,30 @@ class TranslationValidator {
 		}
 
 		return null;
+	}
+
+	public static function normalize_symbol_notation( string $source_text, string $translated_text ): string {
+		foreach ( self::PROTECTED_SYMBOL_SEQUENCE_MAP as $symbol => $variants ) {
+			if ( false === strpos( $source_text, $symbol ) ) {
+				continue;
+			}
+
+			$source_has_variant = false;
+			foreach ( $variants as $variant ) {
+				if ( false !== strpos( $source_text, $variant ) ) {
+					$source_has_variant = true;
+					break;
+				}
+			}
+
+			if ( $source_has_variant ) {
+				continue;
+			}
+
+			$translated_text = str_replace( $variants, $symbol, $translated_text );
+		}
+
+		return $translated_text;
 	}
 
 	private static function normalize_text_for_validation( string $text ): string {
@@ -319,6 +363,34 @@ class TranslationValidator {
 		// translation kept the HTML structure and just added some markdown — be
 		// lenient. If less than half remain, treat as drift.
 		return $translated_html_inline < (int) ceil( $source_html_inline * 0.5 );
+	}
+
+	private static function has_symbol_translation_drift( string $source_text, string $translated_text ): bool {
+		foreach ( self::PROTECTED_SYMBOL_SEQUENCE_MAP as $symbol => $variants ) {
+			if ( false === strpos( $source_text, $symbol ) ) {
+				continue;
+			}
+
+			$source_has_variant = false;
+			foreach ( $variants as $variant ) {
+				if ( false !== strpos( $source_text, $variant ) ) {
+					$source_has_variant = true;
+					break;
+				}
+			}
+
+			if ( $source_has_variant ) {
+				continue;
+			}
+
+			foreach ( $variants as $variant ) {
+				if ( false !== strpos( $translated_text, $variant ) ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	private static function text_length( string $text ): int {

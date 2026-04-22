@@ -35,12 +35,12 @@ It uses the WordPress AI Client for model access, so connector setup happens cen
 | `ai-translate/translate-text` | Translate arbitrary text between languages; accepts optional `model_slug` per request |
 | `ai-translate/translate-blocks` | Translate serialized Gutenberg block content while preserving block markup; accepts optional `additional_prompt` and `model_slug` per request |
 | `ai-translate/translate-content` | Create or update a translated content item; accepts optional `model_slug` per request |
-| `ai-translate/translate-content-bulk` | Bulk-translate multiple content items; accepts optional `model_slug` per request |
+| `ai-translate/translate-content-bulk` | Bulk-translate multiple content items; accepts either explicit `post_ids` or `post_type` plus `limit`, and also supports `additional_prompt` plus optional `model_slug` |
 | `ai-translate/get-progress` | Return the current progress state for a running content translation job |
 | `ai-translate/cancel-translation` | Signal a running translation to stop and clear its progress state |
 | `ai-translate/get-available-models` | List models exposed by the configured AI connectors; can bypass the cached model list |
 | `ai-translate/save-additional-prompt` | Persist the current user's Additional instructions value for reuse in editor and list-table flows |
-| `ai-translate/configure` | Read or update plugin settings (prompt template, prompt add-on, model, direct API URL, optional force-direct-API mode, context window, SEO meta keys, direct API diagnostics, and the last transport diagnostic snapshot) |
+| `ai-translate/configure` | Read or update plugin settings; call with an empty object to inspect current defaults, and use it only for persistent site-wide settings rather than one-off translation overrides |
 
 ## Editor Experience
 
@@ -90,7 +90,7 @@ When a direct URL is configured:
 - Standard instruct/chat models fall back to the WordPress AI Client path if the direct call fails
 - TranslateGemma is treated fail-safe: if `chat_template_kwargs` support cannot be confirmed or the direct call fails, SlyTranslate returns an error instead of silently falling back
 - `ai-translate/configure` exposes `last_transport_diagnostics`, so admins can inspect the last connector/direct-API transport, requested/effective model slug, fallback status, and the captured error code/message without reading `debug.log`
-- Translation output is validated before it is accepted: empty results, assistant-style essays, implausibly long short-text responses, and major structure loss are rejected; standard models get one stricter retry before the request fails
+- Translation output is validated before it is accepted: empty results, assistant-style essays, implausibly long short-text responses, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and major structure loss are rejected; standard models get one stricter retry before the request fails
 
 The direct API path is optional. All standard connectors continue to work without it. TranslateGemma is the exception: for reliable translation it needs both `direct_api_url` and working `chat_template_kwargs` support.
 
@@ -123,7 +123,7 @@ Supported SEO integrations include:
 
 - Uses the WordPress AI Client instead of storing provider-specific API keys in this plugin
 - Optional direct API path (`direct_api_url`) bypasses the AI Client for models that require full control over the request body (e.g. `chat_template_kwargs`); standard models still fall back automatically, while TranslateGemma fails closed when direct API or kwargs support are unavailable
-- Validates translated output before saving: rejects empty or chatty responses, implausibly long title-like output, and structure drift such as missing HTML, Gutenberg comments, URLs, or code fences
+- Validates translated output before saving: rejects empty or chatty responses, implausibly long title-like output, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure drift such as missing HTML, Gutenberg comments, URLs, or code fences
 - Editor REST endpoints require a structured `input` payload, and translation-status responses only include target-post details when the current user can access that translation
 - Translates long content in chunks; derives safe chunk sizes from the active model, learns tighter limits from provider error messages, and retries automatically with a smaller chunk on context-window errors
 - Block content is parsed before translation: code blocks are skipped and consecutive translatable blocks are batched together for efficiency
@@ -155,6 +155,62 @@ All abilities are exposed through the WordPress Abilities API and can be invoked
 - REST base: `/wp-abilities/v1/`
 - Run an ability: `/wp-abilities/v1/run/{ability_name}`
 - MCP adapter discovery: `/wp-json/mcp/mcp-adapter-default-server`
+
+For MCP clients, treat each ability schema as the business payload for that ability. Some clients wrap the call in transport-specific objects such as `parameters` or `input`, but the SlyTranslate-specific fields are the ones listed in the ability schema itself.
+
+Recommended selection order for LLM clients:
+
+1. Call `ai-translate/get-languages` when the target language code is unknown.
+2. Call `ai-translate/get-available-models` before sending `model_slug` if the available model identifiers are unknown or the connector changed.
+3. Call `ai-translate/get-translation-status` before `ai-translate/translate-content` when overwrite behaviour depends on an existing target post.
+4. Call `ai-translate/get-untranslated` before `ai-translate/translate-content-bulk` when the source post IDs are not known yet.
+5. Call `ai-translate/configure` with `{}` to read persistent defaults; use `model_slug` or `additional_prompt` on `translate-*` abilities for one-off request overrides.
+
+Canonical ability payload examples:
+
+Use the empty object below to read the current `ai-translate/configure` state.
+
+```json
+{}
+```
+
+Use the following with `ai-translate/get-available-models` after connector changes.
+
+```json
+{
+	"refresh": true
+}
+```
+
+Use the following with `ai-translate/translate-content` for one specific post.
+
+```json
+{
+	"post_id": 42,
+	"target_language": "en",
+	"model_slug": "gemma3:27b"
+}
+```
+
+Use the following with `ai-translate/translate-content-bulk` when the exact source posts are already known.
+
+```json
+{
+	"post_ids": [42, 55],
+	"target_language": "en",
+	"additional_prompt": "Keep the marketing tone concise."
+}
+```
+
+Use the following with `ai-translate/translate-content-bulk` when the plugin should discover the source posts by type. If `post_ids` and `post_type` are both sent, `post_ids` take precedence.
+
+```json
+{
+	"post_type": "post",
+	"limit": 10,
+	"target_language": "en"
+}
+```
 
 ## Repository Layout
 
@@ -188,6 +244,8 @@ The same dialog also reuses your saved Additional instructions and the current m
 
 Use the `ai-translate/configure` ability to read or update prompt and plugin settings.
 
+Call it with an empty object to read the current site-wide defaults without changing anything.
+
 ### How are API keys handled?
 
 They are handled by the connector configured in Settings > Connectors, not by SlyTranslate itself.
@@ -210,7 +268,7 @@ Known text fields are translated, while rebuild-only analysis keys are cleared o
 
 ### What happens if a model returns a chat answer instead of a translation?
 
-SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
+SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
 
 ## Development
 
