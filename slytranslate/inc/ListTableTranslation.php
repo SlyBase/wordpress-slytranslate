@@ -493,12 +493,14 @@ class ListTableTranslation {
 
 			/* --- Shared helpers --- */
 
-			function apiPost(endpoint, body, signal) {
+			function apiPost(endpoint, body, signal, options) {
+				options = options || {};
 				return fetch(REST_URL + endpoint, {
 					method: 'POST',
 					credentials: 'same-origin',
 					headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': REST_NONCE },
 					body: JSON.stringify(body),
+					keepalive: !!options.keepalive,
 					signal: signal || undefined,
 				}).then(function (r) { return r.json(); });
 			}
@@ -624,7 +626,11 @@ class ListTableTranslation {
 						model_slug: modelSlug || undefined,
 						additional_prompt: additionalPrompt || undefined,
 					}
-				}, abortCtrl ? abortCtrl.signal : undefined)
+				}, abortCtrl ? abortCtrl.signal : undefined, {
+					// Keep the request alive across page navigation so the server-side
+					// translation can continue after the list screen unloads.
+					keepalive: true,
+				})
 					.then(function (resp) {
 						if (movedToBackground) {
 							// Foreground fetch resolved while user already moved
@@ -952,6 +958,8 @@ class ListTableTranslation {
 							model_slug: modelSlug || undefined,
 							additional_prompt: additionalPrompt || undefined,
 						}
+					}, undefined, {
+						keepalive: true,
 					}).then(function (resp) {
 						if (resp && resp.code) {
 							finishBgTask(taskId, 'error', '');
@@ -1065,11 +1073,9 @@ class ListTableTranslation {
 		if ( ! AI_Translate::current_user_can_access_translation_abilities() ) {
 			return;
 		}
-		// Skip rendering entirely when the user has no active or recent job,
-		// saving the KB of inline JS for every admin page load.
-		if ( ! TranslationProgressTracker::user_has_recent_job() ) {
-			return;
-		}
+		// Render the global bridge on every eligible wp-admin screen so the
+		// first explicit "Continue in background" click can create a task even
+		// when the user has no previously recorded recent job yet.
 
 		$rest_url   = esc_url_raw( rest_url( 'ai-translate/v1/' ) );
 		$rest_nonce = wp_create_nonce( 'wp_rest' );

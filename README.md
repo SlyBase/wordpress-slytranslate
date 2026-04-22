@@ -40,7 +40,7 @@ It uses the WordPress AI Client for model access, so connector setup happens cen
 | `ai-translate/cancel-translation` | Signal a running translation to stop and clear its progress state |
 | `ai-translate/get-available-models` | List models exposed by the configured AI connectors; can bypass the cached model list |
 | `ai-translate/save-additional-prompt` | Persist the current user's Additional instructions value for reuse in editor and list-table flows |
-| `ai-translate/configure` | Read or update plugin settings (prompt template, prompt add-on, model, direct API URL, optional force-direct-API mode, context window, SEO meta keys, and direct API diagnostics) |
+| `ai-translate/configure` | Read or update plugin settings (prompt template, prompt add-on, model, direct API URL, optional force-direct-API mode, context window, SEO meta keys, direct API diagnostics, and the last transport diagnostic snapshot) |
 
 ## Editor Experience
 
@@ -52,6 +52,8 @@ SlyTranslate adds two editor-facing workflows:
 The sidebar includes a model dropdown that lists all models registered with the WordPress AI Client. The selection persists across the editor and is reused by the inline and block translation dialogs without showing a second model picker there.
 
 Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. The dialog loads the same live model list as the editor sidebar and pre-fills Additional instructions from the saved per-user preference. If the running dialog is dismissed or the user leaves the current wp-admin screen mid-translation, the job is handed off automatically to that background bar so progress and the eventually created draft stay visible.
+
+The same global bridge is now available even before the user has any previously recorded background job, so the first explicit Continue in background handoff works immediately instead of depending on a prior translation run. The long-running translation request is also sent with browser keepalive semantics, which makes handoff during wp-admin navigation materially more reliable.
 
 During full-content translations, the sidebar polls a lightweight REST endpoint and shows the current phase plus chunk progress for long content, so editors can see whether the plugin is translating the title, content, excerpt, metadata, or saving the translated post.
 
@@ -87,6 +89,7 @@ When a direct URL is configured:
 - The plugin auto-detects whether the server supports `chat_template_kwargs` and enables them automatically when available
 - Standard instruct/chat models fall back to the WordPress AI Client path if the direct call fails
 - TranslateGemma is treated fail-safe: if `chat_template_kwargs` support cannot be confirmed or the direct call fails, SlyTranslate returns an error instead of silently falling back
+- `ai-translate/configure` exposes `last_transport_diagnostics`, so admins can inspect the last connector/direct-API transport, requested/effective model slug, fallback status, and the captured error code/message without reading `debug.log`
 - Translation output is validated before it is accepted: empty results, assistant-style essays, implausibly long short-text responses, and major structure loss are rejected; standard models get one stricter retry before the request fails
 
 The direct API path is optional. All standard connectors continue to work without it. TranslateGemma is the exception: for reliable translation it needs both `direct_api_url` and working `chat_template_kwargs` support.
@@ -194,6 +197,8 @@ They are handled by the connector configured in Settings > Connectors, not by Sl
 Yes. Set `direct_api_url` via `ai-translate/configure` to the URL of your llama.cpp server running TranslateGemma. The plugin automatically probes for `chat_template_kwargs` support, re-probes when TranslateGemma is selected and kwargs are missing, and uses the model's native language-routing for every request once confirmed.
 
 TranslateGemma now fails closed: if no direct API URL is configured, if kwargs support cannot be confirmed, or if the direct API request fails, SlyTranslate returns an error instead of silently falling back to the generic WordPress AI Client path. The `ai-translate/configure` response exposes `direct_api_kwargs_last_probed_at`, `translategemma_runtime_ready`, and `translategemma_runtime_status` for diagnostics.
+
+For both connector-based local models and direct API failures, `ai-translate/configure` now also includes `last_transport_diagnostics` with the last runtime transport, requested/effective model slug, fallback status, and the last captured error code/message.
 
 A custom Jinja chat template is still required on the llama.cpp side — see `translategemma-llama-cpp-guide.md` in this repository.
 

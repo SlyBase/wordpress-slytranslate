@@ -106,6 +106,18 @@ function esc_url_raw( $url, $protocols = null ): string {
 	} );
 }
 
+function rest_url( $path = '', $scheme = 'rest' ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $path = '' ) {
+		return 'https://example.test/wp-json/' . ltrim( (string) $path, '/' );
+	} );
+}
+
+function wp_create_nonce( $action = -1 ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 'test-nonce';
+	} );
+}
+
 function wp_strip_all_tags( $string, bool $remove_breaks = false ): string {
 $string = preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $string );
 $string = strip_tags( $string );
@@ -127,6 +139,22 @@ function wp_parse_url( $url, $component = -1 ) {
 
 function __( $text, $domain = null ): string {
 return (string) $text;
+}
+
+function esc_html__( $text, $domain = null ): string {
+	return (string) __( $text, $domain );
+}
+
+function esc_html_x( $text, $context, $domain = null ): string {
+	return (string) $text;
+}
+
+function esc_html( $text ): string {
+	return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
+}
+
+function esc_attr( $text ): string {
+	return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
 }
 
 function trailingslashit( $value ): string {
@@ -228,9 +256,21 @@ function update_user_meta( int $user_id, string $meta_key, mixed $meta_value ): 
 	} );
 }
 
+function get_user_meta( int $user_id, string $key = '', bool $single = false ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return '';
+	} );
+}
+
 function current_user_can( string $capability, ...$args ): bool {
 	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
 		return false;
+	} );
+}
+
+function is_admin(): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
 	} );
 }
 

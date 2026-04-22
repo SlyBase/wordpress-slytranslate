@@ -118,6 +118,8 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'direct_api_failed', $diagnostics['transport'] );
 		$this->assertSame( 'direct_api_connection_error', $diagnostics['failure_reason'] );
+		$this->assertSame( 'direct_api_connection_error', $diagnostics['error_code'] );
+		$this->assertStringContainsString( 'Could not connect to direct API', $diagnostics['error_message'] );
 	}
 
 	public function test_translategemma_kwargs_request_omits_system_message(): void {
@@ -237,6 +239,41 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
 		$this->assertTrue( $diagnostics['fallback_allowed'] );
+	}
+
+	public function test_wp_ai_client_error_records_error_details_in_diagnostics(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'qwen/qwen3-32b',
+			'direct_api_url' => '',
+		) );
+
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function () {
+				return new class {
+					public function using_system_instruction( string $prompt ) { return $this; }
+					public function using_temperature( int $temperature ) { return $this; }
+					public function using_model_preference( string $model_slug ) { return $this; }
+					public function using_max_tokens( int $max_tokens ) { return $this; }
+					public function generate_text(): \WP_Error {
+						return new \WP_Error( 'prompt_network_error', 'Local connector timed out.' );
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'prompt_network_error', $result->get_error_code() );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
+		$this->assertSame( 'prompt_network_error', $diagnostics['failure_reason'] );
+		$this->assertSame( 'prompt_network_error', $diagnostics['error_code'] );
+		$this->assertSame( 'Local connector timed out.', $diagnostics['error_message'] );
+		$this->assertSame( 'qwen/qwen3-32b', $diagnostics['requested_model_slug'] );
+		$this->assertSame( 'qwen/qwen3-32b', $diagnostics['effective_model_slug'] );
 	}
 
 	public function test_non_translategemma_connection_error_falls_back_to_wp_ai_client(): void {

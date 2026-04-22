@@ -282,6 +282,7 @@ class TranslationRuntime {
 
 		if ( $requires_strict_direct_api ) {
 			if ( ! is_string( $direct_api_url ) || '' === $direct_api_url ) {
+				$error_message = __( 'TranslateGemma requires a direct API endpoint. Configure direct_api_url for your llama.cpp server or switch to an instruct model.', 'slytranslate' );
 				self::record_transport_diagnostics( array(
 					'transport'        => 'blocked',
 					'model_slug'       => $model_slug,
@@ -289,15 +290,18 @@ class TranslationRuntime {
 					'kwargs_supported' => false,
 					'fallback_allowed' => false,
 					'failure_reason'   => 'direct_api_required',
+					'error_code'       => 'translategemma_requires_direct_api',
+					'error_message'    => $error_message,
 				) );
 
 				return new \WP_Error(
 					'translategemma_requires_direct_api',
-					__( 'TranslateGemma requires a direct API endpoint. Configure direct_api_url for your llama.cpp server or switch to an instruct model.', 'slytranslate' )
+					$error_message
 				);
 			}
 
 			if ( ! $kwargs_supported ) {
+				$error_message = __( 'TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model.', 'slytranslate' );
 				self::record_transport_diagnostics( array(
 					'transport'        => 'blocked',
 					'model_slug'       => $model_slug,
@@ -305,11 +309,13 @@ class TranslationRuntime {
 					'kwargs_supported' => false,
 					'fallback_allowed' => false,
 					'failure_reason'   => 'kwargs_required',
+					'error_code'       => 'translategemma_requires_kwargs',
+					'error_message'    => $error_message,
 				) );
 
 				return new \WP_Error(
 					'translategemma_requires_kwargs',
-					__( 'TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model.', 'slytranslate' )
+					$error_message
 				);
 			}
 		}
@@ -355,6 +361,16 @@ class TranslationRuntime {
 				// would hit the same provider and trip the same per-minute
 				// limit, so the sleep-and-retry path is strictly better.
 				if ( 'direct_api_rate_limited' === $direct_error_code ) {
+					self::record_transport_diagnostics( array(
+						'transport'        => 'direct_api_failed',
+						'model_slug'       => $model_slug,
+						'direct_api_url'   => $direct_api_url,
+						'kwargs_supported' => $kwargs_supported,
+						'fallback_allowed' => ! $requires_strict_direct_api,
+						'failure_reason'   => $direct_error_code,
+						'error_code'       => $direct_error_code,
+						'error_message'    => $result->get_error_message(),
+					) );
 					return self::handle_rate_limit_and_retry( $result, $text, $prompt, $validation_attempt, $model_slug );
 				}
 
@@ -369,6 +385,8 @@ class TranslationRuntime {
 						'kwargs_supported' => $kwargs_supported,
 						'fallback_allowed' => false,
 						'failure_reason'   => 'direct_api_connection_error',
+						'error_code'       => $direct_error_code,
+						'error_message'    => $result->get_error_message(),
 					) );
 					return $result;
 				}
@@ -427,6 +445,7 @@ class TranslationRuntime {
 			) );
 
 			if ( $requires_strict_direct_api ) {
+				$error_message = __( 'TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations.', 'slytranslate' );
 				self::record_transport_diagnostics( array(
 					'transport'        => 'direct_api_failed',
 					'model_slug'       => $model_slug,
@@ -434,11 +453,13 @@ class TranslationRuntime {
 					'kwargs_supported' => $kwargs_supported,
 					'fallback_allowed' => false,
 					'failure_reason'   => 'direct_api_failed',
+					'error_code'       => 'translategemma_direct_api_failed',
+					'error_message'    => $error_message,
 				) );
 
 				return new \WP_Error(
 					'translategemma_direct_api_failed',
-					__( 'TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations.', 'slytranslate' )
+					$error_message
 				);
 			}
 
@@ -481,6 +502,17 @@ class TranslationRuntime {
 		TimingLogger::increment( 'ai_calls' );
 
 		if ( is_wp_error( $result ) ) {
+			self::record_transport_diagnostics( array(
+				'transport'        => 'wp_ai_client',
+				'model_slug'       => $model_slug,
+				'direct_api_url'   => is_string( $direct_api_url ) ? $direct_api_url : '',
+				'kwargs_supported' => $kwargs_supported,
+				'fallback_allowed' => true,
+				'failure_reason'   => $result->get_error_code(),
+				'error_code'       => $result->get_error_code(),
+				'error_message'    => $result->get_error_message(),
+			) );
+
 			TimingLogger::log( 'ai_call', array(
 				'transport'    => 'wp_ai_client',
 				'model'        => $model_slug,
@@ -747,6 +779,15 @@ class TranslationRuntime {
 		self::$context = null;
 	}
 
+	public static function get_requested_model_slug(): string {
+		if ( is_string( self::$model_slug_override ) && '' !== self::$model_slug_override ) {
+			return self::$model_slug_override;
+		}
+
+		$runtime_context = self::get_runtime_context();
+		return (string) ( $runtime_context['model_slug'] ?? '' );
+	}
+
 	private static function get_runtime_context_cache_key(): string {
 		$runtime_context = self::get_runtime_context();
 		return '' === $runtime_context['model_slug'] ? '' : $runtime_context['model_slug'];
@@ -908,11 +949,53 @@ class TranslationRuntime {
 	 * ------------------------------------------------------------- */
 
 	public static function record_transport_diagnostics( array $diagnostics ): void {
+		$defaults = array(
+			'transport'            => '',
+			'model_slug'           => '',
+			'requested_model_slug' => '',
+			'effective_model_slug' => '',
+			'direct_api_url'       => '',
+			'kwargs_supported'     => false,
+			'fallback_allowed'     => true,
+			'failure_reason'       => '',
+			'error_code'           => '',
+			'error_message'        => '',
+		);
+
+		$diagnostics = array_merge( $defaults, $diagnostics );
+
+		if ( '' === $diagnostics['model_slug'] ) {
+			$diagnostics['model_slug'] = (string) ( $diagnostics['requested_model_slug'] ?: $diagnostics['effective_model_slug'] );
+		}
+
+		if ( '' === $diagnostics['requested_model_slug'] ) {
+			$diagnostics['requested_model_slug'] = (string) $diagnostics['model_slug'];
+		}
+
+		if ( '' === $diagnostics['effective_model_slug'] ) {
+			$diagnostics['effective_model_slug'] = (string) $diagnostics['model_slug'];
+		}
+
 		self::$last_diagnostics = $diagnostics;
 	}
 
 	public static function get_last_diagnostics(): ?array {
 		return self::$last_diagnostics;
+	}
+
+	public static function get_last_diagnostics_snapshot(): array {
+		return is_array( self::$last_diagnostics ) ? self::$last_diagnostics : array(
+			'transport'            => '',
+			'model_slug'           => '',
+			'requested_model_slug' => '',
+			'effective_model_slug' => '',
+			'direct_api_url'       => '',
+			'kwargs_supported'     => false,
+			'fallback_allowed'     => true,
+			'failure_reason'       => '',
+			'error_code'           => '',
+			'error_message'        => '',
+		);
 	}
 
 	public static function get_source_lang(): ?string {
@@ -927,14 +1010,20 @@ class TranslationRuntime {
 		$diagnostics = is_array( self::$last_diagnostics )
 			? self::$last_diagnostics
 			: array(
-				'transport'        => 'unknown',
-				'model_slug'       => '',
-				'direct_api_url'   => '',
-				'kwargs_supported' => false,
-				'fallback_allowed' => true,
+				'transport'            => 'unknown',
+				'model_slug'           => '',
+				'requested_model_slug' => '',
+				'effective_model_slug' => '',
+				'direct_api_url'       => '',
+				'kwargs_supported'     => false,
+				'fallback_allowed'     => true,
+				'error_code'           => '',
+				'error_message'        => '',
 			);
 
 		$diagnostics['failure_reason'] = $error->get_error_code();
+		$diagnostics['error_code']     = $error->get_error_code();
+		$diagnostics['error_message']  = $error->get_error_message();
 		self::record_transport_diagnostics( $diagnostics );
 	}
 

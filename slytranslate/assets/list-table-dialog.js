@@ -65,12 +65,14 @@
 
 	/* --- Shared helpers --- */
 
-	function apiPost(endpoint, body, signal) {
+	function apiPost(endpoint, body, signal, options) {
+		options = options || {};
 		return fetch(REST_URL + endpoint, {
 			method: 'POST',
 			credentials: 'same-origin',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': REST_NONCE },
 			body: JSON.stringify(body),
+			keepalive: !!options.keepalive,
 			signal: signal || undefined,
 		}).then(function (r) { return r.json(); });
 	}
@@ -191,7 +193,9 @@
 				model_slug: modelSlug || undefined,
 				additional_prompt: additionalPrompt || undefined,
 			}
-		}, abortCtrl ? abortCtrl.signal : undefined)
+		}, abortCtrl ? abortCtrl.signal : undefined, {
+			keepalive: true,
+		})
 			.then(function (resp) {
 				if (movedToBackground) {
 					if (resp && resp.code && currentBgTaskId) {
@@ -478,6 +482,8 @@
 					model_slug: modelSlug || undefined,
 					additional_prompt: additionalPrompt || undefined,
 				}
+			}, undefined, {
+				keepalive: true,
 			}).then(function (resp) {
 				if (resp && resp.code) {
 					finishBgTask(taskId, 'error', '');

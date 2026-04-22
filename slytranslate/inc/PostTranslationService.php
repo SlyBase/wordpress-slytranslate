@@ -92,13 +92,12 @@ class PostTranslationService {
 
 		TimingLogger::reset_counters();
 		$job_started_at  = TimingLogger::start();
-		$runtime_context = TranslationRuntime::get_runtime_context();
 		TimingLogger::log( 'job_start', array(
 			'post'      => $post_id,
 			'post_type' => $post->post_type,
 			'from'      => $from,
 			'to'        => $to,
-			'model'     => (string) ( $runtime_context['model_slug'] ?? '' ),
+			'model'     => TranslationRuntime::get_requested_model_slug(),
 			'overwrite' => $overwrite ? 1 : 0,
 		) );
 
