@@ -18,6 +18,8 @@ SlyTranslate exposes translation workflows as reusable WordPress abilities, so t
 - Cancel running translations, refresh the available model list, and persist per-user additional instructions across editor flows
 - Connect directly to any OpenAI-compatible endpoint for models that need `chat_template_kwargs` (e.g. TranslateGemma)
 - Expose abilities over REST and MCP-friendly discovery
+- Large models (gemma-4, Llama 3.1+) are recognised with their full context window, so a ~48 000-char post translates in one AI call instead of twelve
+- Eligible SEO meta fields (title, description) are translated in a single batched AI call, reducing meta-phase round-trips by up to N−1 calls
 
 ## What This Plugin Does
 

@@ -36,11 +36,13 @@ class TranslationRuntime {
 	private const MAX_TRANSLATION_CHARS         = 48000;
 	private const SAFE_CHARS_PER_CONTEXT_TOKEN  = 0.5;
 	// Upper bound for `max_tokens` / `max_output_tokens` per request.
-	// Kept in sync with MAX_TRANSLATION_CHARS (~0.5 tokens per input
-	// char × growth factor) so a chunk that fills the char ceiling is
-	// still allowed to emit a same-size translation. Filter:
-	// `ai_translate_max_output_tokens_ceiling`.
-	private const MAX_OUTPUT_TOKENS_CEILING     = 8192;
+	// Scaled to MAX_TRANSLATION_CHARS so a chunk that fills the char
+	// ceiling can emit a full-size translation. Formula:
+	//   MAX_TRANSLATION_CHARS (48 000) × 0.5 tokens/char ≈ 24 000 input tokens
+	//   × 1.35 growth headroom                            ≈ 32 400 output tokens
+	// → rounded up to 32 768 (power of 2).
+	// Filter: `ai_translate_max_output_tokens_ceiling`.
+	private const MAX_OUTPUT_TOKENS_CEILING     = 32768;
 	private const MIN_OUTPUT_TOKENS             = 256;
 	private const KNOWN_MODEL_CONTEXT_WINDOWS   = array(
 		'claude'          => 200000,
@@ -73,6 +75,7 @@ class TranslationRuntime {
 		'qwen'            => 32768,
 		'deepseek'        => 131072,
 		'translategemma'  => 8192,
+		'gemma-4'         => 131072,
 		'gemma-3'         => 131072,
 		'gemma'           => 8192,
 	);
@@ -83,6 +86,9 @@ class TranslationRuntime {
 
 	/** Cached runtime context (model slug, direct API URL). */
 	private static $context = null;
+
+	/** Cached chunk char limit for the duration of one PHP request. */
+	private static ?int $chunk_char_limit_cache = null;
 
 	/** Per-request model slug override set by with_model_slug_override(). */
 	private static $model_slug_override = null;
@@ -154,10 +160,15 @@ class TranslationRuntime {
 				? sanitize_text_field( $input['model_slug'] )
 				: null;
 
+		// Chunk limit depends on model slug (context-window lookup).
+		// Clear the cache so the new model gets the correct limit.
+		self::$chunk_char_limit_cache = null;
+
 		try {
 			return $callback();
 		} finally {
-			self::$model_slug_override = $previous;
+			self::$model_slug_override    = $previous;
+			self::$chunk_char_limit_cache = null;
 		}
 	}
 
@@ -620,6 +631,10 @@ class TranslationRuntime {
 	 * ------------------------------------------------------------- */
 
 	public static function get_chunk_char_limit(): int {
+		if ( null !== self::$chunk_char_limit_cache ) {
+			return self::$chunk_char_limit_cache;
+		}
+
 		$runtime_context      = self::get_runtime_context();
 		$context_window_size  = self::get_effective_context_window_tokens();
 		$chunk_char_limit     = self::get_chunk_char_limit_from_context_window( $context_window_size );
@@ -630,7 +645,8 @@ class TranslationRuntime {
 			$chunk_char_limit = $filtered_limit;
 		}
 
-		return max( self::MIN_TRANSLATION_CHARS, min( self::MAX_TRANSLATION_CHARS, $chunk_char_limit ) );
+		self::$chunk_char_limit_cache = max( self::MIN_TRANSLATION_CHARS, min( self::MAX_TRANSLATION_CHARS, $chunk_char_limit ) );
+		return self::$chunk_char_limit_cache;
 	}
 
 	public static function get_chunk_char_limit_from_context_window( int $context_window_tokens ): int {
@@ -777,7 +793,8 @@ class TranslationRuntime {
 	}
 
 	public static function reset_context(): void {
-		self::$context = null;
+		self::$context              = null;
+		self::$chunk_char_limit_cache = null;
 	}
 
 	public static function get_requested_model_slug(): string {

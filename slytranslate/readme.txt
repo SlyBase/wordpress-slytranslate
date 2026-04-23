@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, multilingual
 Requires at least: 7.0
 Tested up to: 7.0.0
 Requires PHP: 8.1
-Stable tag: 1.5.6
+Stable tag: 1.6.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -151,6 +151,12 @@ The running translation is handed off automatically to the same global backgroun
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= 1.6.0 =
+* Performance: raised `MAX_OUTPUT_TOKENS_CEILING` from 8 192 to 32 768 tokens so large posts are no longer truncated mid-translation and fall back to slow per-block mode.
+* Performance: added `gemma-4` to the known model context-window table (131 072 tokens), fixing the substring match that caused gemma-4 variants to be handled with only 8 192 tokens, splitting a ~48 000-char post into 12 chunks instead of 1.
+* Performance: the computed chunk char limit is now cached for the duration of each translation job (cleared on model switch and between jobs), eliminating repeated option reads and model table lookups.
+* Performance: eligible short-string SEO meta values (e.g. Yoast/Slim SEO title and description) are now translated in a single batched AI call instead of one call per key, reducing meta-phase AI round-trips by up to N−1 calls.
 
 = Unreleased =
 * Dev: added a repository instruction that blocks Autopilot completion until local validation, a versioned beta commit, Build and Deploy Plugin ZIP, and a WordPress MCP translation smoke test for post 1109 have all succeeded.

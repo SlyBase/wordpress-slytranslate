@@ -57,8 +57,8 @@ class RunawayOutputValidationTest extends TestCase {
 
 		$this->assertSame( 256, $tokens_for_small_input, 'Short inputs floor at 256 tokens.' );
 		$this->assertGreaterThanOrEqual( 256, $tokens_for_medium_input );
-		$this->assertLessThanOrEqual( 8192, $tokens_for_medium_input );
-		$this->assertSame( 8192, $tokens_for_huge_input, 'Huge inputs cap at the 8192 ceiling.' );
+		$this->assertLessThanOrEqual( 32768, $tokens_for_medium_input );
+		$this->assertSame( 32768, $tokens_for_huge_input, 'Huge inputs cap at the 32768 ceiling.' );
 	}
 
 	public function test_is_retryable_validation_error_code_includes_runaway(): void {

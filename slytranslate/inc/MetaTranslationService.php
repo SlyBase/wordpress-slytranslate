@@ -98,6 +98,16 @@ class MetaTranslationService {
 		) );
 		$meta_started_at = TimingLogger::start();
 
+		// Attempt to translate eligible short string meta values in one
+		// batched AI call. Falls back to individual calls on any failure.
+		$batch_results = self::try_batch_translate_eligible_meta(
+			is_array( $meta ) ? $meta : array(),
+			$meta_key_config,
+			$to,
+			$from,
+			$additional_prompt
+		);
+
 		foreach ( $meta as $key => $values ) {
 			if ( TranslationProgressTracker::is_cancelled() ) {
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
@@ -112,6 +122,21 @@ class MetaTranslationService {
 			if ( in_array( $key, $meta_key_config['clear'], true ) ) {
 				$processed_meta[ $key ] = '';
 			} elseif ( in_array( $key, $meta_key_config['translate'], true ) ) {
+				// Use the batch result when available for this key.
+				if ( is_array( $batch_results ) && array_key_exists( $key, $batch_results ) ) {
+					$processed_meta[ $key ] = $batch_results[ $key ];
+					TimingLogger::log( 'meta_key_done', array(
+						'key'         => $key,
+						'subcalls'    => 0,
+						'duration_ms' => 0,
+						'chars'       => self::sum_value_chars( $value ),
+						'ok'          => true,
+						'batch'       => true,
+					) );
+					continue;
+				}
+
+				// Individual translation (also handles array values and slim_seo).
 				$key_started     = TimingLogger::start();
 				$calls_before    = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
 				$translated_meta = self::translate_meta_value_for_key( $key, $value, $to, $from, $additional_prompt );
@@ -139,6 +164,104 @@ class MetaTranslationService {
 		) );
 
 		return $processed_meta;
+	}
+
+	/**
+	 * Try to translate all eligible short string meta values in a single AI call.
+	 *
+	 * "Eligible" means: the meta key is in the translate list, the value is a
+	 * non-empty string, it is short enough to fit in a single batch JSON payload
+	 * (<= 1 000 chars), and it does not need the special slim_seo array handling.
+	 *
+	 * On any failure (AI error, JSON parse error, missing keys) the method
+	 * returns null and the caller falls back to individual per-key translation.
+	 *
+	 * @return array<string,string>|null Translated values indexed by meta key, or null on failure.
+	 */
+	private static function try_batch_translate_eligible_meta(
+		array $meta,
+		array $meta_key_config,
+		string $to,
+		string $from,
+		string $additional_prompt
+	): ?array {
+		$candidates = array();
+
+		foreach ( $meta as $key => $values ) {
+			if ( in_array( $key, self::INTERNAL_META_KEYS_TO_SKIP, true ) ) {
+				continue;
+			}
+			if ( ! in_array( $key, $meta_key_config['translate'], true ) ) {
+				continue;
+			}
+			// slim_seo is an array with custom key-level handling — skip from batching.
+			if ( 'slim_seo' === $key ) {
+				continue;
+			}
+
+			$value = maybe_unserialize( $values[0] ?? '' );
+			if ( ! is_string( $value ) || '' === trim( $value ) ) {
+				continue;
+			}
+			// Only batch short values; long strings get their own AI call.
+			if ( self::sum_value_chars( $value ) > 1000 ) {
+				continue;
+			}
+
+			$candidates[ $key ] = $value;
+		}
+
+		// Batching only pays off when there are at least two values.
+		if ( count( $candidates ) < 2 ) {
+			return null;
+		}
+
+		$json_input = wp_json_encode( $candidates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		if ( false === $json_input ) {
+			return null;
+		}
+
+		// A concise additional instruction that clarifies the JSON contract
+		// without overriding the user's own style instructions.
+		$json_hint    = 'The input is a JSON object. Translate only the string values, not the keys. Return a valid JSON object with the identical keys and translated values. No explanations, no markdown wrappers — only the JSON.';
+		$batch_prompt = '' !== trim( $additional_prompt )
+			? $additional_prompt . "\n\n" . $json_hint
+			: $json_hint;
+
+		$calls_before = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+		$result       = TranslationRuntime::translate_text( $json_input, $to, $from, $batch_prompt );
+		$calls_after  = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+
+		$ok = ! is_wp_error( $result );
+		TimingLogger::log( 'meta_batch', array(
+			'keys'     => array_keys( $candidates ),
+			'subcalls' => $calls_after - $calls_before,
+			'ok'       => $ok,
+		) );
+
+		if ( ! $ok ) {
+			return null;
+		}
+
+		// Strip optional markdown code fences that some models emit around JSON.
+		$result_str = trim( (string) $result );
+		$result_str = (string) preg_replace( '/^```(?:json)?\s*/i', '', $result_str );
+		$result_str = (string) preg_replace( '/\s*```\s*$/i', '', $result_str );
+		$result_str = trim( $result_str );
+
+		$decoded = json_decode( $result_str, true );
+		if ( ! is_array( $decoded ) ) {
+			return null;
+		}
+
+		// All original keys must be present with string values; otherwise fall back.
+		foreach ( array_keys( $candidates ) as $key ) {
+			if ( ! array_key_exists( $key, $decoded ) || ! is_string( $decoded[ $key ] ) ) {
+				return null;
+			}
+		}
+
+		return $decoded;
 	}
 
 	private static function sum_value_chars( $value ): int {
