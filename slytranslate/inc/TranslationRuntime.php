@@ -45,35 +45,107 @@ class TranslationRuntime {
 	private const MAX_OUTPUT_TOKENS_CEILING     = 32768;
 	private const MIN_OUTPUT_TOKENS             = 256;
 	private const KNOWN_MODEL_CONTEXT_WINDOWS   = array(
+		// ── Anthropic Claude ──────────────────────────────────────────────
+		// All current Claude models (3.x, 3.5, 3.7, 4.x) share 200 K context.
 		'claude'          => 200000,
+
+		// ── Google Gemini ─────────────────────────────────────────────────
 		'gemini-2.5'      => 1000000,
 		'gemini-2.0'      => 1000000,
 		'gemini-1.5'      => 1000000,
+
+		// ── OpenAI GPT ────────────────────────────────────────────────────
+		// GPT-5 family (gpt-5, gpt-5.x) – context TBD, 200 K assumed.
+		'gpt-5'           => 200000,
 		'gpt-4.5'         => 128000,
-		'gpt-4.1'         => 128000,
+		// GPT-4.1 / 4.1-mini / 4.1-nano ship with a 1 M (1 047 576) context.
+		'gpt-4.1'         => 1048576,
+		// gpt-4o-mini must precede gpt-4o so it is matched first.
+		'gpt-4o-mini'     => 128000,
 		'gpt-4o'          => 128000,
 		'gpt-4-turbo'     => 128000,
 		'gpt-3.5-turbo'   => 16385,
-		'o4-mini'         => 128000,
-		'o3'              => 128000,
-		'mistral-large'   => 32768,
-		'mistral-small'   => 32768,
-		'sonar'           => 32768,
+
+		// ── OpenAI reasoning models (200 K context) ───────────────────────
+		// List specific variants before their generic prefixes.
+		'o4-mini'         => 200000,
+		'o3-mini'         => 200000,
+		'o3'              => 200000,
+		'o1-mini'         => 128000,
+		'o1'              => 200000,
+
+		// ── xAI Grok ──────────────────────────────────────────────────────
 		'grok'            => 131072,
-		// Hosted open-weight models (Groq, Together, Fireworks, DeepInfra, …).
-		// Matching is substring-based so provider prefixes like
-		// `llama-3.3-70b-versatile` or `meta-llama/Llama-3.1-…` are covered.
+
+		// ── Mistral AI ────────────────────────────────────────────────────
+		'codestral'       => 32768,
+		'pixtral'         => 128000,
+		'mistral-nemo'    => 131072,
+		'mistral-large'   => 131072,  // Mistral Large 2 (2024): 128 K context.
+		'mistral-small'   => 32768,
+
+		// ── Perplexity Sonar ──────────────────────────────────────────────
+		'sonar'           => 32768,
+
+		// ── Meta Llama ────────────────────────────────────────────────────
+		// Substring-based matching covers provider-prefixed slugs such as
+		// `meta-llama/Llama-3.3-70b` or `llama-3.3-70b-versatile`.
 		'llama-4'         => 131072,
 		'llama-3.3'       => 131072,
 		'llama-3.2'       => 131072,
 		'llama-3.1'       => 131072,
 		'llama-3'         => 8192,
+
+		// ── Mistral Mixtral ───────────────────────────────────────────────
 		'mixtral'         => 32768,
+
+		// ── Alibaba Qwen ──────────────────────────────────────────────────
+		// Both `qwen2.5` and `qwen-2.5` appear in practice.
+		'qwen3'           => 131072,
 		'qwen2.5'         => 131072,
 		'qwen-2.5'        => 131072,
-		'qwen3'           => 131072,
 		'qwen'            => 32768,
+
+		// ── DeepSeek ──────────────────────────────────────────────────────
 		'deepseek'        => 131072,
+
+		// ── Microsoft Phi ─────────────────────────────────────────────────
+		// More specific variants must precede the generic `phi` entry.
+		'phi-4-mini'      => 131072,
+		'phi-4'           => 16384,
+		'phi-3.5'         => 131072,
+		'phi-3'           => 131072,
+		'phi'             => 16384,
+
+		// ── Zhipu GLM (GLM-4, GLM-Z1, …) ────────────────────────────────
+		'glm'             => 131072,
+
+		// ── Moonshot / Kimi ───────────────────────────────────────────────
+		'moonshot'        => 131072,
+		'kimi'            => 131072,
+
+		// ── 01.AI Yi ──────────────────────────────────────────────────────
+		'yi'              => 200000,
+
+		// ── Shanghai AI Lab InternLM ──────────────────────────────────────
+		'internlm'        => 1000000,
+
+		// ── Cohere Command ────────────────────────────────────────────────
+		// command-r must precede the generic command entry.
+		'command-r'       => 128000,
+		'command'         => 128000,
+
+		// ── Nous Hermes (popular community fine-tunes) ────────────────────
+		'hermes'          => 131072,
+
+		// ── Falcon (TII) ─────────────────────────────────────────────────
+		'falcon'          => 8192,
+
+		// ── Baichuan ─────────────────────────────────────────────────────
+		'baichuan'        => 131072,
+
+		// ── Google Gemma ─────────────────────────────────────────────────
+		// translategemma must precede the generic gemma entries.
 		'translategemma'  => 8192,
 		'gemma-4'         => 131072,
 		'gemma-3'         => 131072,

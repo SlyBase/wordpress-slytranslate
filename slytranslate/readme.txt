@@ -157,6 +157,7 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 * Performance: added `gemma-4` to the known model context-window table (131 072 tokens), fixing the substring match that caused gemma-4 variants to be handled with only 8 192 tokens, splitting a ~48 000-char post into 12 chunks instead of 1.
 * Performance: the computed chunk char limit is now cached for the duration of each translation job (cleared on model switch and between jobs), eliminating repeated option reads and model table lookups.
 * Performance: eligible short-string SEO meta values (e.g. Yoast/Slim SEO title and description) are now translated in a single batched AI call instead of one call per key, reducing meta-phase AI round-trips by up to N−1 calls.
+* Performance: expanded `KNOWN_MODEL_CONTEXT_WINDOWS` with many new model families (GPT-5, GPT-4.1 @ 1 M, GPT-4o-mini, o1/o3/o4-mini reasoning models, Mistral Codestral/Pixtral/Nemo, Phi-4/3.x, GLM, Moonshot/Kimi, Yi, InternLM, Cohere Command R, Nous Hermes, Falcon, Baichuan) and corrected existing entries (gpt-4.1 128 K → 1 048 576, o3/o4-mini 128 K → 200 K, mistral-large 32 K → 128 K).
 
 
 = 1.5.6 =
