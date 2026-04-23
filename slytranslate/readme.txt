@@ -158,8 +158,6 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 * Performance: the computed chunk char limit is now cached for the duration of each translation job (cleared on model switch and between jobs), eliminating repeated option reads and model table lookups.
 * Performance: eligible short-string SEO meta values (e.g. Yoast/Slim SEO title and description) are now translated in a single batched AI call instead of one call per key, reducing meta-phase AI round-trips by up to N−1 calls.
 
-= Unreleased =
-* Dev: added a repository instruction that blocks Autopilot completion until local validation, a versioned beta commit, Build and Deploy Plugin ZIP, and a WordPress MCP translation smoke test for post 1109 have all succeeded.
 
 = 1.5.6 =
 * MCP: sharpened public ability descriptions so discovery now hints at the intended read-only preparation flow before mutating translation calls.
