@@ -28,6 +28,11 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if echo "$VERSION" | grep -qi "beta\|alpha\|rc"; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
           echo "Creating release for version: $VERSION"
 
       - name: Check if release already exists
@@ -80,7 +85,7 @@ jobs:
           name: slytranslate v${{ steps.version.outputs.version }}
           body_path: changelog.txt
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.version.outputs.prerelease }}
           files: slytranslate-${{ steps.version.outputs.version }}.zip
           token: ${{ secrets.SLYBASE_ACTIONS }}
 
