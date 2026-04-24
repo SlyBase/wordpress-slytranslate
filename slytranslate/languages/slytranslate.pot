@@ -1,341 +1,657 @@
-# SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the SlyTranslate - AI Translation Abilities package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SlyTranslate - AI Translation Abilities 1.5.0\n"
+"Project-Id-Version: SlyTranslate - AI Translation Abilities\n"
 "Report-Msgid-Bugs-To: https://github.com/SlyBase/wordpress-slytranslate\n"
-"POT-Creation-Date: 2026-04-18 00:30+0200\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"POT-Creation-Date: 2026-04-24 21:21+0200\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: ai-translate-abilities/ai-translate.php:151
-msgid "SlyTranslate AI Translation"
+#. translators: %d: number of errors
+#: slytranslate/inc/ListTableTranslation.php:306
+#, php-format
+msgid "%d error."
+msgid_plural "%d errors."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: number of skipped items
+#: slytranslate/inc/ListTableTranslation.php:298
+#, php-format
+msgid "%d skipped (translation already exists)."
+msgid_plural "%d skipped (translation already exists)."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: number of translations created
+#: slytranslate/inc/ListTableTranslation.php:290
+#, php-format
+msgid "%d translation created."
+msgid_plural "%d translations created."
+msgstr[0] ""
+msgstr[1] ""
+
+#: slytranslate/ai-translate.php:396
+msgid "A translation already exists for the requested language."
 msgstr ""
 
-#: ai-translate-abilities/ai-translate.php:152
-msgid ""
-"Translate this post, page, or custom content item into another language."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:152
-msgid "Source language"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:153
-msgid "Content type"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:154
-msgid "Target language"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:155
-msgid "Overwrite existing translation"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:156
-msgid ""
-"If enabled, an existing translation for the selected language will be "
-"updated."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:157
-msgid "Translate now"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:158
-msgid "Refresh translation status"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:159
-msgid "Loading available languages..."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:160
-msgid "Loading translation status..."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:161
-msgid "No target languages are available for this content item."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:162
-msgid "Translation status"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:163
-msgid "Available"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:164
-msgid "Not translated yet"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:165
-msgid "Open translation"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:166
-msgid "Save the content before creating a translation."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:167
-msgid ""
-"Save your latest changes before translating so the translation uses the "
-"current content."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:168
-msgid "Translation created successfully."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:169
-msgid "Translation updated successfully."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:170
+#: slytranslate/inc/EditorBootstrap.php:80
 msgid ""
 "A translation already exists for the selected language. Enable overwrite to "
 "update it."
 msgstr ""
 
-#: ai-translate-abilities/ai-translate.php:171
-msgid "The source content is already in the selected language."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:172
-msgid "Latest translation"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:173
-msgid "An unexpected error occurred."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:184
-msgid "AI Translation"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:185
-msgid "AI-powered content translation abilities."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:223
-msgid "Get Languages"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:224
-msgid "Returns all languages available for translation."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:252
-#: ai-translate-abilities/ai-translate.php:310
-#: ai-translate-abilities/ai-translate.php:397
-#: ai-translate-abilities/ai-translate.php:616
-#: ai-translate-abilities/ai-translate.php:1659
-msgid "No supported translation plugin is active."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:266
-msgid "Get Translation Status"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:267
-msgid ""
-"Returns the translation status for a post, page, or custom post type entry."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:316
-msgid "Post not found."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:319
-msgid "You are not allowed to inspect this content item."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:351
-msgid "Get Untranslated Content"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:352
-msgid ""
-"Lists posts, pages, or custom post types that do not yet have a translation "
-"in the requested language."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:402
-msgid "Target language is required."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:452
-msgid "Translate Text"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:453
-msgid ""
-"Translates arbitrary text from one language to another using the WordPress "
-"AI Client."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:499
-msgid "Translate Content"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:500
-msgid ""
-"Translates a post, page, or custom post type entry and creates or updates "
-"the translation."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:562
-msgid "Translate Content (Bulk)"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:563
-msgid ""
-"Translates multiple posts, pages, or custom post type entries. Continues on "
-"individual failures."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:638
-#: ai-translate-abilities/ai-translate.php:1668
-msgid "You are not allowed to translate this content item."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:651
-msgid "The source content is already in the requested target language."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:664
-msgid "A translation already exists for the requested language."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:711
-msgid "Configure AI Translate"
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:712
-msgid ""
-"Read or update AI Translate settings, including prompt template, meta keys, "
-"SEO defaults, and auto-translate behavior."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:1513
-msgid "Provide either post_ids or a post_type to translate in bulk."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:1569
-msgid "The requested post type does not exist."
-msgstr ""
-
-#. translators: %s: post type slug.
-#: ai-translate-abilities/ai-translate.php:1577
-#, php-format
-msgid "The post type \"%s\" is not enabled for translation in Polylang."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:1665
-msgid "Source post not found."
-msgstr ""
-
-#: ai-translate-abilities/ai-translate.php:1679
-msgid "Source and target languages must be different."
-msgstr ""
-
 #. translators: 1: language code, 2: post ID.
-#: ai-translate-abilities/ai-translate.php:1688
+#: slytranslate/inc/PostTranslationService.php:76
 #, php-format
 msgid "A translation for language \"%1$s\" already exists (post %2$d)."
 msgstr ""
 
-#: ai-translate-abilities/ai-translate.php:1695
-msgid "You are not allowed to update the existing translation."
+#: slytranslate/ai-translate.php:325
+msgid "A valid source post ID is required."
 msgstr ""
 
-#: slytranslate/ai-translate.php
-msgid "Optional site-wide addition always appended after the prompt template. Applied to every translation request."
+#: slytranslate/inc/AbilityRegistrar.php:14
+msgid "AI Translation"
 msgstr ""
 
-#: slytranslate/ai-translate.php
-msgid "Optional extra instructions appended after the global prompt template and the site-wide prompt add-on."
+#: slytranslate/inc/EditorBootstrap.php:45
+#: slytranslate/inc/ListTableTranslation.php:352
+msgid "AI model"
 msgstr ""
 
-#: slytranslate/ai-translate.php
-msgid "You must be logged in to save preferences."
+#: slytranslate/inc/AbilityRegistrar.php:15
+msgid "AI-powered content translation abilities."
 msgstr ""
 
-#: slytranslate/assets/editor-plugin.js
+#: slytranslate/inc/EditorBootstrap.php:55
+#: slytranslate/inc/ListTableTranslation.php:356
 msgid "Additional instructions (optional)"
 msgstr ""
 
-#: slytranslate/assets/editor-plugin.js
-msgid "Supplements the site-wide translation instructions. Example: Use informal language."
+#: slytranslate/inc/EditorBootstrap.php:87
+msgid "An unexpected error occurred."
 msgstr ""
 
-#: slytranslate/inc/EditorBootstrap.php
-msgid "Translating title..."
+#: slytranslate/inc/EditorBootstrap.php:72
+msgid "Available"
 msgstr ""
 
-#: slytranslate/inc/EditorBootstrap.php
-msgid "Translating content ({current}/{total})..."
+#: slytranslate/ai-translate.php:287
+msgid "Block content to translate is required."
 msgstr ""
 
-#: slytranslate/inc/EditorBootstrap.php
-msgid "Translating excerpt..."
+#. translators: 1: translated item count, 2: skipped item count, 3: failed item count
+#: slytranslate/inc/ListTableTranslation.php:368
+#, php-format
+msgid "Bulk translation complete: %1$d translated, %2$d skipped, %3$d failed."
 msgstr ""
 
-#: slytranslate/inc/EditorBootstrap.php
-msgid "Translating metadata..."
+#: slytranslate/inc/EditorBootstrap.php:86
+#: slytranslate/inc/ListTableTranslation.php:359
+msgid "Cancel"
 msgstr ""
 
-#: slytranslate/inc/EditorBootstrap.php
-msgid "Saving translation..."
+#: slytranslate/inc/AbilityRegistrar.php:357
+msgid "Cancel Translation"
 msgstr ""
 
-#: slytranslate/ai-translate.php
-msgid "TranslateGemma requires a direct API endpoint. Configure direct_api_url for your llama.cpp server or switch to an instruct model."
-msgstr ""
-
-#: slytranslate/ai-translate.php
-msgid "TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model."
-msgstr ""
-
-#: slytranslate/ai-translate.php
-msgid "TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations."
-msgstr ""
-
-#: slytranslate/ai-translate.php
-msgid "The model returned an empty translation result."
-msgstr ""
-
-#: slytranslate/ai-translate.php
-msgid "The translated output did not contain usable text."
-msgstr ""
-
-#: slytranslate/ai-translate.php
-msgid "The model returned explanatory assistant text instead of a clean translation."
-msgstr ""
-
-#: slytranslate/ai-translate.php
-msgid "The translated output is implausibly long for the source text and looks like a generated explanation rather than a translation."
-msgstr ""
-
-#: slytranslate/ai-translate.php
-msgid "The translated output lost required structure such as HTML, Gutenberg block comments, URLs, or code fences."
-msgstr ""
-
-#: slytranslate/assets/editor-plugin.js
+#: slytranslate/inc/EditorBootstrap.php:59
+#: slytranslate/inc/ListTableTranslation.php:333
+#: slytranslate/inc/ListTableTranslation.php:1086
 msgid "Cancel translation"
 msgstr ""
 
-#: slytranslate/assets/editor-plugin.js
-msgid "TranslateGemma does not reliably follow style guidelines. For tone, address forms, and language register, consider Instruct-LLMs."
+#: slytranslate/inc/ListTableTranslation.php:1093
+msgid "Clear finished"
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:335
+msgid "Close"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:438
+msgid "Configure AI Translate"
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:363
+msgid "Connector default"
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:334
+msgid "Continue in background"
+msgstr ""
+
+#. translators: 1: API endpoint URL, 2: error message from HTTP transport.
+#: slytranslate/inc/DirectApiTranslationClient.php:114
+#, php-format
+msgid "Could not connect to direct API at %1$s: %2$s"
+msgstr ""
+
+#. translators: 1: API endpoint URL, 2: response body / retry-after.
+#: slytranslate/inc/DirectApiTranslationClient.php:178
+#, php-format
+msgid "Direct API rate limit (429) from %1$s: %2$s"
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:1091
+msgid "Dismiss"
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:347
+msgid "Done"
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:348
+msgid "Failed"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:383
+msgid "Get Available Models"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:58
+msgid "Get Languages"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:329
+msgid "Get Translation Progress"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:86
+msgid "Get Translation Status"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:129
+msgid "Get Untranslated Content"
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:217
+msgid "Invalid request."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:130
+msgid ""
+"Lists posts, pages, or custom post types that do not yet have a translation "
+"in the requested language. Use this to collect candidates before calling "
+"translate-content-bulk."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:68
+msgid "Loading available languages..."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:361
+msgid "Loading available models..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:69
+msgid "Loading translation status..."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:362
+msgid ""
+"No AI models are available. Configure a connector under Settings → "
+"Connectors first."
+msgstr ""
+
+#: slytranslate/inc/PostTranslationService.php:40
+#: slytranslate/inc/TranslationQueryService.php:20
+#: slytranslate/inc/TranslationQueryService.php:33
+#: slytranslate/inc/TranslationQueryService.php:77
+#: slytranslate/ai-translate.php:363
+msgid "No supported translation plugin is active."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:85
+msgid "No target languages are available for the selected text."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:70
+msgid "No target languages are available for this content item."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:73
+msgid "Not translated yet"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:75
+msgid "Open"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:74
+#: slytranslate/inc/ListTableTranslation.php:346
+#: slytranslate/inc/ListTableTranslation.php:1090
+msgid "Open translation"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:53
+msgid "Overwrite existing translation"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:412
+msgid ""
+"Persists the per-user additional translation instructions so they are pre-"
+"filled on the next visit. This stores a UI preference and does not start a "
+"translation by itself."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:364
+msgid "Please select at least one item before translating."
+msgstr ""
+
+#: slytranslate/inc/TranslationQueryService.php:39
+#: slytranslate/inc/ListTableTranslation.php:228
+msgid "Post not found."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:62
+#: slytranslate/inc/ListTableTranslation.php:1099
+msgid "Processing translated content..."
+msgstr ""
+
+#: slytranslate/inc/TranslationQueryService.php:199
+msgid "Provide either post_ids or a post_type to translate in bulk."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:439
+msgid ""
+"Reads or updates site-wide AI Translate settings. Call with an empty object "
+"to inspect current defaults. Use translate-* abilities for per-request "
+"overrides and configure only for persistent site-wide changes."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:46
+#: slytranslate/inc/ListTableTranslation.php:360
+msgid "Refresh model list"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:67
+msgid "Refresh translation status"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:59
+msgid ""
+"Returns all languages available for translation. Call this before a "
+"translation when the target language code is unknown."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:330
+msgid ""
+"Returns the current translation progress for a running translation job. Pass "
+"post_id when you want the progress state for a specific content item."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:384
+msgid ""
+"Returns the list of AI models available for translation through the "
+"configured connectors. Call this before setting model_slug when the "
+"available model identifiers are unknown."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:87
+msgid ""
+"Returns the translation status for a post, page, or custom post type entry. "
+"Use this before translate-content when you need to inspect existing target "
+"posts or decide whether overwrite should be enabled."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:411
+msgid "Save Additional Prompt"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:76
+msgid "Save the content before creating a translation."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:77
+msgid ""
+"Save your latest changes before translating so the translation uses the "
+"current content."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:65
+#: slytranslate/inc/ListTableTranslation.php:345
+#: slytranslate/inc/ListTableTranslation.php:1102
+msgid "Saving translation..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:84
+msgid "Select text in a paragraph, heading, or another text field first."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:83
+msgid "Selected text"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:358
+msgid ""
+"Signals the running translation job to stop and clears the progress "
+"indicator. Pass post_id when you also want that post-specific progress state "
+"cleared immediately."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:1092
+msgid "SlyTranslate background tasks"
+msgstr ""
+
+#: slytranslate/inc/PostTranslationService.php:67
+msgid "Source and target languages must be different."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:49
+#: slytranslate/inc/ListTableTranslation.php:353
+msgid "Source language"
+msgstr ""
+
+#: slytranslate/ai-translate.php:264 slytranslate/ai-translate.php:290
+msgid "Source language is required."
+msgstr ""
+
+#: slytranslate/inc/PostTranslationService.php:45
+msgid "Source post not found."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:57
+#: slytranslate/inc/ListTableTranslation.php:358
+msgid "Start translation"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:56
+#: slytranslate/inc/ListTableTranslation.php:357
+msgid ""
+"Supplements the site-wide translation instructions. Example: Use informal "
+"language."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:52
+#: slytranslate/inc/ListTableTranslation.php:355
+msgid "Swap source and target language"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:51
+#: slytranslate/inc/ListTableTranslation.php:354
+msgid "Target language"
+msgstr ""
+
+#: slytranslate/inc/TranslationQueryService.php:82
+#: slytranslate/ai-translate.php:267 slytranslate/ai-translate.php:293
+#: slytranslate/ai-translate.php:328 slytranslate/ai-translate.php:358
+msgid "Target language is required."
+msgstr ""
+
+#: slytranslate/ai-translate.php:261
+msgid "Text to translate is required."
+msgstr ""
+
+#: slytranslate/inc/ConfigurationService.php:118
+msgid "The direct API URL must be a valid http(s) URL."
+msgstr ""
+
+#: slytranslate/inc/ConfigurationService.php:124
+msgid ""
+"The direct API URL points to a private or loopback address. Set the "
+"slytranslate_allow_internal_direct_api filter to true if this is intentional."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:55
+msgid "The model returned an empty translation result."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:79
+msgid ""
+"The model returned explanatory assistant text instead of a clean translation."
+msgstr ""
+
+#. translators: %s: post type slug.
+#: slytranslate/inc/TranslationQueryService.php:253
+#, php-format
+msgid "The post type \"%s\" is not enabled for translation in Polylang."
+msgstr ""
+
+#: slytranslate/inc/TranslationQueryService.php:245
+msgid "The requested post type does not exist."
+msgstr ""
+
+#: slytranslate/ai-translate.php:389
+msgid "The source content is already in the requested target language."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:50
+msgid "The source language is managed by your language plugin."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:72
+msgid "The translated output did not contain usable text."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:100
+msgid ""
+"The translated output is far longer than the source text, indicating the "
+"model entered a runaway generation loop or appended hallucinated content."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:93
+msgid ""
+"The translated output is implausibly long for the source text and looks like "
+"a generated explanation rather than a translation."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:114
+#: slytranslate/inc/ContentTranslator.php:637
+msgid ""
+"The translated output lost required structure such as HTML, Gutenberg block "
+"comments, URLs, or code fences."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:107
+msgid ""
+"The translated output rewrote source symbols into a different notation such "
+"as LaTeX instead of preserving them."
+msgstr ""
+
+#: slytranslate/inc/TranslationValidator.php:86
+msgid ""
+"The translated output still appears to be in the source language instead of "
+"German."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:48
+#: slytranslate/inc/ListTableTranslation.php:106
+#: slytranslate/inc/ListTableTranslation.php:129
+#: slytranslate/inc/ListTableTranslation.php:349
+msgid "Translate"
+msgstr ""
+
+#. translators: %d: number of selected items
+#: slytranslate/inc/ListTableTranslation.php:351
+#, php-format
+msgid "Translate %d items"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:47
+#: slytranslate/inc/EditorBootstrap.php:81
+msgid "Translate (SlyTranslate)"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:296
+msgid "Translate Blocks"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:207
+msgid "Translate Content"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:246
+msgid "Translate Content (Bulk)"
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:174
+msgid "Translate Text"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:58
+msgid "Translate now"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:82
+msgid "Translate selected text with SlyTranslate"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:54
+msgid "Translate title"
+msgstr ""
+
+#: slytranslate/inc/TranslationRuntime.php:826
+msgid ""
+"TranslateGemma direct API request failed. SlyTranslate did not fall back to "
+"the WordPress AI Client because TranslateGemma requires chat_template_kwargs "
+"for reliable translations."
+msgstr ""
+
+#: slytranslate/inc/TranslationRuntime.php:662
+msgid ""
+"TranslateGemma requires a direct API endpoint. Configure direct_api_url for "
+"your llama.cpp server or switch to an instruct model."
+msgstr ""
+
+#: slytranslate/inc/TranslationRuntime.php:681
+msgid ""
+"TranslateGemma requires chat_template_kwargs support on the configured "
+"direct API endpoint. Re-save the direct API settings after the server is "
+"reachable, or switch to an instruct model."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:175
+msgid ""
+"Translates arbitrary text from one language to another using the configured "
+"translation runtime. This does not create or update WordPress posts."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:247
+msgid ""
+"Translates multiple posts, pages, or custom post type entries. Choose "
+"exactly one source selector: pass post_ids for explicit items, or pass "
+"post_type with an optional limit to query candidates. If both are provided, "
+"post_ids take precedence. Continues on individual failures."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:208
+msgid ""
+"Translates one post, page, or custom post type entry and creates or updates "
+"exactly one target translation post."
+msgstr ""
+
+#: slytranslate/inc/AbilityRegistrar.php:297
+msgid ""
+"Translates serialised Gutenberg block content from one language to another "
+"while preserving block markup. Use this for raw block content, not for "
+"creating translated posts."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:61
+#: slytranslate/inc/ListTableTranslation.php:342
+#: slytranslate/inc/ListTableTranslation.php:1098
+msgid "Translating content..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:63
+#: slytranslate/inc/ListTableTranslation.php:343
+#: slytranslate/inc/ListTableTranslation.php:1100
+msgid "Translating excerpt..."
+msgstr ""
+
+#. translators: 1: current item number, 2: total item count
+#: slytranslate/inc/ListTableTranslation.php:366
+#, php-format
+msgid "Translating item %1$d of %2$d..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:64
+#: slytranslate/inc/ListTableTranslation.php:344
+#: slytranslate/inc/ListTableTranslation.php:1101
+msgid "Translating metadata..."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:60
+#: slytranslate/inc/ListTableTranslation.php:341
+#: slytranslate/inc/ListTableTranslation.php:1097
+msgid "Translating title..."
+msgstr ""
+
+#. translators: %s: target language name
+#: slytranslate/inc/ListTableTranslation.php:332
+#: slytranslate/inc/ListTableTranslation.php:1085
+#, php-format
+msgid "Translating to %s..."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:330
+#: slytranslate/inc/ListTableTranslation.php:1103
+msgid "Translating..."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:339
+#: slytranslate/inc/ListTableTranslation.php:1089
+msgid "Translation cancelled."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:66
+msgid "Translation complete."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:255
+#: slytranslate/inc/ListTableTranslation.php:336
+#: slytranslate/inc/ListTableTranslation.php:1087
+msgid "Translation completed successfully."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:340
+msgid "Translation continues in the background. You can navigate away."
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:78
+msgid "Translation created successfully."
+msgstr ""
+
+#: slytranslate/inc/ListTableTranslation.php:1088
+msgid "Translation failed."
+msgstr ""
+
+#. translators: %s: error message
+#: slytranslate/inc/ListTableTranslation.php:264
+#: slytranslate/inc/ListTableTranslation.php:338
+#, php-format
+msgid "Translation failed: %s"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:71
+msgid "Translation status"
+msgstr ""
+
+#: slytranslate/inc/EditorBootstrap.php:79
+msgid "Translation updated successfully."
+msgstr ""
+
+#: slytranslate/inc/TranslationQueryService.php:42
+msgid "You are not allowed to inspect this content item."
+msgstr ""
+
+#: slytranslate/inc/PostTranslationService.php:55
+#: slytranslate/inc/ListTableTranslation.php:223
+#: slytranslate/ai-translate.php:382
+msgid "You are not allowed to translate this content item."
+msgstr ""
+
+#: slytranslate/inc/PostTranslationService.php:83
+msgid "You are not allowed to update the existing translation."
+msgstr ""
+
+#: slytranslate/ai-translate.php:489
+msgid "You must be logged in to save preferences."
 msgstr ""
