@@ -1,6 +1,6 @@
 name: 🚀 Feature request
 description: Request a new feature or enhancement for the WordPress plugin.
-title: "[ai-translate-abilities] "
+title: "[slytranslate] "
 labels: enhancement
 assignees:
   - slydlake
@@ -10,7 +10,7 @@ body:
     attributes:
       value: |
         Thanks for proposing a feature! Please fill out the fields below so we can evaluate the request.
-        Important: The issue title should start with the plugin name in square brackets, e.g. `[ai-translate-abilities] Add configuration for <feature>`.
+        Important: The issue title should start with the plugin name in square brackets, e.g. `[slytranslate] Add configuration for <feature>`.
 
   - type: textarea
     id: feature_description
@@ -36,7 +36,8 @@ body:
     id: configuration_files
     attributes:
       label: Configuration files (optional)
-      description: Paste relevant parts of your configuration files here or provide a Gist/URL if applicable.
+      description: Paste relevant parts of your configuration files here or provide a
+        Gist/URL if applicable.
 
   - type: textarea
     id: notes
