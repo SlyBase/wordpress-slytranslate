@@ -12,157 +12,104 @@ AI translation abilities for WordPress using native AI Connectors, the AI Client
 
 == Description ==
 
-SlyTranslate - AI Translation Abilities provides AI-powered translation as WordPress Abilities, making them available to AI agents, automation tools, and the WordPress REST API. Polylang translation is based on AI Translate For Polylang by jamesdlow (https://de.wordpress.org/plugins/ai-translate-for-polylang/).
+SlyTranslate brings practical AI translation to WordPress 7. It is built for teams that need translation directly in editing workflows and also want the same workflows available through REST and MCP automation.
 
+**Why this plugin?**
 
-**Abilities provided:**
+Use SlyTranslate when you need one consistent translation workflow for:
 
-* **ai-translate/get-languages** – Lists all available languages from the active translation plugin.
-* **ai-translate/get-translation-status** – Shows which translations exist for a given content item.
-* **ai-translate/get-untranslated** – Lists posts, pages, or custom post types that still need a translation for a target language.
-* **ai-translate/translate-text** – Translates arbitrary text between languages.
-* **ai-translate/translate-blocks** – Translates serialized Gutenberg block content while preserving block structure.
-* **ai-translate/translate-content** – Translates a post, page, or custom post type entry and creates or updates the translation.
-* **ai-translate/translate-content-bulk** – Bulk-translates multiple entries at once (either by explicit IDs or by post type, max 50) and also accepts per-request additional instructions.
-* **ai-translate/get-progress** – Returns the current progress for a running content translation job.
-* **ai-translate/cancel-translation** – Cancels a running translation job and clears its progress indicator.
-* **ai-translate/get-available-models** – Lists translation models exposed by the configured AI connectors, with optional cache refresh.
-* **ai-translate/save-additional-prompt** – Saves the current user's additional translation instructions for reuse in the editor and list-table flows.
-* **ai-translate/configure** – Read or update plugin settings (prompt template, prompt add-on, meta key configuration, SEO defaults, auto-translate toggle, model slug, optional context window token override, direct API URL for OpenAI-compatible endpoints, optional force-direct-API mode, and direct API plus last-transport diagnostics).
+* page/post translation in wp-admin
+* inline selected-text translation in Gutenberg
+* Gutenberg block translation
+* bulk translation from list-table actions
+* SEO title/description translation in the same process
 
-**Architecture:**
+**Internal flow (short):**
 
-* Uses the WordPress AI Client (`wp_ai_client_prompt()`) for LLM access — no API keys to configure in this plugin. Set up your preferred AI provider via Settings > Connectors.
-* For local llama.cpp-based LLM setups, we recommend **AI Provider for llama.cpp**.
-* For other local or self-hosted OpenAI-compatible LLM endpoints (for example Ollama, LM Studio, LocalAI, or vLLM), we recommend **Ultimate AI Connector for Compatible Endpoints**: https://wordpress.org/plugins/ultimate-ai-connector-compatible-endpoints/
-* Optional **Direct API** path (`direct_api_url`): connect directly to any OpenAI-compatible endpoint without the WordPress AI Client. Standard instruct/chat models still fall back automatically when the direct call fails. TranslateGemma is handled fail-safe instead: if no direct API URL is configured, if `chat_template_kwargs` support cannot be confirmed, or if the direct call fails, SlyTranslate returns an error instead of silently falling back. The `ai-translate/configure` response includes probe diagnostics such as the last kwargs probe timestamp, the TranslateGemma runtime status, and the last transport diagnostic snapshot with requested/effective model slug plus the last error code/message.
-* Translation behavior is model-profile driven. SlyTranslate resolves request mode, prompt style, extra request payload keys, chunk strategy, and retry behavior from a central profile registry that can be extended through the `slytranslate_model_profiles` filter.
-* TowerInstruct models now use a dedicated profile: user-only bilingual framing (`English:` → `German:`), conservative chunk sizing for long content, and a stricter retry path when obvious English passthrough is detected for German targets.
-* Long content is translated in chunks. The plugin derives a safe chunk size from the active model, learns tighter limits from provider error messages, retries automatically with a smaller chunk on context-window errors, and supports a manual context window token override.
-* Translated outputs are validated before they are accepted. SlyTranslate rejects empty/chatty assistant-style answers, implausibly long title-like responses, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure drift such as missing HTML tags, Gutenberg block comments, URLs, or code fences. For standard instruct/chat models, the plugin retries once with stricter output instructions before failing.
-* Editor REST requests require a structured `input` payload, and translation-status responses only expose target-post details such as title and edit link when the current user can access that translation.
-* Block content is parsed before translation: code and preformatted blocks are skipped, and consecutive translatable blocks are batched together for efficiency.
-* Translation plugin support via an adapter interface. Currently supports **Polylang**, including posts, pages, custom post types, and associated taxonomies. Additional adapters (WPML, TranslatePress, etc.) can be added.
-* Popular SEO plugins are detected automatically and their key SEO meta fields can be translated or cleared without manual configuration. At runtime, SlyTranslate also inspects the source post's real SEO meta keys and merges any matching supported profiles, so legacy or mixed setups (for example Genesis meta on a site that now uses The SEO Framework) continue to translate correctly.
-* The block editor gets an **AI Translate** document settings panel for launching content translations directly from the editor when a translation plugin is active, including a model selector dropdown that lists all registered AI Client models and persists the choice per user. During active content translations, the panel shows a live progress bar with phase and chunk tracking, and the main action button toggles from **Translate now** to **Cancel translation**. The inline selected-text action and the block-translation dialog reuse that same model selection, show the source/target language pickers side by side with a swap button, and keep the picker columns visually flush at the top and bottom like the post/page translation flow.
-* Post/page list-table translations use an AJAX progress dialog plus the same persistent background-task bar. The dialog loads the same live model list as the editor sidebar and pre-fills **Additional instructions** from the saved per-user preference, so the list-table flow and editor panel stay in sync. If the running dialog is dismissed or the user leaves the admin page mid-translation, the job is handed off automatically to the background bar so progress and the eventually created draft remain visible instead of appearing unexpectedly later.
-* All abilities are exposed via the REST API (`/wp-abilities/v1/`) and marked public for MCP Adapter discovery via `/wp-json/mcp/mcp-adapter-default-server`.
-* For MCP clients, the ability schema describes the business payload. Some clients wrap calls in transport-specific `parameters` or `input` objects, but the SlyTranslate-specific fields are always the ones defined on the ability itself.
-* Plugin labels and descriptions are translation-ready and include a bundled German (`de_DE`) translation.
+* Uses native WordPress 7 AI connectors through `wp_ai_client_prompt()`.
+* Registers translation workflows as WordPress Abilities.
+* Exposes abilities over REST (`/wp-abilities/v1/`) and MCP discovery.
+* Supports long/structured content with chunking and output validation.
+* Optional `direct_api_url` supports OpenAI-compatible endpoints for model-specific payload needs.
+
+**Abilities:**
+
+| Ability | Purpose |
+| --- | --- |
+| `ai-translate/get-languages` | List languages exposed by the active language plugin |
+| `ai-translate/get-translation-status` | Show translation status for a content item |
+| `ai-translate/get-untranslated` | Find content still missing a target translation |
+| `ai-translate/translate-text` | Translate arbitrary text |
+| `ai-translate/translate-blocks` | Translate serialized Gutenberg blocks |
+| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry |
+| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries |
+| `ai-translate/get-progress` | Return live progress for a running translation |
+| `ai-translate/cancel-translation` | Cancel a running translation |
+| `ai-translate/get-available-models` | List models from configured connectors |
+| `ai-translate/save-additional-prompt` | Save per-user additional instructions |
+| `ai-translate/configure` | Read or update persistent plugin settings |
 
 **Requirements:**
 
 * WordPress 7.0+
 * PHP 8.1+
-* WordPress MCP Adapter for MCP client access
-* An AI provider plugin configured via Settings > Connectors (e.g., AI Provider for OpenAI, AI Provider for Anthropic, AI Provider for Google, **AI Provider for llama.cpp** for local llama.cpp-based setups, or **Ultimate AI Connector for Compatible Endpoints** for other OpenAI-compatible local/self-hosted endpoints)
-* A translation plugin for content translation workflows across posts, pages, and custom post types: Polylang (recommended), with more adapters planned
+* An AI connector configured in WordPress (Settings > Connectors)
+* Polylang for content-translation workflows across posts/pages/CPTs
+* WordPress MCP Adapter if you want MCP discovery
+
+**Supported plugins:**
+
+* Language plugin: Polylang (current content-translation adapter)
+* SEO plugins: Genesis SEO, Yoast SEO, Rank Math, All in One SEO, The SEO Framework, SEOpress, Slim SEO
+
+**Supported model profiles:**
+
+* Standard LLMs: any model provided by active WordPress AI connectors
+* TranslateGemma: dedicated runtime with `chat_template_kwargs` support through `direct_api_url`
+* TowerInstruct: dedicated profile with bilingual framing, conservative chunking, and stricter retry behavior for German-target passthrough
 
 == Installation ==
 
 1. Ensure WordPress 7.0+ and PHP 8.1+ are running.
-2. Optional for content translation workflows across posts, pages, and custom post types: install and activate a translation plugin (e.g., Polylang).
-3. Install and activate an AI provider plugin and configure it via Settings > Connectors.
-4. For local llama.cpp-based LLMs, we recommend **AI Provider for llama.cpp** so SlyTranslate can use locally exposed llama.cpp models through the WordPress AI Client. For other OpenAI-compatible local/self-hosted endpoints, we recommend **Ultimate AI Connector for Compatible Endpoints**.
-5. Optional: Install and activate WordPress MCP Adapter if you want MCP clients to discover these abilities.
-6. Upload the `slytranslate` folder to `/wp-content/plugins/`. This plugin currently still needs to be installed manually until the WordPress.org plugin directory listing is approved (pending).
-7. Activate SlyTranslate - AI Translation Abilities.
-8. Text translation abilities are now available via the Abilities API, REST API, and MCP Adapter. Content translation workflows become available once a translation plugin is active.
+2. Install and configure an AI connector in Settings > Connectors.
+3. Optional for content translation: install and activate Polylang.
+4. Optional for local llama.cpp models: install AI Provider for llama.cpp.
+5. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
+6. Optional for MCP discovery: install and activate WordPress MCP Adapter.
+7. Upload the `slytranslate` folder to `/wp-content/plugins/`.
+8. Activate SlyTranslate - AI Translation Abilities.
+
+== Screenshots ==
+
+1. Panel UI in page/post
+2. Inline translation
+3. Gutenberg block translation
+4. Page/post translation and bulk action
+5. Translation UI overview
 
 == Frequently Asked Questions ==
 
-= Where do I configure API keys? =
-
-API keys are managed centrally in WordPress via Settings > Connectors. This plugin does not handle API keys directly.
-
-= How do I change the translation prompt? =
-
-Use the `ai-translate/configure` ability via the REST API or any tool that supports WordPress Abilities. The `prompt_template` field sets the base instructions including language pair placeholders (`{FROM_CODE}`, `{TO_CODE}`). The `prompt_addon` field adds a site-wide addition that is always appended after the template — useful for global style requirements such as formal language or domain-specific vocabulary.
-
-Call `ai-translate/configure` with an empty object if you only want to read the current site-wide defaults without changing anything.
-
-
-= How do I add per-request translation instructions? =
-
-The `ai-translate/translate-text`, `ai-translate/translate-blocks`, `ai-translate/translate-content`, and `ai-translate/translate-content-bulk` abilities accept an optional `additional_prompt` field. This text is appended after the prompt template and the site-wide add-on, so it can override or extend the defaults just for that request. In wp-admin, the **AI Translate** panel, the selected-text/block translation dialogs, and the post/page list-table picker share that saved per-user value, so recurring style preferences are pre-filled across the translation UI.
-
-= What is the difference between prompt_template, prompt_addon, and additional_prompt? =
-
-* **prompt_template** — the base translation instruction including `{FROM_CODE}` and `{TO_CODE}` placeholders. Managed by `ai-translate/configure`, requires `manage_options` capability.
-* **prompt_addon** — a site-wide addition always appended after the template. Also managed by `ai-translate/configure` and admin-only. Use this for global requirements that apply to every translation on the site.
-* **additional_prompt** (per-request) — an optional field on `translate-text`, `translate-blocks`, `translate-content`, and `translate-content-bulk`. Appended last, after the template and the site-wide add-on. Available to any user who can run translation abilities. In the block editor this is the **Additional instructions** textarea; the last used value is stored per user.
-
-= How do I tune chunking for large posts? =
-
-Use the `context_window_tokens` field on the `ai-translate/configure` ability to override the detected model context window when your provider uses a smaller or larger limit than the plugin inferred.
-
-= Can I use local LLMs? =
-
-Yes. For local llama.cpp-based LLMs, we recommend **AI Provider for llama.cpp** so the local server is available through WordPress Settings > Connectors and the WordPress AI Client.
-
-For other local or self-hosted OpenAI-compatible inference servers, we recommend **Ultimate AI Connector for Compatible Endpoints**. If you need request-level parameters such as `chat_template_kwargs`, you can also use the `direct_api_url` setting on `ai-translate/configure` to send translation requests directly to that endpoint.
-
-For models that require request-level parameters such as `chat_template_kwargs` (e.g. TranslateGemma on llama.cpp), use the `direct_api_url` setting on `ai-translate/configure` to bypass the AI Client and send requests directly to the endpoint.
-
-= Can I use TranslateGemma or other specialized translation models? =
-
-Yes. Set `direct_api_url` via `ai-translate/configure` to the URL of your llama.cpp (or other OpenAI-compatible) server. The plugin automatically probes for `chat_template_kwargs` support, re-probes when TranslateGemma is selected and kwargs are still missing, and then includes `source_lang_code` and `target_lang_code` in every translation request so the model can use its native language-routing.
-
-TranslateGemma is now handled fail-safe: if no direct API URL is configured, if kwargs support cannot be confirmed, or if the direct API request fails, SlyTranslate returns an error instead of silently falling back to the generic WordPress AI Client path. The `ai-translate/configure` response exposes diagnostics such as `direct_api_kwargs_last_probed_at`, `translategemma_runtime_ready`, and `translategemma_runtime_status`.
-
-For connector-based local models and direct API failures alike, `ai-translate/configure` now also exposes `last_transport_diagnostics`, including the last transport (`wp_ai_client` or direct API), the requested/effective model slug, fallback status, and the last error code/message captured by the runtime.
-
-A custom Jinja chat template is required on the llama.cpp side to make this work — a ready-to-use template and setup guide are included in the plugin repository.
-
-= How does TowerInstruct support work? =
-
-TowerInstruct now uses a dedicated model profile. Requests are sent in user-only mode with a bilingual frame (`English:` source and `German:` target) instead of a separate system role. For long content, SlyTranslate applies conservative chunk sizing for Tower and retries with stricter instructions (and smaller retry chunks when needed) if the model returns obvious English passthrough while the target language is German.
-
-= What happens if a model returns a chat answer instead of a translation? =
-
-SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
-
-= Can I translate pages or custom post types? =
-
-Yes. The `translate-content`, `translate-content-bulk`, `get-translation-status`, and `get-untranslated` abilities work with any Polylang-enabled post type, including pages and custom post types.
-
-= What is the best MCP call order for an LLM? =
-
-Use the read-only abilities to remove ambiguity before mutating content:
-
-* Call `ai-translate/get-languages` when the target language code is not known yet.
-* Call `ai-translate/get-available-models` before sending `model_slug` if the available identifiers are unknown or the connector has changed.
-* Call `ai-translate/get-translation-status` before `ai-translate/translate-content` when you need to inspect existing target posts or decide whether `overwrite` should be true.
-* Call `ai-translate/get-untranslated` before `ai-translate/translate-content-bulk` when you do not already know the source post IDs.
-* Call `ai-translate/configure` with an empty object to read persistent defaults; use `model_slug` and `additional_prompt` on `translate-*` abilities for one-off overrides.
-
-For `ai-translate/translate-content-bulk`, choose one source selector: either `post_ids` or `post_type` with an optional `limit`. If both are sent, the plugin uses `post_ids` and ignores `post_type`.
-
-= How do SEO plugin fields get translated? =
-
-The plugin auto-detects supported SEO plugins such as Genesis SEO, Yoast SEO, Rank Math, All in One SEO, The SEO Framework, SEOpress, and Slim SEO. Their most important title/description meta fields are translated automatically, while analysis scores are cleared so the SEO plugin can recalculate them.
-
-For runtime translation, the plugin does not rely only on the currently detected SEO plugin. It also checks the source post's stored meta keys and merges any matching supported profiles, so legacy Genesis fields like `_genesis_title` and `_genesis_description` are still translated even after a later SEO-plugin migration. Unknown Genesis flags, robots settings, and URL-like fields are left untouched unless you add them explicitly via `ai-translate/configure`.
-
-= Can I trigger translation from the block editor? =
-
-Yes. The block editor includes an **AI Translate** panel in the document settings sidebar when a translation plugin is active. It loads translation status, can create or update translations directly from the editor, and shows a live progress bar while a translation is running. During that time, the main action button switches to **Cancel translation** so you can stop the current job without leaving the editor. When you highlight text or open the block-level translation dialog, those modals reuse the sidebar's active model selection and the same side-by-side language picker layout as the post/page translation dialog.
-
-= What happens if I close the post list translation dialog or leave the page mid-translation? =
-
-The running translation is handed off automatically to the same global background-task bar that the **Continue in background** button uses. That means progress stays visible across wp-admin screens and the created draft does not appear "out of nowhere" after the dialog disappeared.
-
 = Does this work without Polylang? =
 
-Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
+Yes, for text and block translation (`translate-text`, `translate-blocks`, inline selected-text workflow). Content translation workflows require a language plugin, currently Polylang.
+
+= Where are API keys configured? =
+
+In WordPress Settings > Connectors, not inside SlyTranslate.
+
+= Can I use bulk translation from post/page lists? =
+
+Yes. Use `translate-content-bulk` through abilities or the wp-admin list-table translation UI.
+
+= How do I control prompts and style? =
+
+Use `ai-translate/configure` for persistent defaults and `additional_prompt` on `translate-*` abilities for per-request instructions.
+
+= Can I use TranslateGemma and TowerInstruct? =
+
+Yes. TranslateGemma uses the direct API runtime with `chat_template_kwargs`; TowerInstruct uses a dedicated model profile tuned for bilingual translation framing.
 
 == Changelog ==
-
-= Unreleased =
-* Architecture: introduced a central model-profile registry (`slytranslate_model_profiles`) that drives request mode, prompt style, extra request body keys, chunk strategy, and retry behavior per model family.
-* TowerInstruct: added a built-in Tower profile with user-only bilingual framing (`English:`/`German:`), conservative chunk sizing, and stricter retry behavior for long-content stability.
-* Validation: added explicit German-target passthrough detection (`invalid_translation_language_passthrough`) so obvious English carry-over can trigger model-profile retries.
-* Transport: direct API request assembly is now profile-driven (system+user vs user-only and profile-defined extra payload keys) instead of model-specific branching in multiple places.
 
 = 1.6.0 =
 * Performance: raised `MAX_OUTPUT_TOKENS_CEILING` from 8 192 to 32 768 tokens so large posts are no longer truncated mid-translation and fall back to slow per-block mode.
@@ -170,6 +117,10 @@ Yes, for text translation. The `translate-text` ability and the block editor's s
 * Performance: the computed chunk char limit is now cached for the duration of each translation job (cleared on model switch and between jobs), eliminating repeated option reads and model table lookups.
 * Performance: eligible short-string SEO meta values (e.g. Yoast/Slim SEO title and description) are now translated in a single batched AI call instead of one call per key, reducing meta-phase AI round-trips by up to N−1 calls.
 * Performance: expanded `KNOWN_MODEL_CONTEXT_WINDOWS` with many new model families (GPT-5, GPT-4.1 @ 1 M, GPT-4o-mini, o1/o3/o4-mini reasoning models, Mistral Codestral/Pixtral/Nemo, Phi-4/3.x, GLM, Moonshot/Kimi, Yi, InternLM, Cohere Command R, Nous Hermes, Falcon, Baichuan) and corrected existing entries (gpt-4.1 128 K → 1 048 576, o3/o4-mini 128 K → 200 K, mistral-large 32 K → 128 K).
+* Architecture: introduced a central model-profile registry (`slytranslate_model_profiles`) that drives request mode, prompt style, extra request body keys, chunk strategy, and retry behavior per model family.
+* TowerInstruct: added a built-in Tower profile with user-only bilingual framing (`English:`/`German:`), conservative chunk sizing, and stricter retry behavior for long-content stability.
+* Validation: added explicit German-target passthrough detection (`invalid_translation_language_passthrough`) so obvious English carry-over can trigger model-profile retries.
+* Transport: direct API request assembly is now profile-driven (system+user vs user-only and profile-defined extra payload keys) instead of model-specific branching in multiple places.
 
 
 = 1.5.6 =
