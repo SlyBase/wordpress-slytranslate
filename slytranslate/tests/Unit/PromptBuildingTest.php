@@ -121,6 +121,7 @@ class PromptBuildingTest extends TestCase {
 		$this->assertFalse( $payload['use_system_prompt'] );
 		$this->assertSame( '', $payload['system_prompt'] );
 		$this->assertStringContainsString( 'Translate the following text from English into German.', $payload['user_content'] );
+		$this->assertStringContainsString( 'Follow these translation rules: Prompt', $payload['user_content'] );
 		$this->assertStringContainsString( 'English:', $payload['user_content'] );
 		$this->assertStringContainsString( 'German:', $payload['user_content'] );
 	}
@@ -140,28 +141,31 @@ class PromptBuildingTest extends TestCase {
 		$this->assertFalse( $payload['use_system_prompt'] );
 		$this->assertSame( '', $payload['system_prompt'] );
 		$this->assertStringContainsString( 'Translate the following text from English into German.', $payload['user_content'] );
+		$this->assertStringContainsString( 'Follow these translation rules: Prompt', $payload['user_content'] );
 		$this->assertStringContainsString( 'English:', $payload['user_content'] );
 		$this->assertStringContainsString( 'German:', $payload['user_content'] );
 	}
 
-	public function test_bilingual_payload_promotes_informal_du_requirement_when_requested(): void {
+	public function test_ministral_bilingual_payload_keeps_user_additional_prompt_verbatim(): void {
 		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 
+		$user_prompt = 'Anreden mit "du" statt "Sie". junger aber professioneller ton.';
 		$profile = TranslationRuntime::get_model_profile( 'Ministral-3-3B-Instruct-2512-Q4_K_M' );
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
 			array(
 				'Please open your dashboard.',
-				'Anreden mit "du" statt "Sie". junger aber professioneller ton.',
+				$user_prompt,
 				$profile,
 				false,
 				0
 			)
 		);
 
-		$this->assertStringContainsString( 'STYLE REQUIREMENT (German): Use informal address ("du"/"dir"/"dein"). Never use formal address ("Sie"/"Ihnen"/"Ihr").', $payload['user_content'] );
+		$this->assertStringContainsString( 'Follow these translation rules: ' . $user_prompt, $payload['user_content'] );
+		$this->assertStringNotContainsString( 'STYLE REQUIREMENT (German):', $payload['user_content'] );
 	}
 
 	public function test_default_profile_keeps_system_plus_user_payload_shape(): void {
