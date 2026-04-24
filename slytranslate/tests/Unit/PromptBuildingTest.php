@@ -5,11 +5,20 @@ declare(strict_types=1);
 namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
+use AI_Translate\TranslationRuntime;
 
 /**
  * Tests for AI_Translate::prompt().
  */
 class PromptBuildingTest extends TestCase {
+
+	protected function tearDown(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_profile_cache', array() );
+
+		parent::tearDown();
+	}
 
 	public function test_substitutes_language_codes_in_default_template(): void {
 		$this->stubWpFunction( 'get_option',
@@ -95,5 +104,37 @@ class PromptBuildingTest extends TestCase {
 		$this->assertCount( 3, $parts );
 		$this->assertSame( 'Addon text.', $parts[1] );
 		$this->assertSame( 'Additional style instructions (do NOT translate these lines, apply them to the user-provided content): Extra instruction.', $parts[2] );
+	}
+
+	public function test_tower_profile_builds_bilingual_user_only_payload(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$profile = TranslationRuntime::get_model_profile( 'TowerInstruct-7B-v0.2.Q4_K_M' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array( 'Hello world', 'Prompt', $profile, false, 0 )
+		);
+
+		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( 'towerinstruct-7b' ) );
+		$this->assertFalse( $payload['use_system_prompt'] );
+		$this->assertSame( '', $payload['system_prompt'] );
+		$this->assertStringContainsString( 'Translate the following text from English into German.', $payload['user_content'] );
+		$this->assertStringContainsString( 'English:', $payload['user_content'] );
+		$this->assertStringContainsString( 'German:', $payload['user_content'] );
+	}
+
+	public function test_default_profile_keeps_system_plus_user_payload_shape(): void {
+		$profile = TranslationRuntime::get_model_profile( 'gpt-4o' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array( 'Hello world', 'Prompt', $profile, false, 0 )
+		);
+
+		$this->assertTrue( $payload['use_system_prompt'] );
+		$this->assertSame( 'Prompt', $payload['system_prompt'] );
+		$this->assertSame( 'Hello world', $payload['user_content'] );
 	}
 }

@@ -17,6 +17,8 @@ SlyTranslate exposes translation workflows as reusable WordPress abilities, so t
 - Translate selected text inline in the editor, even without a translation plugin
 - Cancel running translations, refresh the available model list, and persist per-user additional instructions across editor flows
 - Connect directly to any OpenAI-compatible endpoint for models that need `chat_template_kwargs` (e.g. TranslateGemma)
+- Resolve translation behavior via a central model-profile registry (request mode, prompt style, extra payload keys, chunk strategy, retry policy)
+- TowerInstruct gets a dedicated profile with user-only bilingual framing plus conservative chunking and stricter passthrough retries for German targets
 - Expose abilities over REST and MCP-friendly discovery
 - Large models (gemma-4, Llama 3.1+) are recognised with their full context window, so a ~48 000-char post translates in one AI call instead of twelve
 - Eligible SEO meta fields (title, description) are translated in a single batched AI call, reducing meta-phase round-trips by up to N−1 calls
@@ -125,6 +127,7 @@ Supported SEO integrations include:
 
 - Uses the WordPress AI Client instead of storing provider-specific API keys in this plugin
 - Optional direct API path (`direct_api_url`) bypasses the AI Client for models that require full control over the request body (e.g. `chat_template_kwargs`); standard models still fall back automatically, while TranslateGemma fails closed when direct API or kwargs support are unavailable
+- Model-specific behavior is resolved through a central profile registry (`slytranslate_model_profiles`) so new model families can define request mode, prompt style, extra request body keys, chunk strategy, and retry policy without patching multiple core flows
 - Validates translated output before saving: rejects empty or chatty responses, implausibly long title-like output, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure drift such as missing HTML, Gutenberg comments, URLs, or code fences
 - Editor REST endpoints require a structured `input` payload, and translation-status responses only include target-post details when the current user can access that translation
 - Translates long content in chunks; derives safe chunk sizes from the active model, learns tighter limits from provider error messages, and retries automatically with a smaller chunk on context-window errors
@@ -261,6 +264,12 @@ TranslateGemma now fails closed: if no direct API URL is configured, if kwargs s
 For both connector-based local models and direct API failures, `ai-translate/configure` now also includes `last_transport_diagnostics` with the last runtime transport, requested/effective model slug, fallback status, and the last captured error code/message.
 
 A custom Jinja chat template is still required on the llama.cpp side — see `translategemma-llama-cpp-guide.md` in this repository.
+
+### How does TowerInstruct support work?
+
+TowerInstruct is handled through a dedicated model profile. Requests use a user-only bilingual frame (`English:` source and `German:` target) instead of a separate system role, and chunking is intentionally conservative for long inputs.
+
+When the target is German and the model obviously passes through English text, runtime validation returns `invalid_translation_language_passthrough`; the Tower retry profile then re-runs translation with stricter instructions and smaller retry chunks.
 
 ### How do SEO plugin fields get translated?
 

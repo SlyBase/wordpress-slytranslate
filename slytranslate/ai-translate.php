@@ -35,6 +35,62 @@ class AI_Translate {
 		return (string) apply_filters( 'slytranslate_default_prompt_template', self::DEFAULT_PROMPT );
 	}
 
+	/**
+	 * Return model-profile rules used by TranslationRuntime.
+	 *
+	 * Integrations can extend or override this registry through the
+	 * `slytranslate_model_profiles` filter instead of patching core flows.
+	 */
+	public static function get_model_profiles(): array {
+		$profiles = array(
+			array(
+				'id'                         => 'translategemma',
+				'matchers'                   => array( 'translategemma' ),
+				'request_mode'               => 'user_only',
+				'prompt_style'               => 'generic_template',
+				'supports_system_role'       => false,
+				'requires_strict_direct_api' => true,
+				'requires_chat_template_kwargs' => true,
+				'extra_request_body'         => array(
+					'chat_template_kwargs' => array(
+						'source_lang_code' => '{source_lang_code}',
+						'target_lang_code' => '{target_lang_code}',
+					),
+				),
+				'chunk_strategy'             => 'default',
+				'temperature'                => 0,
+				'retry_profile'              => array(
+					'retry_on_validation_failure' => false,
+					'retry_on_passthrough_de'     => false,
+					'reduce_chunk_on_retry'       => false,
+				),
+			),
+			array(
+				'id'                         => 'towerinstruct',
+				'matchers'                   => array( 'towerinstruct' ),
+				'request_mode'               => 'user_only',
+				'prompt_style'               => 'bilingual_frame',
+				'supports_system_role'       => false,
+				'requires_strict_direct_api' => false,
+				'requires_chat_template_kwargs' => false,
+				'extra_request_body'         => array(),
+				'chunk_strategy'             => 'tower_conservative',
+				'max_chunk_chars'            => 3000,
+				'temperature'                => 0,
+				'retry_profile'              => array(
+					'retry_on_validation_failure' => true,
+					'retry_on_passthrough_de'     => true,
+					'reduce_chunk_on_retry'       => true,
+					'retry_chunk_chars'           => 1800,
+				),
+			),
+		);
+
+		$filtered = apply_filters( 'slytranslate_model_profiles', $profiles );
+
+		return is_array( $filtered ) ? $filtered : $profiles;
+	}
+
 	public static function get_adapter(): ?TranslationPluginAdapter {
 		if ( null === self::$adapter ) {
 			$polylang = new PolylangAdapter();

@@ -45,7 +45,7 @@ class TranslationValidator {
 	 */
 	private const RUNAWAY_GUARD_MIN_SOURCE_CHARS = 221;
 
-	public static function validate( string $source_text, string $translated_text ) {
+	public static function validate( string $source_text, string $translated_text, ?string $target_language = null ) {
 		$source_text     = (string) $source_text;
 		$translated_text = (string) $translated_text;
 
@@ -77,6 +77,13 @@ class TranslationValidator {
 			return new \WP_Error(
 				'invalid_translation_assistant_reply',
 				__( 'The model returned explanatory assistant text instead of a clean translation.', 'slytranslate' )
+			);
+		}
+
+		if ( self::is_obvious_language_passthrough( $source_plain, $translated_plain, $target_language ) ) {
+			return new \WP_Error(
+				'invalid_translation_language_passthrough',
+				__( 'The translated output still appears to be in the source language instead of German.', 'slytranslate' )
 			);
 		}
 
@@ -399,5 +406,83 @@ class TranslationValidator {
 		}
 
 		return strlen( $text );
+	}
+
+	private static function normalize_for_passthrough_compare( string $text ): string {
+		$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$text = preg_replace( '/[^\p{L}\p{N}\s]+/u', ' ', $text );
+		$text = preg_replace( '/\s+/u', ' ', (string) $text );
+		$text = trim( (string) $text );
+
+		if ( '' === $text ) {
+			return '';
+		}
+
+		if ( function_exists( 'mb_strtolower' ) ) {
+			return mb_strtolower( $text, 'UTF-8' );
+		}
+
+		return strtolower( $text );
+	}
+
+	private static function count_english_markers( string $text ): int {
+		$count = preg_match_all( '/\b(?:the|and|with|for|from|this|that|are|you|your|into|please|translate|content|following)\b/iu', $text );
+
+		return false === $count ? 0 : $count;
+	}
+
+	private static function count_german_markers( string $text ): int {
+		$count = preg_match_all( '/\b(?:der|die|das|und|mit|nicht|ist|sind|ein|eine|fuer|für|oder|auf|von|im|den|dem|zu)\b/iu', $text );
+
+		return false === $count ? 0 : $count;
+	}
+
+	private static function is_obvious_language_passthrough( string $source_plain, string $translated_plain, ?string $target_language ): bool {
+		$target = strtolower( trim( (string) $target_language ) );
+		if ( '' === $target || 0 !== strpos( $target, 'de' ) ) {
+			return false;
+		}
+
+		if ( self::text_length( $source_plain ) < 30 || self::text_length( $translated_plain ) < 30 ) {
+			return false;
+		}
+
+		$source_normalized     = self::normalize_for_passthrough_compare( $source_plain );
+		$translated_normalized = self::normalize_for_passthrough_compare( $translated_plain );
+		if ( '' === $source_normalized || '' === $translated_normalized ) {
+			return false;
+		}
+
+		$english_markers = self::count_english_markers( $translated_normalized );
+		$german_markers  = self::count_german_markers( $translated_normalized );
+
+		if ( $source_normalized === $translated_normalized ) {
+			return $english_markers >= 2 && 0 === $german_markers;
+		}
+
+		$source_tokens     = preg_split( '/\s+/u', $source_normalized, -1, PREG_SPLIT_NO_EMPTY );
+		$translated_tokens = preg_split( '/\s+/u', $translated_normalized, -1, PREG_SPLIT_NO_EMPTY );
+
+		if ( ! is_array( $source_tokens ) || ! is_array( $translated_tokens ) ) {
+			return false;
+		}
+
+		if ( count( $source_tokens ) < 8 || count( $translated_tokens ) < 8 ) {
+			return false;
+		}
+
+		$shared_limit    = min( count( $source_tokens ), count( $translated_tokens ) );
+		$max_token_count = max( count( $source_tokens ), count( $translated_tokens ) );
+		$same_position   = 0;
+
+		for ( $index = 0; $index < $shared_limit; $index++ ) {
+			if ( $source_tokens[ $index ] === $translated_tokens[ $index ] ) {
+				$same_position++;
+			}
+		}
+
+		$position_ratio = $max_token_count > 0 ? ( $same_position / $max_token_count ) : 0;
+
+		return $position_ratio >= 0.9 && $english_markers >= 2 && 0 === $german_markers;
 	}
 }

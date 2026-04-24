@@ -6,6 +6,7 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\TextSplitter;
+use AI_Translate\TranslationRuntime;
 
 /**
  * Tests for the text-splitting methods used to break long content into
@@ -16,6 +17,14 @@ use AI_Translate\TextSplitter;
  *   MAX_TRANSLATION_CHARS = 48000
  */
 class TextSplittingTest extends TestCase {
+
+	protected function tearDown(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'context', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_profile_cache', array() );
+
+		parent::tearDown();
+	}
 
 	// -----------------------------------------------------------------------
 	// hard_split_text
@@ -143,5 +152,20 @@ class TextSplittingTest extends TestCase {
 			$this->invokeStatic( TextSplitter::class, 'split_text_for_translation', [ $text, 1200 ] ),
 			TextSplitter::split_text_for_translation( $text, 1200 )
 		);
+	}
+
+	public function test_tower_chunk_strategy_applies_conservative_limit(): void {
+		$tower_profile = TranslationRuntime::get_model_profile( 'TowerInstruct-7B-v0.2.Q4_K_M' );
+		$limit         = $this->invokeStatic( TranslationRuntime::class, 'apply_chunk_strategy_to_limit', array( 4096, $tower_profile ) );
+
+		$this->assertSame( 'tower_conservative', TranslationRuntime::get_chunk_strategy_for_model( 'towerinstruct-7b' ) );
+		$this->assertSame( 2457, $limit );
+	}
+
+	public function test_default_chunk_strategy_does_not_change_limit(): void {
+		$default_profile = TranslationRuntime::get_model_profile( 'gpt-4o' );
+		$limit           = $this->invokeStatic( TranslationRuntime::class, 'apply_chunk_strategy_to_limit', array( 4096, $default_profile ) );
+
+		$this->assertSame( 4096, $limit );
 	}
 }

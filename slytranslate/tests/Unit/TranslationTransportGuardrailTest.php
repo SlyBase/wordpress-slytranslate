@@ -16,6 +16,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', null );
 		$this->setStaticProperty( TranslationRuntime::class, 'model_slug_override', null );
 		$this->setStaticProperty( TranslationRuntime::class, 'last_diagnostics', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_profile_cache', array() );
 
 		parent::tearDown();
 	}
@@ -125,14 +126,26 @@ class TranslationTransportGuardrailTest extends TestCase {
 	public function test_translategemma_kwargs_request_omits_system_message(): void {
 		$captured_body = array();
 
-		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
-		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 		$this->mockSuccessfulDirectApiResponse( $captured_body );
 
 		$result = $this->invokeStatic(
 			DirectApiTranslationClient::class,
 			'translate',
-			array( 'Hello world', 'Prompt', 'translategemma-4b-it.Q4_K_M', 'http://llama.local:8080', true, 'en', 'de' )
+			array(
+				'Hello world',
+				'Prompt',
+				false,
+				'translategemma-4b-it.Q4_K_M',
+				'http://llama.local:8080',
+				0,
+				0,
+				array(
+					'chat_template_kwargs' => array(
+						'source_lang_code' => 'en',
+						'target_lang_code' => 'de',
+					),
+				)
+			)
 		);
 
 		$this->assertSame( 'Hallo Welt', $result );
@@ -157,14 +170,26 @@ class TranslationTransportGuardrailTest extends TestCase {
 	public function test_non_translategemma_kwargs_request_keeps_system_message(): void {
 		$captured_body = array();
 
-		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
-		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 		$this->mockSuccessfulDirectApiResponse( $captured_body );
 
 		$result = $this->invokeStatic(
 			DirectApiTranslationClient::class,
 			'translate',
-			array( 'Hello world', 'Prompt', 'gemma-3-4b-it', 'http://llama.local:8080', true, 'en', 'de' )
+			array(
+				'Hello world',
+				'Prompt',
+				true,
+				'gemma-3-4b-it',
+				'http://llama.local:8080',
+				0,
+				0,
+				array(
+					'chat_template_kwargs' => array(
+						'source_lang_code' => 'en',
+						'target_lang_code' => 'de',
+					),
+				)
+			)
 		);
 
 		$this->assertSame( 'Hallo Welt', $result );
@@ -181,6 +206,62 @@ class TranslationTransportGuardrailTest extends TestCase {
 			),
 			$captured_body['messages'] ?? null
 		);
+	}
+
+	public function test_tower_profile_direct_request_is_user_only_bilingual_frame(): void {
+		$captured_body = array();
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'TowerInstruct-7B-v0.2.Q4_K_M',
+			'direct_api_url' => 'http://llama.local:8080',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_force_direct_api' === $option ) {
+					return '1';
+				}
+
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+
+				return $default;
+			}
+		);
+		$this->stubWpFunction( 'wp_remote_post',
+			static function ( string $endpoint, array $args ) use ( &$captured_body ) {
+				$decoded_body  = json_decode( $args['body'] ?? '', true );
+				$captured_body = is_array( $decoded_body ) ? $decoded_body : array();
+
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => wp_json_encode(
+						array(
+							'choices' => array(
+								array(
+									'message' => array(
+										'content' => 'Hallo Welt',
+									),
+								),
+							),
+						)
+					),
+				);
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertSame( 'Hallo Welt', $result );
+		$this->assertCount( 1, $captured_body['messages'] ?? array() );
+		$this->assertSame( 'user', $captured_body['messages'][0]['role'] ?? null );
+		$this->assertStringContainsString( 'Translate the following text from English into German.', $captured_body['messages'][0]['content'] ?? '' );
+		$this->assertStringContainsString( 'English:', $captured_body['messages'][0]['content'] ?? '' );
+		$this->assertStringContainsString( 'German:', $captured_body['messages'][0]['content'] ?? '' );
 	}
 
 	public function test_non_translategemma_still_falls_back_to_wp_ai_client(): void {

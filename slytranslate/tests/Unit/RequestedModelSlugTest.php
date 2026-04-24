@@ -11,6 +11,7 @@ class RequestedModelSlugTest extends TestCase {
 	protected function tearDown(): void {
 		$this->setStaticProperty( TranslationRuntime::class, 'context', null );
 		$this->setStaticProperty( TranslationRuntime::class, 'model_slug_override', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_profile_cache', array() );
 
 		parent::tearDown();
 	}
@@ -34,5 +35,17 @@ class RequestedModelSlugTest extends TestCase {
 		) );
 
 		$this->assertSame( 'qwen/qwen3-32b', TranslationRuntime::get_requested_model_slug() );
+	}
+
+	public function test_tower_slug_maps_to_bilingual_profile_rules(): void {
+		$model_slug = 'TowerInstruct-7B-v0.2.Q4_K_M';
+
+		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
+		$this->assertSame( 'tower_conservative', TranslationRuntime::get_chunk_strategy_for_model( $model_slug ) );
+		$this->assertTrue( TranslationRuntime::is_tower_model( $model_slug ) );
+	}
+
+	public function test_translategemma_slug_maps_to_strict_direct_api_profile(): void {
+		$this->assertTrue( TranslationRuntime::model_requires_strict_direct_api( 'translategemma-4b-it.Q4_K_M' ) );
 	}
 }

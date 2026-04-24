@@ -36,6 +36,8 @@ SlyTranslate - AI Translation Abilities provides AI-powered translation as WordP
 * For local llama.cpp-based LLM setups, we recommend **AI Provider for llama.cpp**.
 * For other local or self-hosted OpenAI-compatible LLM endpoints (for example Ollama, LM Studio, LocalAI, or vLLM), we recommend **Ultimate AI Connector for Compatible Endpoints**: https://wordpress.org/plugins/ultimate-ai-connector-compatible-endpoints/
 * Optional **Direct API** path (`direct_api_url`): connect directly to any OpenAI-compatible endpoint without the WordPress AI Client. Standard instruct/chat models still fall back automatically when the direct call fails. TranslateGemma is handled fail-safe instead: if no direct API URL is configured, if `chat_template_kwargs` support cannot be confirmed, or if the direct call fails, SlyTranslate returns an error instead of silently falling back. The `ai-translate/configure` response includes probe diagnostics such as the last kwargs probe timestamp, the TranslateGemma runtime status, and the last transport diagnostic snapshot with requested/effective model slug plus the last error code/message.
+* Translation behavior is model-profile driven. SlyTranslate resolves request mode, prompt style, extra request payload keys, chunk strategy, and retry behavior from a central profile registry that can be extended through the `slytranslate_model_profiles` filter.
+* TowerInstruct models now use a dedicated profile: user-only bilingual framing (`English:` → `German:`), conservative chunk sizing for long content, and a stricter retry path when obvious English passthrough is detected for German targets.
 * Long content is translated in chunks. The plugin derives a safe chunk size from the active model, learns tighter limits from provider error messages, retries automatically with a smaller chunk on context-window errors, and supports a manual context window token override.
 * Translated outputs are validated before they are accepted. SlyTranslate rejects empty/chatty assistant-style answers, implausibly long title-like responses, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure drift such as missing HTML tags, Gutenberg block comments, URLs, or code fences. For standard instruct/chat models, the plugin retries once with stricter output instructions before failing.
 * Editor REST requests require a structured `input` payload, and translation-status responses only expose target-post details such as title and edit link when the current user can access that translation.
@@ -112,6 +114,10 @@ For connector-based local models and direct API failures alike, `ai-translate/co
 
 A custom Jinja chat template is required on the llama.cpp side to make this work — a ready-to-use template and setup guide are included in the plugin repository.
 
+= How does TowerInstruct support work? =
+
+TowerInstruct now uses a dedicated model profile. Requests are sent in user-only mode with a bilingual frame (`English:` source and `German:` target) instead of a separate system role. For long content, SlyTranslate applies conservative chunk sizing for Tower and retries with stricter instructions (and smaller retry chunks when needed) if the model returns obvious English passthrough while the target language is German.
+
 = What happens if a model returns a chat answer instead of a translation? =
 
 SlyTranslate validates translation output before saving it. The plugin rejects empty responses, explanatory assistant replies, implausibly long short-text outputs, symbol-notation drift such as Unicode arrows rewritten as LaTeX, and structure loss in block content such as missing Gutenberg comments, HTML tags, URLs, or code fences. For standard instruct/chat models, it automatically retries once with stricter output instructions. For TranslateGemma, the request fails immediately once the output is deemed invalid.
@@ -151,6 +157,12 @@ The running translation is handed off automatically to the same global backgroun
 Yes, for text translation. The `translate-text` ability and the block editor's selected-text translation action work independently. The translation abilities that create or manage translated content (`get-languages`, `get-translation-status`, `get-untranslated`, `translate-content`, `translate-content-bulk`) still require a translation plugin, currently Polylang.
 
 == Changelog ==
+
+= Unreleased =
+* Architecture: introduced a central model-profile registry (`slytranslate_model_profiles`) that drives request mode, prompt style, extra request body keys, chunk strategy, and retry behavior per model family.
+* TowerInstruct: added a built-in Tower profile with user-only bilingual framing (`English:`/`German:`), conservative chunk sizing, and stricter retry behavior for long-content stability.
+* Validation: added explicit German-target passthrough detection (`invalid_translation_language_passthrough`) so obvious English carry-over can trigger model-profile retries.
+* Transport: direct API request assembly is now profile-driven (system+user vs user-only and profile-defined extra payload keys) instead of model-specific branching in multiple places.
 
 = 1.6.0 =
 * Performance: raised `MAX_OUTPUT_TOKENS_CEILING` from 8 192 to 32 768 tokens so large posts are no longer truncated mid-translation and fall back to slow per-block mode.

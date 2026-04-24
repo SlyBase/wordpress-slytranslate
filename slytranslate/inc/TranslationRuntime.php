@@ -44,6 +44,12 @@ class TranslationRuntime {
 	// Filter: `ai_translate_max_output_tokens_ceiling`.
 	private const MAX_OUTPUT_TOKENS_CEILING     = 32768;
 	private const MIN_OUTPUT_TOKENS             = 256;
+	private const REQUEST_MODE_SYSTEM_PLUS_USER = 'system_plus_user';
+	private const REQUEST_MODE_USER_ONLY        = 'user_only';
+	private const PROMPT_STYLE_GENERIC_TEMPLATE = 'generic_template';
+	private const PROMPT_STYLE_BILINGUAL_FRAME  = 'bilingual_frame';
+	private const CHUNK_STRATEGY_DEFAULT        = 'default';
+	private const CHUNK_STRATEGY_TOWER          = 'tower_conservative';
 	private const KNOWN_MODEL_CONTEXT_WINDOWS   = array(
 		// ── Anthropic Claude ──────────────────────────────────────────────
 		// All current Claude models (3.x, 3.5, 3.7, 4.x) share 200 K context.
@@ -138,6 +144,9 @@ class TranslationRuntime {
 		// ── Nous Hermes (popular community fine-tunes) ────────────────────
 		'hermes'          => 131072,
 
+		// ── Unbabel TowerInstruct ─────────────────────────────────────────
+		'towerinstruct'   => 4096,
+
 		// ── Falcon (TII) ─────────────────────────────────────────────────
 		'falcon'          => 8192,
 
@@ -164,6 +173,9 @@ class TranslationRuntime {
 
 	/** Per-request model slug override set by with_model_slug_override(). */
 	private static $model_slug_override = null;
+
+	/** Cached normalized model profiles keyed by lower-cased model slug. */
+	private static array $model_profile_cache = array();
 
 	/** Source / target language codes set inside translate_text() for use by DirectApiTranslationClient. */
 	private static $source_lang = null;
@@ -225,22 +237,27 @@ class TranslationRuntime {
 
 	public static function with_model_slug_override( $input, callable $callback ): mixed {
 		$previous                    = self::$model_slug_override;
+		$previous_context            = self::$context;
 		self::$model_slug_override   = is_array( $input )
 			&& isset( $input['model_slug'] )
 			&& is_string( $input['model_slug'] )
 			&& '' !== $input['model_slug']
 				? sanitize_text_field( $input['model_slug'] )
 				: null;
+		self::$context = null;
 
 		// Chunk limit depends on model slug (context-window lookup).
 		// Clear the cache so the new model gets the correct limit.
 		self::$chunk_char_limit_cache = null;
+		self::$model_profile_cache    = array();
 
 		try {
 			return $callback();
 		} finally {
 			self::$model_slug_override    = $previous;
+			self::$context                = $previous_context;
 			self::$chunk_char_limit_cache = null;
+			self::$model_profile_cache    = array();
 		}
 	}
 
@@ -281,7 +298,8 @@ class TranslationRuntime {
 		string $prompt,
 		int $chunk_char_limit,
 		int $attempt = 0,
-		?int $previous_chunk_count = null
+		?int $previous_chunk_count = null,
+		bool $track_progress = true
 	): mixed {
 		$chunks = TextSplitter::split_text_for_translation( $text, $chunk_char_limit );
 
@@ -307,19 +325,21 @@ class TranslationRuntime {
 					// will re-translate the same source text and credit it
 					// again \u2014 capping at the phase budget keeps the bar
 					// monotonic regardless.
-					return self::translate_with_chunk_limit( $text, $prompt, $adjusted, $attempt + 1, count( $chunks ) );
+					return self::translate_with_chunk_limit( $text, $prompt, $adjusted, $attempt + 1, count( $chunks ), $track_progress );
 				}
 				return $translated_chunk;
 			}
 
 			$translated_chunks[] = $translated_chunk;
 
-			$chunk_units = self::char_length( $chunk );
-			if ( $chunk_units > 0 ) {
-				$active_phase = TranslationProgressTracker::current_phase();
-				if ( '' !== $active_phase && 'saving' !== $active_phase && 'done' !== $active_phase ) {
-					TranslationProgressTracker::advance_units( $active_phase, $chunk_units );
-					$completed_unit_count += $chunk_units;
+			if ( $track_progress ) {
+				$chunk_units = self::char_length( $chunk );
+				if ( $chunk_units > 0 ) {
+					$active_phase = TranslationProgressTracker::current_phase();
+					if ( '' !== $active_phase && 'saving' !== $active_phase && 'done' !== $active_phase ) {
+						TranslationProgressTracker::advance_units( $active_phase, $chunk_units );
+						$completed_unit_count += $chunk_units;
+					}
 				}
 			}
 		}
@@ -352,14 +372,288 @@ class TranslationRuntime {
 		return $text;
 	}
 
+	private static function get_default_model_profile(): array {
+		return array(
+			'id'                         => 'default',
+			'matchers'                   => array(),
+			'request_mode'               => self::REQUEST_MODE_SYSTEM_PLUS_USER,
+			'prompt_style'               => self::PROMPT_STYLE_GENERIC_TEMPLATE,
+			'supports_system_role'       => true,
+			'requires_strict_direct_api' => false,
+			'requires_chat_template_kwargs' => false,
+			'extra_request_body'         => array(),
+			'chunk_strategy'             => self::CHUNK_STRATEGY_DEFAULT,
+			'max_chunk_chars'            => 0,
+			'temperature'                => 0,
+			'retry_profile'              => array(
+				'retry_on_validation_failure' => true,
+				'retry_on_passthrough_de'     => false,
+				'reduce_chunk_on_retry'       => false,
+				'retry_chunk_chars'           => 0,
+			),
+		);
+	}
+
+	private static function normalize_model_profile( array $profile, array $defaults ): array {
+		$retry_defaults = is_array( $defaults['retry_profile'] ?? null ) ? $defaults['retry_profile'] : array();
+		$retry_profile  = is_array( $profile['retry_profile'] ?? null )
+			? array_merge( $retry_defaults, $profile['retry_profile'] )
+			: $retry_defaults;
+
+		$normalized = array_merge( $defaults, $profile );
+		$normalized['retry_profile'] = $retry_profile;
+
+		if ( ! is_array( $normalized['matchers'] ) ) {
+			if ( is_string( $normalized['matchers'] ) && '' !== trim( $normalized['matchers'] ) ) {
+				$normalized['matchers'] = array( trim( $normalized['matchers'] ) );
+			} else {
+				$normalized['matchers'] = array();
+			}
+		}
+
+		if ( ! in_array( $normalized['request_mode'], array( self::REQUEST_MODE_SYSTEM_PLUS_USER, self::REQUEST_MODE_USER_ONLY ), true ) ) {
+			$normalized['request_mode'] = self::REQUEST_MODE_SYSTEM_PLUS_USER;
+		}
+
+		if ( ! in_array( $normalized['prompt_style'], array( self::PROMPT_STYLE_GENERIC_TEMPLATE, self::PROMPT_STYLE_BILINGUAL_FRAME ), true ) ) {
+			$normalized['prompt_style'] = self::PROMPT_STYLE_GENERIC_TEMPLATE;
+		}
+
+		if ( ! in_array( $normalized['chunk_strategy'], array( self::CHUNK_STRATEGY_DEFAULT, self::CHUNK_STRATEGY_TOWER ), true ) ) {
+			$normalized['chunk_strategy'] = self::CHUNK_STRATEGY_DEFAULT;
+		}
+
+		$normalized['supports_system_role']       = ! empty( $normalized['supports_system_role'] );
+		$normalized['requires_strict_direct_api'] = ! empty( $normalized['requires_strict_direct_api'] );
+		$normalized['requires_chat_template_kwargs'] = ! empty( $normalized['requires_chat_template_kwargs'] );
+		$normalized['max_chunk_chars']            = absint( $normalized['max_chunk_chars'] ?? 0 );
+		$normalized['temperature']                = (int) round( is_numeric( $normalized['temperature'] ?? null ) ? (float) $normalized['temperature'] : 0.0 );
+
+		if ( ! is_array( $normalized['extra_request_body'] ) ) {
+			$normalized['extra_request_body'] = array();
+		}
+
+		$normalized['retry_profile']['retry_on_validation_failure'] = ! empty( $normalized['retry_profile']['retry_on_validation_failure'] );
+		$normalized['retry_profile']['retry_on_passthrough_de']     = ! empty( $normalized['retry_profile']['retry_on_passthrough_de'] );
+		$normalized['retry_profile']['reduce_chunk_on_retry']       = ! empty( $normalized['retry_profile']['reduce_chunk_on_retry'] );
+		$normalized['retry_profile']['retry_chunk_chars']           = absint( $normalized['retry_profile']['retry_chunk_chars'] ?? 0 );
+
+		$normalized['id'] = is_string( $normalized['id'] ?? null ) && '' !== trim( $normalized['id'] )
+			? sanitize_key( $normalized['id'] )
+			: 'default';
+
+		return $normalized;
+	}
+
+	private static function model_slug_matches_profile( string $model_slug, array $model_profile ): bool {
+		$matchers = $model_profile['matchers'] ?? array();
+		if ( ! is_array( $matchers ) ) {
+			return false;
+		}
+
+		foreach ( $matchers as $matcher ) {
+			if ( ! is_string( $matcher ) || '' === trim( $matcher ) ) {
+				continue;
+			}
+
+			if ( false !== strpos( $model_slug, strtolower( trim( $matcher ) ) ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static function get_model_profile( string $model_slug ): array {
+		$normalized_slug = strtolower( trim( $model_slug ) );
+		if ( isset( self::$model_profile_cache[ $normalized_slug ] ) ) {
+			return self::$model_profile_cache[ $normalized_slug ];
+		}
+
+		$default_profile = self::get_default_model_profile();
+		$resolved        = $default_profile;
+
+		$profiles = AI_Translate::get_model_profiles();
+		if ( is_array( $profiles ) && '' !== $normalized_slug ) {
+			foreach ( $profiles as $profile_key => $candidate ) {
+				if ( ! is_array( $candidate ) ) {
+					continue;
+				}
+
+				if ( ! isset( $candidate['id'] ) && is_string( $profile_key ) && '' !== trim( $profile_key ) ) {
+					$candidate['id'] = $profile_key;
+				}
+
+				$normalized_candidate = self::normalize_model_profile( $candidate, $default_profile );
+				if ( self::model_slug_matches_profile( $normalized_slug, $normalized_candidate ) ) {
+					$resolved = $normalized_candidate;
+					break;
+				}
+			}
+		}
+
+		$resolved = self::normalize_model_profile( $resolved, $default_profile );
+		self::$model_profile_cache[ $normalized_slug ] = $resolved;
+
+		return $resolved;
+	}
+
+	public static function is_tower_model( string $model_slug ): bool {
+		return self::CHUNK_STRATEGY_TOWER === self::get_chunk_strategy_for_model( $model_slug );
+	}
+
+	public static function get_chunk_strategy_for_model( string $model_slug ): string {
+		$profile = self::get_model_profile( $model_slug );
+		return (string) ( $profile['chunk_strategy'] ?? self::CHUNK_STRATEGY_DEFAULT );
+	}
+
+	public static function get_prompt_style_for_model( string $model_slug ): string {
+		$profile = self::get_model_profile( $model_slug );
+		return (string) ( $profile['prompt_style'] ?? self::PROMPT_STYLE_GENERIC_TEMPLATE );
+	}
+
+	private static function resolve_language_label( ?string $language_code, string $fallback ): string {
+		$normalized = strtolower( trim( (string) $language_code ) );
+		switch ( $normalized ) {
+			case 'en':
+				return 'English';
+			case 'de':
+				return 'German';
+			case 'fr':
+				return 'French';
+			case 'es':
+				return 'Spanish';
+			case 'it':
+				return 'Italian';
+			case 'nl':
+				return 'Dutch';
+			case 'pl':
+				return 'Polish';
+			default:
+				return '' !== $normalized ? strtoupper( $normalized ) : $fallback;
+		}
+	}
+
+	private static function build_bilingual_frame_prompt( string $text, string $prompt, int $validation_attempt ): string {
+		$source_label = self::resolve_language_label( is_string( self::$source_lang ) ? self::$source_lang : null, 'Source' );
+		$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'Target' );
+
+		$parts   = array();
+		$parts[] = sprintf( 'Translate the following text from %1$s into %2$s.', $source_label, $target_label );
+		if ( '' !== trim( $prompt ) ) {
+			$parts[] = 'Follow these translation rules: ' . trim( $prompt );
+		}
+		if ( $validation_attempt > 0 ) {
+			$parts[] = sprintf( 'CRITICAL: Return only %s. Do not copy sentences in %s.', $target_label, $source_label );
+		}
+		$parts[] = $source_label . ':';
+		$parts[] = $text;
+		$parts[] = $target_label . ':';
+
+		return implode( "\n\n", $parts );
+	}
+
+	private static function replace_profile_placeholders( mixed $value ): mixed {
+		if ( is_array( $value ) ) {
+			$result = array();
+			foreach ( $value as $key => $inner_value ) {
+				$result[ $key ] = self::replace_profile_placeholders( $inner_value );
+			}
+			return $result;
+		}
+
+		if ( ! is_string( $value ) ) {
+			return $value;
+		}
+
+		$source_lang_code = is_string( self::$source_lang ) ? self::$source_lang : '';
+		$target_lang_code = is_string( self::$target_lang ) ? self::$target_lang : '';
+
+		return str_replace(
+			array( '{source_lang_code}', '{target_lang_code}' ),
+			array( $source_lang_code, $target_lang_code ),
+			$value
+		);
+	}
+
+	private static function build_profile_extra_request_body( array $model_profile, bool $kwargs_supported ): array {
+		$extra = $model_profile['extra_request_body'] ?? array();
+		if ( ! is_array( $extra ) || empty( $extra ) ) {
+			return array();
+		}
+
+		$extra = self::replace_profile_placeholders( $extra );
+
+		if ( isset( $extra['chat_template_kwargs'] ) ) {
+			$has_languages = is_string( self::$source_lang ) && '' !== self::$source_lang
+				&& is_string( self::$target_lang ) && '' !== self::$target_lang;
+
+			if ( ! $kwargs_supported || ! $has_languages || ! is_array( $extra['chat_template_kwargs'] ) ) {
+				unset( $extra['chat_template_kwargs'] );
+			}
+		}
+
+		return $extra;
+	}
+
+	private static function build_transport_payload(
+		string $source_text,
+		string $prompt,
+		array $model_profile,
+		bool $kwargs_supported,
+		int $validation_attempt
+	): array {
+		$request_mode   = (string) ( $model_profile['request_mode'] ?? self::REQUEST_MODE_SYSTEM_PLUS_USER );
+		$prompt_style   = (string) ( $model_profile['prompt_style'] ?? self::PROMPT_STYLE_GENERIC_TEMPLATE );
+		$system_prompt  = $prompt;
+		$user_content   = $source_text;
+		$use_system     = self::REQUEST_MODE_SYSTEM_PLUS_USER === $request_mode && ! empty( $model_profile['supports_system_role'] );
+		$temperature    = (int) ( $model_profile['temperature'] ?? 0 );
+
+		if ( self::PROMPT_STYLE_BILINGUAL_FRAME === $prompt_style ) {
+			$user_content = self::build_bilingual_frame_prompt( $source_text, $prompt, $validation_attempt );
+			$system_prompt = '';
+			$use_system    = false;
+		} elseif ( self::REQUEST_MODE_USER_ONLY === $request_mode ) {
+			$system_prompt = '';
+			$use_system    = false;
+		}
+
+		return array(
+			'user_content'       => $user_content,
+			'system_prompt'      => $system_prompt,
+			'use_system_prompt'  => $use_system,
+			'temperature'        => $temperature,
+			'extra_request_body' => self::build_profile_extra_request_body( $model_profile, $kwargs_supported ),
+		);
+	}
+
+	private static function apply_chunk_strategy_to_limit( int $chunk_char_limit, array $model_profile ): int {
+		$chunk_strategy = (string) ( $model_profile['chunk_strategy'] ?? self::CHUNK_STRATEGY_DEFAULT );
+
+		if ( self::CHUNK_STRATEGY_TOWER === $chunk_strategy ) {
+			$conservative = (int) floor( $chunk_char_limit * 0.6 );
+			$cap          = absint( $model_profile['max_chunk_chars'] ?? 0 );
+			if ( $cap > 0 ) {
+				$conservative = min( $conservative, $cap );
+			}
+
+			$chunk_char_limit = max( self::MIN_TRANSLATION_CHARS, $conservative );
+		}
+
+		return max( self::MIN_TRANSLATION_CHARS, min( self::MAX_TRANSLATION_CHARS, $chunk_char_limit ) );
+	}
+
 	public static function translate_chunk( string $text, string $prompt, int $validation_attempt = 0 ): mixed {
 		$runtime_context           = self::get_runtime_context();
 		$model_slug                = self::$model_slug_override ?? $runtime_context['model_slug'];
-		$requires_strict_direct_api = self::model_requires_strict_direct_api( $model_slug );
+		$model_profile             = self::get_model_profile( $model_slug );
+		$requires_strict_direct_api = ! empty( $model_profile['requires_strict_direct_api'] );
+		$requires_chat_template_kwargs = ! empty( $model_profile['requires_chat_template_kwargs'] );
 		$direct_api_url            = $runtime_context['direct_api_url'];
 		$kwargs_supported          = self::direct_api_kwargs_supported();
 
-		if ( $requires_strict_direct_api && is_string( $direct_api_url ) && '' !== $direct_api_url && ! $kwargs_supported ) {
+		if ( $requires_chat_template_kwargs && is_string( $direct_api_url ) && '' !== $direct_api_url && ! $kwargs_supported ) {
 			$kwargs_supported = self::refresh_direct_api_kwargs_detection( $direct_api_url, $model_slug );
 		}
 
@@ -383,7 +677,7 @@ class TranslationRuntime {
 				);
 			}
 
-			if ( ! $kwargs_supported ) {
+			if ( $requires_chat_template_kwargs && ! $kwargs_supported ) {
 				$error_message = __( 'TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model.', 'slytranslate' );
 				self::record_transport_diagnostics( array(
 					'transport'        => 'blocked',
@@ -405,6 +699,7 @@ class TranslationRuntime {
 
 		$input_chars = self::char_length( $text );
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
+		$transport_payload = self::build_transport_payload( $text, $prompt, $model_profile, $kwargs_supported, $validation_attempt );
 
 		// Use the direct API only when explicitly opted in: either the model
 		// requires it (TranslateGemma via chat_template_kwargs) or the user
@@ -413,14 +708,14 @@ class TranslationRuntime {
 		if ( self::should_use_direct_api( $model_slug, (string) $direct_api_url ) ) {
 			$direct_started = TimingLogger::start();
 			$result         = DirectApiTranslationClient::translate(
-				$text,
-				$prompt,
+				(string) $transport_payload['user_content'],
+				(string) $transport_payload['system_prompt'],
+				! empty( $transport_payload['use_system_prompt'] ),
 				$model_slug,
 				$direct_api_url,
-				$kwargs_supported,
-				self::$source_lang,
-				self::$target_lang,
-				$max_output_tokens
+				(int) $transport_payload['temperature'],
+				$max_output_tokens,
+				(array) $transport_payload['extra_request_body']
 			);
 			$direct_duration_ms = TimingLogger::stop( $direct_started );
 			TimingLogger::increment( 'ai_calls' );
@@ -556,9 +851,17 @@ class TranslationRuntime {
 		}
 
 		$wp_started = TimingLogger::start();
-		$builder = wp_ai_client_prompt( $text )
-			->using_system_instruction( $prompt )
-			->using_temperature( 0 );
+		$builder    = wp_ai_client_prompt( (string) $transport_payload['user_content'] );
+
+		if ( ! empty( $transport_payload['use_system_prompt'] )
+			&& is_callable( array( $builder, 'using_system_instruction' ) )
+		) {
+			$builder = $builder->using_system_instruction( (string) $transport_payload['system_prompt'] );
+		}
+
+		if ( is_callable( array( $builder, 'using_temperature' ) ) ) {
+			$builder = $builder->using_temperature( (int) $transport_payload['temperature'] );
+		}
 
 		if ( '' !== $model_slug && is_callable( array( $builder, 'using_model_preference' ) ) ) {
 			$builder = $builder->using_model_preference( $model_slug );
@@ -669,13 +972,14 @@ class TranslationRuntime {
 	): mixed {
 		$translated_text  = self::unwrap_pseudo_tag_translation( $source_text, $translated_text );
 		$translated_text  = TranslationValidator::normalize_symbol_notation( $source_text, $translated_text );
-		$validation_error = TranslationValidator::validate( $source_text, $translated_text );
+		$validation_error = TranslationValidator::validate( $source_text, $translated_text, self::$target_lang );
 		if ( is_wp_error( $validation_error ) ) {
 			self::record_validation_failure_diagnostics( $validation_error );
+			$validation_error_code = (string) $validation_error->get_error_code();
 
 			TimingLogger::log( 'ai_validation_failed', array(
 				'model'           => $model_slug,
-				'reason'          => $validation_error->get_error_code(),
+				'reason'          => $validation_error_code,
 				'attempt'         => $validation_attempt,
 				'source_chars'    => self::char_length( $source_text ),
 				'output_chars'    => self::char_length( $translated_text ),
@@ -683,13 +987,23 @@ class TranslationRuntime {
 				'output_excerpt'  => self::truncate_for_log( $translated_text ),
 			) );
 
-			if ( 0 === $validation_attempt && self::should_retry_after_validation_failure( $model_slug ) ) {
+			if ( 0 === $validation_attempt && self::should_retry_after_validation_failure( $model_slug, $validation_error_code ) ) {
 				TimingLogger::increment( 'retries' );
 				TimingLogger::log( 'ai_validation_retry', array(
 					'model'  => $model_slug,
-					'reason' => $validation_error->get_error_code(),
+					'reason' => $validation_error_code,
 				) );
-				return self::translate_chunk( $source_text, self::build_retry_prompt( $prompt ), 1 );
+
+				$retry_prompt      = self::build_retry_prompt( $prompt, $model_slug, $validation_error_code );
+				$retry_chunk_limit = self::get_retry_chunk_limit_for_validation_failure( $model_slug, $validation_error_code );
+
+				if ( $retry_chunk_limit >= self::MIN_TRANSLATION_CHARS
+					&& self::char_length( $source_text ) > $retry_chunk_limit
+				) {
+					return self::translate_with_chunk_limit( $source_text, $retry_prompt, $retry_chunk_limit, 0, null, false );
+				}
+
+				return self::translate_chunk( $source_text, $retry_prompt, 1 );
 			}
 
 			return $validation_error;
@@ -710,12 +1024,15 @@ class TranslationRuntime {
 		$runtime_context      = self::get_runtime_context();
 		$context_window_size  = self::get_effective_context_window_tokens();
 		$chunk_char_limit     = self::get_chunk_char_limit_from_context_window( $context_window_size );
+		$model_profile        = self::get_model_profile( (string) ( $runtime_context['model_slug'] ?? '' ) );
 
 		$filtered_limit = apply_filters( 'ai_translate_chunk_char_limit', $chunk_char_limit, $context_window_size, $runtime_context );
 		$filtered_limit = absint( $filtered_limit );
 		if ( $filtered_limit > 0 ) {
 			$chunk_char_limit = $filtered_limit;
 		}
+
+		$chunk_char_limit = self::apply_chunk_strategy_to_limit( $chunk_char_limit, $model_profile );
 
 		self::$chunk_char_limit_cache = max( self::MIN_TRANSLATION_CHARS, min( self::MAX_TRANSLATION_CHARS, $chunk_char_limit ) );
 		return self::$chunk_char_limit_cache;
@@ -822,6 +1139,10 @@ class TranslationRuntime {
 			);
 		}
 
+		if ( is_string( self::$model_slug_override ) && '' !== self::$model_slug_override ) {
+			$model_slug = self::$model_slug_override;
+		}
+
 		self::$context = array(
 			'service_slug'   => '',
 			'model_slug'     => $model_slug,
@@ -867,6 +1188,7 @@ class TranslationRuntime {
 	public static function reset_context(): void {
 		self::$context              = null;
 		self::$chunk_char_limit_cache = null;
+		self::$model_profile_cache    = array();
 	}
 
 	public static function get_requested_model_slug(): string {
@@ -981,7 +1303,13 @@ class TranslationRuntime {
 	 * ------------------------------------------------------------- */
 
 	public static function model_requires_strict_direct_api( string $model_slug ): bool {
-		return '' !== $model_slug && false !== strpos( strtolower( $model_slug ), 'translategemma' );
+		if ( '' === trim( $model_slug ) ) {
+			return false;
+		}
+
+		$model_profile = self::get_model_profile( $model_slug );
+
+		return ! empty( $model_profile['requires_strict_direct_api'] );
 	}
 
 	/**
@@ -1121,8 +1449,39 @@ class TranslationRuntime {
 	 * Retry / validation helpers
 	 * ------------------------------------------------------------- */
 
-	private static function should_retry_after_validation_failure( string $model_slug ): bool {
-		return ! self::model_requires_strict_direct_api( $model_slug );
+	private static function should_retry_after_validation_failure( string $model_slug, string $validation_error_code ): bool {
+		$model_profile = self::get_model_profile( $model_slug );
+		$retry_profile = is_array( $model_profile['retry_profile'] ?? null ) ? $model_profile['retry_profile'] : array();
+
+		if ( empty( $retry_profile['retry_on_validation_failure'] ) ) {
+			return false;
+		}
+
+		if ( 'invalid_translation_language_passthrough' === $validation_error_code ) {
+			return ! empty( $retry_profile['retry_on_passthrough_de'] );
+		}
+
+		return true;
+	}
+
+	private static function get_retry_chunk_limit_for_validation_failure( string $model_slug, string $validation_error_code ): int {
+		$model_profile = self::get_model_profile( $model_slug );
+		$retry_profile = is_array( $model_profile['retry_profile'] ?? null ) ? $model_profile['retry_profile'] : array();
+
+		if ( empty( $retry_profile['reduce_chunk_on_retry'] ) ) {
+			return 0;
+		}
+
+		if ( 'invalid_translation_language_passthrough' === $validation_error_code && empty( $retry_profile['retry_on_passthrough_de'] ) ) {
+			return 0;
+		}
+
+		$retry_chunk_chars = absint( $retry_profile['retry_chunk_chars'] ?? 0 );
+		if ( $retry_chunk_chars < self::MIN_TRANSLATION_CHARS ) {
+			$retry_chunk_chars = (int) floor( self::get_chunk_char_limit() * 0.5 );
+		}
+
+		return max( self::MIN_TRANSLATION_CHARS, min( self::MAX_TRANSLATION_CHARS, $retry_chunk_chars ) );
 	}
 
 	/**
@@ -1176,13 +1535,21 @@ class TranslationRuntime {
 				'invalid_translation_structure_drift',
 				'invalid_translation_empty',
 				'invalid_translation_plain_text_missing',
+				'invalid_translation_language_passthrough',
 			),
 			true
 		);
 	}
 
-	private static function build_retry_prompt( string $prompt ): string {
-		return $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, code fences, and source symbols exactly. Do not rewrite Unicode symbols or math notation as LaTeX or ASCII. Do not add explanations, bullet lists, markdown headings, or commentary. The output length MUST be approximately the same as the input length; do not append extra paragraphs.";
+	private static function build_retry_prompt( string $prompt, string $model_slug = '', string $validation_error_code = '' ): string {
+		$retry_prompt = $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, code fences, and source symbols exactly. Do not rewrite Unicode symbols or math notation as LaTeX or ASCII. Do not add explanations, bullet lists, markdown headings, or commentary. The output length MUST be approximately the same as the input length; do not append extra paragraphs.";
+
+		if ( self::is_tower_model( $model_slug ) || 'invalid_translation_language_passthrough' === $validation_error_code ) {
+			$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'the target language' );
+			$retry_prompt .= "\n\nCRITICAL: The final output must be in {$target_label}. Do not keep source-language sentences unchanged.";
+		}
+
+		return $retry_prompt;
 	}
 
 	/* ---------------------------------------------------------------

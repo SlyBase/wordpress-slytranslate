@@ -13,53 +13,50 @@ defined( 'ABSPATH' ) || exit;
 class DirectApiTranslationClient {
 
 	/**
-	 * Translate $text via a direct POST to $api_url/v1/chat/completions.
+	 * Translate content via a direct POST to $api_url/v1/chat/completions.
 	 *
-	 * @param string      $text              Text to translate.
-	 * @param string      $prompt            System instruction prompt.
+	 * @param string      $user_content      User message content.
+	 * @param string      $system_prompt     Optional system instruction prompt.
+	 * @param bool        $use_system_prompt Whether the system instruction should be sent.
 	 * @param string      $model_slug        Model slug (may be empty).
 	 * @param string      $api_url           Base URL of the API server.
-	 * @param bool        $kwargs_supported  Whether chat_template_kwargs should be sent.
-	 * @param string|null $source_lang       Source language code for kwargs.
-	 * @param string|null $target_lang       Target language code for kwargs.
+	 * @param int         $temperature       Sampling temperature.
 	 * @param int         $max_tokens        Maximum tokens to generate (0 = no explicit limit).
+	 * @param array       $extra_request_body Additional top-level request keys from the model profile.
 	 * @return string|\WP_Error|null Translated text, WP_Error on connection failure, or null for non-fatal API errors.
 	 */
 	public static function translate(
-		string $text,
-		string $prompt,
+		string $user_content,
+		string $system_prompt,
+		bool $use_system_prompt,
 		string $model_slug,
 		string $api_url,
-		bool $kwargs_supported,
-		?string $source_lang = null,
-		?string $target_lang = null,
-		int $max_tokens = 0
+		int $temperature = 0,
+		int $max_tokens = 0,
+		array $extra_request_body = array()
 	): string|\WP_Error|null {
 		$endpoint = trailingslashit( $api_url ) . 'v1/chat/completions';
-
-		$attach_chat_template_kwargs = $kwargs_supported && $source_lang && $target_lang;
-		$omit_system_message         = $attach_chat_template_kwargs && TranslationRuntime::model_requires_strict_direct_api( $model_slug );
 
 		$messages = array(
 			array(
 				'role'    => 'user',
-				'content' => $text,
+				'content' => $user_content,
 			),
 		);
 
-		if ( ! $omit_system_message ) {
+		if ( $use_system_prompt && '' !== trim( $system_prompt ) ) {
 			array_unshift(
 				$messages,
 				array(
 					'role'    => 'system',
-					'content' => $prompt,
+					'content' => $system_prompt,
 				)
 			);
 		}
 
 		$body = array(
 			'messages'    => $messages,
-			'temperature' => 0,
+			'temperature' => $temperature,
 		);
 
 		if ( '' !== $model_slug ) {
@@ -70,11 +67,12 @@ class DirectApiTranslationClient {
 			$body['max_tokens'] = $max_tokens;
 		}
 
-		if ( $attach_chat_template_kwargs ) {
-			$body['chat_template_kwargs'] = array(
-				'source_lang_code' => $source_lang,
-				'target_lang_code' => $target_lang,
-			);
+		foreach ( $extra_request_body as $key => $value ) {
+			if ( in_array( (string) $key, array( 'messages', 'model' ), true ) ) {
+				continue;
+			}
+
+			$body[ $key ] = $value;
 		}
 
 		$transport_started = TimingLogger::start();
