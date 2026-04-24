@@ -84,6 +84,24 @@ class AI_Translate {
 					'retry_chunk_chars'           => 1800,
 				),
 			),
+			array(
+				'id'                         => 'ministral',
+				'matchers'                   => array( 'ministral', 'ministral-8b', 'ministral-8b-instruct' ),
+				'request_mode'               => 'user_only',
+				'prompt_style'               => 'bilingual_frame',
+				'supports_system_role'       => false,
+				'requires_strict_direct_api' => false,
+				'requires_chat_template_kwargs' => false,
+				'extra_request_body'         => array(),
+				'chunk_strategy'             => 'default',
+				'temperature'                => 0,
+				'retry_profile'              => array(
+					'retry_on_validation_failure' => true,
+					'retry_on_passthrough_de'     => true,
+					'reduce_chunk_on_retry'       => true,
+					'retry_chunk_chars'           => 1800,
+				),
+			),
 		);
 
 		$filtered = apply_filters( 'slytranslate_model_profiles', $profiles );

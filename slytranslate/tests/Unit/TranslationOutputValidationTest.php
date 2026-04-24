@@ -41,6 +41,15 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'invalid_translation_language_passthrough', $result->get_error_code() );
 	}
 
+	public function test_normalizes_leading_german_label_leakage_for_de_target(): void {
+		$source_text = 'This sentence should be translated to German without any role labels in the output.';
+		$translated  = "German:\nDies ist eine saubere deutsche Uebersetzung.";
+
+		$result = TranslationValidator::validate( $source_text, $translated, 'de' );
+
+		$this->assertNull( $result );
+	}
+
 	public function test_rejects_gutenberg_structure_drift(): void {
 		$source_text = "<!-- wp:paragraph -->\n<p>See https://example.com for details.</p>\n<!-- /wp:paragraph -->";
 		$translated  = '<p>Weitere Informationen folgen bald.</p>';
@@ -414,5 +423,83 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertIsString( $result );
 		$this->assertGreaterThanOrEqual( 3, $call_count );
 		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $input_texts[1] ?? '' );
+	}
+
+	public function test_ministral_profile_retries_passthrough_failure_with_smaller_chunks(): void {
+		$call_count  = 0;
+		$input_texts = array();
+
+		$source = str_repeat( 'This is an English source sentence with repeated words and structure. ', 45 );
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'Ministral-8B-Instruct-2410-Q4_K_M',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+
+				return $default;
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$call_count, &$input_texts ) {
+				return new class( $text, $call_count, $input_texts ) {
+					private string $text;
+					private int $call_count;
+					private array $input_texts;
+
+					public function __construct( string $text, int &$call_count, array &$input_texts ) {
+						$this->text        = $text;
+						$this->call_count  = &$call_count;
+						$this->input_texts = &$input_texts;
+					}
+
+					public function using_system_instruction( string $prompt ) {
+						return $this;
+					}
+
+					public function using_temperature( int $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						++$this->call_count;
+						$this->input_texts[] = $this->text;
+
+						if ( 1 === $this->call_count ) {
+							if ( preg_match( '/English:\\s*(.*?)\\s*German:\\s*$/s', $this->text, $matches ) && is_string( $matches[1] ?? null ) ) {
+								return trim( $matches[1] );
+							}
+
+							return $this->text;
+						}
+
+						return 'Dies ist eine deutsche Uebersetzung.';
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( $source, 'Prompt' ) );
+
+		$this->assertIsString( $result );
+		$this->assertGreaterThanOrEqual( 3, $call_count );
+		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $input_texts[1] ?? '' );
+		$this->assertStringContainsString( 'CRITICAL: The final output must be in German.', $input_texts[1] ?? '' );
 	}
 }

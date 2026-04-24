@@ -168,4 +168,14 @@ class TextSplittingTest extends TestCase {
 
 		$this->assertSame( 4096, $limit );
 	}
+
+	public function test_ministral_retry_chunk_limit_applies_on_passthrough_failure(): void {
+		$limit = $this->invokeStatic(
+			TranslationRuntime::class,
+			'get_retry_chunk_limit_for_validation_failure',
+			array( 'Ministral-8B-Instruct-2410-Q4_K_M', 'invalid_translation_language_passthrough' )
+		);
+
+		$this->assertSame( 1800, $limit );
+	}
 }

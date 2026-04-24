@@ -6,14 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Beta releases (for example 1.6.0-beta.1) are documented under their base version (for example 1.6.0).
 
 
-## [Unreleased]
-- Tooling: added `.github/scripts/test-llamacpp-prompts.sh` to run side-by-side llama.cpp chat-completion tests with the plugin-default prompt and the bilingual-frame prompt.
-- MCP: added `ai-translate/set-post-language` to change the language assignment of existing posts with conflict-aware `force` handling and optional `relink` semantics.
-- Architecture: introduced `LanguageMutationService` plus the optional `TranslationMutationAdapter` capability contract so write-mutations stay plugin-neutral while unsupported adapters return a uniform error.
-- DevOps: hardening for the VS Code deploy task now resolves the target pod from running candidates, auto-selects a valid container when the preferred one is missing, and retries once with refreshed pod/container resolution after transient `kubectl exec` failures.
-
-
 ## [1.6.0]
+- Ministral: added a dedicated model profile (`ministral`, `ministral-8b`, `ministral-8b-instruct`) using user-only bilingual framing (`English:`/`German:`) with stricter validation-retry settings and 1,800-char retry chunking.
+- Retry: bilingual-frame profiles now always append a hard target-language requirement on validation retries, improving recovery from assistant-style or mixed-language outputs.
+- Validation: leading bilingual-frame label leakage (`German:` / `Deutsch:`) is normalized for German targets before validation, reducing false failures from prompt-frame artifacts.
+- Tests: added focused coverage for Ministral profile matching, prompt payload shape, retry chunk sizing, and passthrough-triggered retry behavior.
 - Performance: raised `MAX_OUTPUT_TOKENS_CEILING` from 8 192 to 32 768 tokens so large posts are no longer truncated mid-translation and fall back to slow per-block mode.
 - Performance: added `gemma-4` to the known model context-window table (131 072 tokens), fixing the substring match that caused gemma-4 variants to be handled with only 8 192 tokens, splitting a ~48 000-char post into 12 chunks instead of 1.
 - Performance: the computed chunk char limit is now cached for the duration of each translation job (cleared on model switch and between jobs), eliminating repeated option reads and model table lookups.

@@ -125,6 +125,25 @@ class PromptBuildingTest extends TestCase {
 		$this->assertStringContainsString( 'German:', $payload['user_content'] );
 	}
 
+	public function test_ministral_profile_builds_bilingual_user_only_payload(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$profile = TranslationRuntime::get_model_profile( 'Ministral-8B-Instruct-2410-Q4_K_M' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array( 'Hello world', 'Prompt', $profile, false, 0 )
+		);
+
+		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( 'ministral-8b-instruct' ) );
+		$this->assertFalse( $payload['use_system_prompt'] );
+		$this->assertSame( '', $payload['system_prompt'] );
+		$this->assertStringContainsString( 'Translate the following text from English into German.', $payload['user_content'] );
+		$this->assertStringContainsString( 'English:', $payload['user_content'] );
+		$this->assertStringContainsString( 'German:', $payload['user_content'] );
+	}
+
 	public function test_default_profile_keeps_system_plus_user_payload_shape(): void {
 		$profile = TranslationRuntime::get_model_profile( 'gpt-4o' );
 		$payload = $this->invokeStatic(

@@ -47,7 +47,7 @@ class TranslationValidator {
 
 	public static function validate( string $source_text, string $translated_text, ?string $target_language = null ) {
 		$source_text     = (string) $source_text;
-		$translated_text = (string) $translated_text;
+		$translated_text = self::normalize_bilingual_frame_label_leakage( $source_text, (string) $translated_text, $target_language );
 
 		if ( '' === trim( $translated_text ) ) {
 			return new \WP_Error(
@@ -140,6 +140,33 @@ class TranslationValidator {
 		}
 
 		return $translated_text;
+	}
+
+	private static function normalize_bilingual_frame_label_leakage( string $source_text, string $translated_text, ?string $target_language ): string {
+		$target = strtolower( trim( (string) $target_language ) );
+		if ( '' === $target || 0 !== strpos( $target, 'de' ) ) {
+			return $translated_text;
+		}
+
+		$source_trimmed = ltrim( $source_text );
+		if ( 1 === preg_match( '/^(?:\*\*)?\s*(?:german|deutsch)\s*:/iu', $source_trimmed ) ) {
+			return $translated_text;
+		}
+
+		$translated_trimmed = ltrim( $translated_text );
+		$normalized         = preg_replace(
+			'/^(?:\*\*)?\s*(?:german|deutsch)\s*:\s*(?:\*\*)?\s*/iu',
+			'',
+			$translated_trimmed,
+			1,
+			$count
+		);
+
+		if ( ! is_string( $normalized ) || 1 !== $count ) {
+			return $translated_text;
+		}
+
+		return $normalized;
 	}
 
 	private static function normalize_text_for_validation( string $text ): string {

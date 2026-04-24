@@ -1543,8 +1543,9 @@ class TranslationRuntime {
 
 	private static function build_retry_prompt( string $prompt, string $model_slug = '', string $validation_error_code = '' ): string {
 		$retry_prompt = $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, code fences, and source symbols exactly. Do not rewrite Unicode symbols or math notation as LaTeX or ASCII. Do not add explanations, bullet lists, markdown headings, or commentary. The output length MUST be approximately the same as the input length; do not append extra paragraphs.";
+		$uses_bilingual_prompt_style = self::PROMPT_STYLE_BILINGUAL_FRAME === self::get_prompt_style_for_model( $model_slug );
 
-		if ( self::is_tower_model( $model_slug ) || 'invalid_translation_language_passthrough' === $validation_error_code ) {
+		if ( $uses_bilingual_prompt_style || 'invalid_translation_language_passthrough' === $validation_error_code ) {
 			$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'the target language' );
 			$retry_prompt .= "\n\nCRITICAL: The final output must be in {$target_label}. Do not keep source-language sentences unchanged.";
 		}
