@@ -144,6 +144,26 @@ class PromptBuildingTest extends TestCase {
 		$this->assertStringContainsString( 'German:', $payload['user_content'] );
 	}
 
+	public function test_bilingual_payload_promotes_informal_du_requirement_when_requested(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$profile = TranslationRuntime::get_model_profile( 'Ministral-3-3B-Instruct-2512-Q4_K_M' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array(
+				'Please open your dashboard.',
+				'Anreden mit "du" statt "Sie". junger aber professioneller ton.',
+				$profile,
+				false,
+				0
+			)
+		);
+
+		$this->assertStringContainsString( 'STYLE REQUIREMENT (German): Use informal address ("du"/"dir"/"dein"). Never use formal address ("Sie"/"Ihnen"/"Ihr").', $payload['user_content'] );
+	}
+
 	public function test_default_profile_keeps_system_plus_user_payload_shape(): void {
 		$profile = TranslationRuntime::get_model_profile( 'gpt-4o' );
 		$payload = $this->invokeStatic(

@@ -41,6 +41,42 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'invalid_translation_language_passthrough', $result->get_error_code() );
 	}
 
+	public function test_rejects_formal_german_address_when_du_was_requested(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'finalize_translated_chunk',
+			array(
+				'Please open your dashboard and continue with the next step.',
+				'Bitte oeffnen Sie Ihr Dashboard und fahren Sie mit dem naechsten Schritt fort.',
+				'Ministral-3-3B-Instruct-2512-Q4_K_M',
+				'Anreden mit "du" statt "Sie". junger aber professioneller ton.',
+				1
+			)
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_formality_mismatch', $result->get_error_code() );
+	}
+
+	public function test_retry_prompt_adds_informal_german_constraint_when_du_was_requested(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$retry_prompt = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_retry_prompt',
+			array(
+				'Anreden mit "du" statt "Sie". junger aber professioneller ton.',
+				'Ministral-3-3B-Instruct-2512-Q4_K_M',
+				'invalid_translation_formality_mismatch'
+			)
+		);
+
+		$this->assertStringContainsString( 'CRITICAL: For German address, use only informal "du" form.', $retry_prompt );
+	}
+
 	public function test_normalizes_leading_german_label_leakage_for_de_target(): void {
 		$source_text = 'This sentence should be translated to German without any role labels in the output.';
 		$translated  = "German:\nDies ist eine saubere deutsche Uebersetzung.";

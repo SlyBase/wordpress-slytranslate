@@ -1,5 +1,7 @@
 
 = 1.6.0 =
+* German tone control: added a DE formality guardrail for explicit informal requests (e.g. "du statt Sie"). Outputs that still use formal address ("Sie"/"Ihnen"/"Ihr") now fail validation with a retryable invalid_translation_formality_mismatch error.
+* Prompting: bilingual-frame requests now inject an explicit German informal-address style requirement when the prompt asks for "du" tone, and retries reinforce this requirement.
 * Ministral: added a dedicated model profile (ministral, ministral-8b, ministral-8b-instruct) using user-only bilingual framing (English:/German:) with stricter validation-retry settings and 1,800-char retry chunking.
 * Retry: bilingual-frame profiles now always append a hard target-language requirement on validation retries, improving recovery from assistant-style or mixed-language outputs.
 * Validation: leading bilingual-frame label leakage (German: / Deutsch:) is normalized for German targets before validation, reducing false failures from prompt-frame artifacts.

@@ -534,6 +534,52 @@ class TranslationRuntime {
 		}
 	}
 
+	private static function target_language_is_german(): bool {
+		$target = strtolower( trim( (string) self::$target_lang ) );
+
+		return '' !== $target && 0 === strpos( $target, 'de' );
+	}
+
+	private static function prompt_requests_informal_german_address( string $prompt ): bool {
+		if ( ! self::target_language_is_german() ) {
+			return false;
+		}
+
+		$normalized_prompt = trim( $prompt );
+		if ( '' === $normalized_prompt ) {
+			return false;
+		}
+
+		if ( 1 === preg_match( '/anreden?\s+mit\s+"?du"?\s+statt\s+"?sie"?/iu', $normalized_prompt ) ) {
+			return true;
+		}
+
+		return 1 === preg_match( '/\b(?:du\s+statt\s+sie|du-form|duzen|informell|informal|kein(?:e|en)?\s+sie(?:-|\s)?form|ohne\s+siezen)\b/iu', $normalized_prompt );
+	}
+
+	private static function contains_formal_german_address( string $text ): bool {
+		if ( '' === trim( $text ) ) {
+			return false;
+		}
+
+		return 1 === preg_match( '/\b(?:Sie|Ihnen|Ihr(?:e|em|en|er|es)?)\b/u', $text );
+	}
+
+	private static function validate_german_address_formality( string $translated_text, string $prompt ): ?\WP_Error {
+		if ( ! self::prompt_requests_informal_german_address( $prompt ) ) {
+			return null;
+		}
+
+		if ( ! self::contains_formal_german_address( $translated_text ) ) {
+			return null;
+		}
+
+		return new \WP_Error(
+			'invalid_translation_formality_mismatch',
+			__( 'The translated output uses formal German address ("Sie") although informal "du" was requested.', 'slytranslate' )
+		);
+	}
+
 	private static function build_bilingual_frame_prompt( string $text, string $prompt, int $validation_attempt ): string {
 		$source_label = self::resolve_language_label( is_string( self::$source_lang ) ? self::$source_lang : null, 'Source' );
 		$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'Target' );
@@ -542,6 +588,9 @@ class TranslationRuntime {
 		$parts[] = sprintf( 'Translate the following text from %1$s into %2$s.', $source_label, $target_label );
 		if ( '' !== trim( $prompt ) ) {
 			$parts[] = 'Follow these translation rules: ' . trim( $prompt );
+		}
+		if ( self::prompt_requests_informal_german_address( $prompt ) ) {
+			$parts[] = 'STYLE REQUIREMENT (German): Use informal address ("du"/"dir"/"dein"). Never use formal address ("Sie"/"Ihnen"/"Ihr").';
 		}
 		if ( $validation_attempt > 0 ) {
 			$parts[] = sprintf( 'CRITICAL: Return only %s. Do not copy sentences in %s.', $target_label, $source_label );
@@ -973,6 +1022,11 @@ class TranslationRuntime {
 		$translated_text  = self::unwrap_pseudo_tag_translation( $source_text, $translated_text );
 		$translated_text  = TranslationValidator::normalize_symbol_notation( $source_text, $translated_text );
 		$validation_error = TranslationValidator::validate( $source_text, $translated_text, self::$target_lang );
+
+		if ( ! is_wp_error( $validation_error ) ) {
+			$validation_error = self::validate_german_address_formality( $translated_text, $prompt );
+		}
+
 		if ( is_wp_error( $validation_error ) ) {
 			self::record_validation_failure_diagnostics( $validation_error );
 			$validation_error_code = (string) $validation_error->get_error_code();
@@ -1536,6 +1590,7 @@ class TranslationRuntime {
 				'invalid_translation_empty',
 				'invalid_translation_plain_text_missing',
 				'invalid_translation_language_passthrough',
+				'invalid_translation_formality_mismatch',
 			),
 			true
 		);
@@ -1548,6 +1603,10 @@ class TranslationRuntime {
 		if ( $uses_bilingual_prompt_style || 'invalid_translation_language_passthrough' === $validation_error_code ) {
 			$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'the target language' );
 			$retry_prompt .= "\n\nCRITICAL: The final output must be in {$target_label}. Do not keep source-language sentences unchanged.";
+		}
+
+		if ( self::prompt_requests_informal_german_address( $prompt ) || 'invalid_translation_formality_mismatch' === $validation_error_code ) {
+			$retry_prompt .= "\n\nCRITICAL: For German address, use only informal \"du\" form. Never use formal forms such as \"Sie\", \"Ihnen\", or \"Ihr\".";
 		}
 
 		return $retry_prompt;
