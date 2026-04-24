@@ -9,6 +9,7 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 ## [Unreleased]
 - MCP: added `ai-translate/set-post-language` to change the language assignment of existing posts with conflict-aware `force` handling and optional `relink` semantics.
 - Architecture: introduced `LanguageMutationService` plus the optional `TranslationMutationAdapter` capability contract so write-mutations stay plugin-neutral while unsupported adapters return a uniform error.
+- DevOps: hardening for the VS Code deploy task now resolves the target pod from running candidates, auto-selects a valid container when the preferred one is missing, and retries once with refreshed pod/container resolution after transient `kubectl exec` failures.
 
 
 ## [1.6.0]
