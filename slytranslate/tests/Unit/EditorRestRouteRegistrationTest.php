@@ -27,6 +27,7 @@ class EditorRestRouteRegistrationTest extends TestCase {
 		$expected_routes = array(
 			'/ai-translate/get-languages/run',
 			'/ai-translate/get-translation-status/run',
+			'/ai-translate/set-post-language/run',
 			'/ai-translate/get-untranslated/run',
 			'/ai-translate/translate-text/run',
 			'/ai-translate/translate-blocks/run',

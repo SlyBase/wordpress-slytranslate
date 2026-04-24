@@ -48,6 +48,7 @@ Use SlyTranslate when you need one consistent translation workflow for:
 | --- | --- |
 | `ai-translate/get-languages` | List languages exposed by the active language plugin |
 | `ai-translate/get-translation-status` | Show translation status for a content item |
+| `ai-translate/set-post-language` | Change the language assignment of an existing content item |
 | `ai-translate/get-untranslated` | Find content still missing a target translation |
 | `ai-translate/translate-text` | Translate arbitrary text |
 | `ai-translate/translate-blocks` | Translate serialized Gutenberg blocks |
@@ -113,6 +114,10 @@ In WordPress Settings > Connectors, not inside SlyTranslate.
 ### Can I use bulk translation from post/page lists?
 
 Yes. Use `translate-content-bulk` through abilities or the wp-admin list-table translation UI.
+
+### Can I change the language assignment of an existing post without running translation?
+
+Yes. Use `ai-translate/set-post-language` with `post_id` and `target_language`. By default language conflicts fail with `language_conflict`; use `force` to opt in, and pass `relink=true` when translation relations should be rewritten.
 
 ### How do I control prompts and style?
 

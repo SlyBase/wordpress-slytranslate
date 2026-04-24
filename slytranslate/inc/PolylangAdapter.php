@@ -4,7 +4,7 @@ namespace AI_Translate;
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-class PolylangAdapter implements TranslationPluginAdapter {
+class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAdapter {
 
 	public function is_available(): bool {
 		return function_exists( 'pll_languages_list' );
@@ -36,6 +36,62 @@ class PolylangAdapter implements TranslationPluginAdapter {
 			return array();
 		}
 		return pll_get_post_translations( $post_id );
+	}
+
+	public function supports_mutation_capability( string $capability ): bool {
+		if ( ! $this->is_available() ) {
+			return false;
+		}
+
+		if ( TranslationMutationAdapter::CAPABILITY_SET_POST_LANGUAGE === $capability ) {
+			return function_exists( 'pll_set_post_language' );
+		}
+
+		if ( TranslationMutationAdapter::CAPABILITY_RELINK_TRANSLATION === $capability ) {
+			return function_exists( 'pll_save_post_translations' );
+		}
+
+		return false;
+	}
+
+	public function set_post_language( int $post_id, string $target_language ) {
+		if ( ! $this->supports_mutation_capability( TranslationMutationAdapter::CAPABILITY_SET_POST_LANGUAGE ) ) {
+			return new \WP_Error( 'unsupported_language_mutation', __( 'The active translation plugin does not support changing post languages.', 'slytranslate' ) );
+		}
+
+		$result = pll_set_post_language( $post_id, $target_language );
+		if ( false === $result ) {
+			return new \WP_Error( 'polylang_update_failed', __( 'Polylang could not update the post language.', 'slytranslate' ) );
+		}
+
+		return true;
+	}
+
+	public function relink_post_translations( array $translations ) {
+		if ( ! $this->supports_mutation_capability( TranslationMutationAdapter::CAPABILITY_RELINK_TRANSLATION ) ) {
+			return new \WP_Error( 'unsupported_language_mutation', __( 'The active translation plugin does not support translation relinking.', 'slytranslate' ) );
+		}
+
+		$normalized = array();
+		foreach ( $translations as $language_code => $post_id ) {
+			$code = sanitize_key( (string) $language_code );
+			$id   = absint( $post_id );
+			if ( '' === $code || $id < 1 ) {
+				continue;
+			}
+			$normalized[ $code ] = $id;
+		}
+
+		if ( empty( $normalized ) ) {
+			return true;
+		}
+
+		$result = pll_save_post_translations( $normalized );
+		if ( false === $result ) {
+			return new \WP_Error( 'polylang_update_failed', __( 'Polylang could not rewrite translation links.', 'slytranslate' ) );
+		}
+
+		return true;
 	}
 
 	public function create_translation( int $source_post_id, string $target_lang, array $data ) {
@@ -86,7 +142,10 @@ class PolylangAdapter implements TranslationPluginAdapter {
 				return $translation_id;
 			}
 
-			pll_set_post_language( $translation_id, $target_lang );
+			$set_result = $this->set_post_language( $translation_id, $target_lang );
+			if ( is_wp_error( $set_result ) ) {
+				return $set_result;
+			}
 		}
 
 		$update_data = array( 'ID' => $translation_id );

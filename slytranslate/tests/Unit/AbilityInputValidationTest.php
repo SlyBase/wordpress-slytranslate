@@ -8,6 +8,16 @@ use AI_Translate\AI_Translate;
 
 class AbilityInputValidationTest extends TestCase {
 
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setStaticProperty( AI_Translate::class, 'adapter', null );
+	}
+
+	protected function tearDown(): void {
+		$this->setStaticProperty( AI_Translate::class, 'adapter', null );
+		parent::tearDown();
+	}
+
 	public function test_execute_translate_text_rejects_missing_text(): void {
 		$result = AI_Translate::execute_translate_text(
 			array(
@@ -81,5 +91,28 @@ class AbilityInputValidationTest extends TestCase {
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'missing_post_selection', $result->get_error_code() );
+	}
+
+	public function test_execute_set_post_language_rejects_invalid_post_id(): void {
+		$result = AI_Translate::execute_set_post_language(
+			array(
+				'post_id'         => 'abc',
+				'target_language' => 'de',
+			)
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_post_id', $result->get_error_code() );
+	}
+
+	public function test_execute_set_post_language_rejects_missing_target_language(): void {
+		$result = AI_Translate::execute_set_post_language(
+			array(
+				'post_id' => 10,
+			)
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'missing_target_language', $result->get_error_code() );
 	}
 }

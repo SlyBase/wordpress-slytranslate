@@ -41,7 +41,7 @@ class AbilityRegistrationTest extends TestCase {
 	public function test_register_abilities_registers_expected_ability_contracts(): void {
 		$registered_abilities = $this->capture_registered_abilities();
 
-		$this->assertCount( 12, $registered_abilities );
+		$this->assertCount( 13, $registered_abilities );
 		$this->assertSame( array_keys( $this->expected_ability_contracts() ), array_keys( $registered_abilities ) );
 		$this->assertArrayNotHasKey( 'ai-translate/translate-post', $registered_abilities );
 
@@ -72,6 +72,7 @@ class AbilityRegistrationTest extends TestCase {
 		foreach ( array(
 			'ai-translate/get-languages',
 			'ai-translate/get-translation-status',
+			'ai-translate/set-post-language',
 			'ai-translate/get-untranslated',
 			'ai-translate/translate-text',
 			'ai-translate/translate-blocks',
@@ -229,6 +230,50 @@ class AbilityRegistrationTest extends TestCase {
 				),
 				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
 			),
+				'ai-translate/set-post-language' => array(
+					'execute_callback' => array( AI_Translate::class, 'execute_set_post_language' ),
+					'input_schema'     => array(
+						'type'          => 'object',
+						'property_keys' => array( 'post_id', 'target_language', 'relink', 'force' ),
+						'required'      => array( 'post_id', 'target_language' ),
+						'properties'    => array(
+							'post_id' => array(
+								'type'        => 'integer',
+								'description' => 'The content item ID whose language should be changed.',
+							),
+							'target_language' => array(
+								'type'        => 'string',
+								'description' => 'Target language code to assign to the content item.',
+							),
+							'relink' => array(
+								'type'        => 'boolean',
+								'description' => 'When true, the translation relation map is rewritten so the current post is linked under target_language.',
+							),
+							'force' => array(
+								'type'        => 'boolean',
+								'description' => 'When true, allows overriding an existing target-language conflict.',
+								'default'     => false,
+							),
+						),
+					),
+					'output_schema'    => array(
+						'type'          => 'object',
+						'property_keys' => array( 'post_id', 'source_language', 'target_language', 'translations', 'changed', 'edit_link' ),
+						'required'      => array( 'post_id', 'source_language', 'target_language', 'translations', 'changed' ),
+						'properties'    => array(
+							'post_id'         => array( 'type' => 'integer' ),
+							'source_language' => array( 'type' => 'string' ),
+							'target_language' => array( 'type' => 'string' ),
+							'translations'    => array(
+								'type'                 => 'object',
+								'additionalProperties' => array( 'type' => 'integer' ),
+							),
+							'changed'         => array( 'type' => 'boolean' ),
+							'edit_link'       => array( 'type' => 'string' ),
+						),
+					),
+					'meta'             => $this->expected_public_mcp_meta(),
+				),
 			'ai-translate/get-untranslated' => array(
 				'execute_callback' => array( AI_Translate::class, 'execute_get_untranslated' ),
 				'input_schema'     => array(

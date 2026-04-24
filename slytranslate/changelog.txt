@@ -1,4 +1,8 @@
 
+= Unreleased =
+* MCP: added ai-translate/set-post-language to change the language assignment of existing posts with conflict-aware force handling and optional relink semantics.
+* Architecture: introduced LanguageMutationService plus the optional TranslationMutationAdapter capability contract so write-mutations stay plugin-neutral while unsupported adapters return a uniform error.
+
 = 1.6.0 =
 * Performance: raised MAX_OUTPUT_TOKENS_CEILING from 8 192 to 32 768 tokens so large posts are no longer truncated mid-translation and fall back to slow per-block mode.
 * Performance: added gemma-4 to the known model context-window table (131 072 tokens), fixing the substring match that caused gemma-4 variants to be handled with only 8 192 tokens, splitting a ~48 000-char post into 12 chunks instead of 1.

@@ -141,6 +141,10 @@ class AI_Translate {
 				'callback'            => array( self::class, 'execute_get_translation_status' ),
 				'permission_callback' => $translation_permission,
 			),
+			'/ai-translate/set-post-language/run'     => array(
+				'callback'            => array( self::class, 'execute_set_post_language' ),
+				'permission_callback' => $translation_permission,
+			),
 			'/ai-translate/get-untranslated/run'      => array(
 				'callback'            => array( self::class, 'execute_get_untranslated' ),
 				'permission_callback' => $translation_permission,
@@ -246,6 +250,10 @@ class AI_Translate {
 
 	public static function execute_get_translation_status( $input ) {
 		return TranslationQueryService::execute_get_translation_status( $input );
+	}
+
+	public static function execute_set_post_language( $input ) {
+		return LanguageMutationService::execute_set_post_language( $input );
 	}
 
 	public static function execute_get_untranslated( $input ) {

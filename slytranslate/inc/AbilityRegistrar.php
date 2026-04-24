@@ -19,6 +19,7 @@ class AbilityRegistrar {
 	public static function register_abilities(): void {
 		self::register_get_languages_ability();
 		self::register_get_translation_status_ability();
+		self::register_set_post_language_ability();
 		self::register_get_untranslated_ability();
 		self::register_translate_text_ability();
 		self::register_translate_blocks_ability();
@@ -119,6 +120,44 @@ class AbilityRegistrar {
 			'execute_callback'    => array( AI_Translate::class, 'execute_get_translation_status' ),
 			'permission_callback' => array( static::class, 'permission_callback' ),
 			'meta'                => self::public_mcp_meta( array( 'readonly' => true ) ),
+		) );
+	}
+
+	/* --- set-post-language ---------------------------------------- */
+
+	private static function register_set_post_language_ability(): void {
+		wp_register_ability( 'ai-translate/set-post-language', array(
+			'label'               => __( 'Set Post Language', 'slytranslate' ),
+			'description'         => __( 'Changes the language of a post, page, or custom post type entry. Use force to override a target-language conflict. Pass relink=true when translation relations should be rewritten to match the new language.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id'         => array( 'type' => 'integer', 'description' => 'The content item ID whose language should be changed.' ),
+					'target_language' => array( 'type' => 'string', 'description' => 'Target language code to assign to the content item.' ),
+					'relink'          => array( 'type' => 'boolean', 'description' => 'When true, the translation relation map is rewritten so the current post is linked under target_language.' ),
+					'force'           => array( 'type' => 'boolean', 'description' => 'When true, allows overriding an existing target-language conflict.', 'default' => false ),
+				),
+				'required' => array( 'post_id', 'target_language' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id'         => array( 'type' => 'integer' ),
+					'source_language' => array( 'type' => 'string' ),
+					'target_language' => array( 'type' => 'string' ),
+					'translations'    => array(
+						'type'                 => 'object',
+						'additionalProperties' => array( 'type' => 'integer' ),
+					),
+					'changed'         => array( 'type' => 'boolean' ),
+					'edit_link'       => array( 'type' => 'string' ),
+				),
+				'required' => array( 'post_id', 'source_language', 'target_language', 'translations', 'changed' ),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_set_post_language' ),
+			'permission_callback' => array( static::class, 'permission_callback' ),
+			'meta'                => self::public_mcp_meta(),
 		) );
 	}
 
