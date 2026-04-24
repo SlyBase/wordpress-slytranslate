@@ -172,15 +172,22 @@ require $_tests_dir . '/includes/bootstrap.php';
 - Cover basic user journeys and regressions (block insertion, settings save, front‑end render).
 
 ## 11) Documentation & Commits
+- For plugin directory docs, treat `readme.txt` as WordPress.org readme format, not GitHub README markdown.
+- Use WordPress readme heading syntax: `=== Plugin Name ===`, `== Section ==`, `= Subsection =`.
+- Keep the short description under the header plain (no markup) and around 150 characters max.
+- Keep `Stable tag` aligned with the released plugin version and validate with https://wordpress.org/plugins/developers/readme-validator/.
+- Use the official references when creating/updating readmes:
+  - https://wordpress.org/plugins/readme.txt
+  - https://developer.wordpress.org/plugins/wordpress-org/how-your-readme-txt-works/
 - Keep `README.md` up to date: install, usage, capabilities, hooks/filters, and test instructions.
 - Use clear, imperative commit messages; reference issues/tickets and summarize impact.
 
 ## 12) What Copilot Must Ensure (Checklist)
-- ✅ Unique prefixes/namespaces; no accidental globals.  
-- ✅ Nonce + capability checks for any write action (AJAX/REST/forms).  
-- ✅ Inputs sanitized; outputs escaped.  
-- ✅ User‑visible strings wrapped in i18n with correct text domain.  
-- ✅ Assets enqueued via APIs (no inline script/style).  
-- ✅ Tests added/updated for new behaviors.  
-- ✅ Code passes PHPCS (WPCS) and ESLint where applicable.  
+- ✅ Unique prefixes/namespaces; no accidental globals.
+- ✅ Nonce + capability checks for any write action (AJAX/REST/forms).
+- ✅ Inputs sanitized; outputs escaped.
+- ✅ User‑visible strings wrapped in i18n with correct text domain.
+- ✅ Assets enqueued via APIs (no inline script/style).
+- ✅ Tests added/updated for new behaviors.
+- ✅ Code passes PHPCS (WPCS) and ESLint where applicable.
 - ✅ Avoid direct DB concatenation; always prepare queries.
