@@ -1,5 +1,6 @@
 
 = Unreleased =
+* Tooling: added .github/scripts/test-llamacpp-prompts.sh to run side-by-side llama.cpp chat-completion tests with the plugin-default prompt and the bilingual-frame prompt.
 * MCP: added ai-translate/set-post-language to change the language assignment of existing posts with conflict-aware force handling and optional relink semantics.
 * Architecture: introduced LanguageMutationService plus the optional TranslationMutationAdapter capability contract so write-mutations stay plugin-neutral while unsupported adapters return a uniform error.
 * DevOps: hardening for the VS Code deploy task now resolves the target pod from running candidates, auto-selects a valid container when the preferred one is missing, and retries once with refreshed pod/container resolution after transient kubectl exec failures.
