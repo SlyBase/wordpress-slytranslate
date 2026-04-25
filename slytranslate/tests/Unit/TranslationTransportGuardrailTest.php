@@ -17,6 +17,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->setStaticProperty( TranslationRuntime::class, 'model_slug_override', null );
 		$this->setStaticProperty( TranslationRuntime::class, 'last_diagnostics', null );
 		$this->setStaticProperty( TranslationRuntime::class, 'model_profile_cache', array() );
+		$this->setStaticProperty( TranslationRuntime::class, 'rate_limit_retry_depth', 0 );
 
 		parent::tearDown();
 	}
@@ -398,6 +399,98 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
 		$this->assertTrue( $diagnostics['fallback_allowed'] );
+	}
+
+	public function test_direct_api_returns_structured_model_limit_error_on_retryable_500_body(): void {
+		$this->stubWpFunctionReturn( 'wp_remote_post', array(
+			'response' => array( 'code' => 500 ),
+			'body'     => 'Internal Server Error (500) - model limit reached, try again later',
+		) );
+
+		$result = $this->invokeStatic(
+			DirectApiTranslationClient::class,
+			'translate',
+			array(
+				'Hello world',
+				'Prompt',
+				true,
+				'gemma-3-4b-it',
+				'http://llama.local:8080',
+				0,
+				0,
+				array()
+			)
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'direct_api_model_limit_reached', $result->get_error_code() );
+		$this->assertStringContainsString( 'model limit (500)', $result->get_error_message() );
+	}
+
+	public function test_non_translategemma_model_limit_error_retries_without_wp_ai_client_fallback(): void {
+		$calls      = 0;
+		$wp_fallback_calls = 0;
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'gemma-3-4b-it',
+			'direct_api_url' => 'http://llama.local:8080',
+		) );
+
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+				if ( 'ai_translate_force_direct_api' === $option ) {
+					return '1';
+				}
+
+				return $default;
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function () use ( &$wp_fallback_calls ) {
+				++$wp_fallback_calls;
+				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached when direct API model-limit retry succeeds.' );
+			}
+		);
+		$this->stubWpFunction( 'wp_remote_post',
+			static function () use ( &$calls ) {
+				++$calls;
+				if ( 1 === $calls ) {
+					return array(
+						'response' => array( 'code' => 500 ),
+						'body'     => 'Internal Server Error (500) - model limit reached, try again later',
+					);
+				}
+
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => wp_json_encode(
+						array(
+							'choices' => array(
+								array(
+									'message' => array(
+										'content' => 'Hallo Welt',
+									),
+								),
+							),
+						)
+					),
+				);
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertSame( 'Hallo Welt', $result );
+		$this->assertSame( 2, $calls );
+		$this->assertSame( 0, $wp_fallback_calls );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'direct_api', $diagnostics['transport'] );
+		$this->assertSame( '', $diagnostics['failure_reason'] );
 	}
 
 	public function test_non_translategemma_direct_api_response_is_validated_and_retried(): void {

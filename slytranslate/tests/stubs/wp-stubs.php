@@ -238,6 +238,12 @@ function apply_filters( $hook_name, $value, ...$args ) {
 	} );
 }
 
+function wp_rand( int $min = 0, int $max = 4294967295 ): int {
+	return (int) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( int $min = 0, int $max = 4294967295 ) {
+		return random_int( $min, $max );
+	} );
+}
+
 function get_locale(): string {
 	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
 		return 'en_US';

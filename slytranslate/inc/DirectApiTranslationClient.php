@@ -143,11 +143,14 @@ class DirectApiTranslationClient {
 				) );
 			}
 
-			// Expose HTTP 429 responses as a structured WP_Error so the
-			// runtime's rate-limit guard can parse the provider's
-			// "try again in Ns" / Retry-After hint and pause + retry instead
-			// of collapsing to a non-actionable null. All other non-2xx
-			// responses (400 for wrong model, 404 for missing endpoint, …)
+			// Expose retryable capacity responses as structured WP_Errors so
+			// the runtime can back off and retry instead of collapsing to
+			// non-actionable null. This currently covers:
+			//   - HTTP 429 ("rate limit")
+			//   - HTTP 500 router capacity errors like
+			//     "model limit reached, try again later" on single-model
+			//     llama.cpp router setups (`--models-max 1`).
+			// Other non-2xx responses (400 wrong model, 404 missing endpoint, …)
 			// still return null so the generic fallback-to-wp_ai_client path
 			// takes over.
 			if ( 429 === (int) $code ) {
@@ -180,6 +183,31 @@ class DirectApiTranslationClient {
 						$detail
 					)
 				);
+			}
+
+			if ( 500 === (int) $code ) {
+				$model_limit_body = is_string( $body_text ) ? wp_strip_all_tags( $body_text ) : '';
+				$model_limit_hint = strtolower( $model_limit_body );
+				if ( false !== strpos( $model_limit_hint, 'model limit reached' )
+					|| ( false !== strpos( $model_limit_hint, 'try again later' ) && false !== strpos( $model_limit_hint, 'limit' ) )
+				) {
+					if ( '' !== $model_limit_body ) {
+						$model_limit_body = preg_replace( '/\s+/', ' ', $model_limit_body );
+						$model_limit_body = is_string( $model_limit_body )
+							? ( function_exists( 'mb_substr' ) ? mb_substr( $model_limit_body, 0, 120, 'UTF-8' ) : substr( $model_limit_body, 0, 120 ) )
+							: '';
+					}
+
+					return new \WP_Error(
+						'direct_api_model_limit_reached',
+						sprintf(
+							/* translators: 1: API endpoint URL, 2: response body excerpt. */
+							__( 'Direct API model limit (500) from %1$s: %2$s', 'slytranslate' ),
+							$endpoint,
+							$model_limit_body
+						)
+					);
+				}
 			}
 
 			return null;

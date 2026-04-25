@@ -720,7 +720,12 @@ class TranslationRuntime {
 			TimingLogger::increment( 'ai_calls' );
 
 			if ( is_wp_error( $result ) ) {
-				$direct_error_code = (string) $result->get_error_code();
+				$direct_error_code             = (string) $result->get_error_code();
+				$is_retryable_capacity_failure = in_array(
+					$direct_error_code,
+					array( 'direct_api_rate_limited', 'direct_api_model_limit_reached' ),
+					true
+				);
 				TimingLogger::log( 'ai_call', array(
 					'transport'   => 'direct',
 					'model'       => $model_slug,
@@ -729,15 +734,18 @@ class TranslationRuntime {
 					'duration_ms' => $direct_duration_ms,
 					'attempt'     => $validation_attempt,
 					'ok'          => false,
-					'reason'      => 'direct_api_rate_limited' === $direct_error_code ? 'rate_limited' : 'connection_error',
+					'reason'      => $is_retryable_capacity_failure ? 'rate_limited' : 'connection_error',
 				) );
 
-				// HTTP 429 from the direct endpoint: the server is healthy,
-				// it is just asking us to slow down. Parse the retry-after
-				// hint, pause, and recurse. Falling back to the WP AI Client
-				// would hit the same provider and trip the same per-minute
-				// limit, so the sleep-and-retry path is strictly better.
-				if ( 'direct_api_rate_limited' === $direct_error_code ) {
+				// Retry transient direct-endpoint capacity errors:
+				//   - HTTP 429 provider-side rate limits
+				//   - HTTP 500 single-model router capacity errors
+				//     ("model limit reached, try again later").
+				//
+				// In both cases the endpoint is healthy and asks us to wait.
+				// Falling back to another transport for the same chunk usually
+				// hits the same bottleneck, so sleep-and-retry is better.
+				if ( $is_retryable_capacity_failure ) {
 					self::record_transport_diagnostics( array(
 						'transport'        => 'direct_api_failed',
 						'model_slug'       => $model_slug,
@@ -1641,6 +1649,8 @@ class TranslationRuntime {
 				|| false !== stripos( $message, '429 ' )
 				|| false !== stripos( $message, 'too many requests' )
 				|| false !== stripos( $message, 'rate limit' )
+				|| false !== stripos( $message, 'model limit reached' )
+				|| false !== stripos( $message, 'try again later' )
 			) {
 				return true;
 			}
