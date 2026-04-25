@@ -58,6 +58,12 @@ jobs:
           php-version: "8.1"
           coverage: none
 
+      - name: Install gettext
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gettext
+
       - name: Create plugin ZIP
         if: steps.check-release.outputs.exists == 'false'
         run: |

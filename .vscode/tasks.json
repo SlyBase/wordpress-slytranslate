@@ -37,7 +37,9 @@
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",
-                "clear": true
+                "clear": true,
+                "close": true,
+                "showReuseMessage": false
             },
             "problemMatcher": []
         },
@@ -91,7 +93,9 @@
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",
-                "clear": true
+                "clear": true,
+                "close": true,
+                "showReuseMessage": false
             },
             "problemMatcher": []
         },
@@ -101,6 +105,46 @@
             "dependsOn": [
                 "SlyTranslate: Build Plugin ZIP",
                 "SlyTranslate: Deploy Plugin ZIP to WordPress Pod"
+            ],
+            "presentation": {
+                "close": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "SlyTranslate: Deploy Plugin ZIP to SlyBase WordPress Pod",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                ".github/scripts/deploy-plugin-to-wordpress-pod.sh",
+                "${workspaceFolder}/slytranslate.zip"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "SLYTRANSLATE_DEPLOY_NAMESPACE": "websites",
+                    "SLYTRANSLATE_DEPLOY_POD_SELECTOR": "app.kubernetes.io/instance=slybase-com,app.kubernetes.io/name=wordpress",
+                    "SLYTRANSLATE_DEPLOY_CONTAINER": "wordpress",
+                    "SLYTRANSLATE_KUBECTL_BIN": "/opt/homebrew/bin/kubectl"
+                }
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "SlyTranslate: Verify Plugin ZIP"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "SlyTranslate: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "SlyTranslate: Build Plugin ZIP",
+                "SlyTranslate: Deploy Plugin ZIP to SlyBase WordPress Pod"
             ],
             "problemMatcher": []
         }

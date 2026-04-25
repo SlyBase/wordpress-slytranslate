@@ -22,14 +22,24 @@
                     "description": "Build slytranslate.zip and verify the archive contents"
                 },
                 {
-                    "label": "$(cloud-upload) Deploy plugin ZIP to WordPress pod",
+                    "label": "$(cloud-upload) Deploy plugin ZIP to Test WordPress (wp-loco)",
                     "task": "SlyTranslate: Deploy Plugin ZIP to WordPress Pod",
-                    "description": "Upload slytranslate.zip into the wordpress container in namespace websites"
+                    "description": "Upload slytranslate.zip into the wp-loco WordPress pod in namespace default"
                 },
                 {
-                    "label": "$(rocket) Build and deploy plugin ZIP",
+                    "label": "$(rocket) Build and deploy plugin ZIP to Test WordPress (wp-loco)",
                     "task": "SlyTranslate: Build and Deploy Plugin ZIP",
-                    "description": "Build, verify, and deploy slytranslate.zip to the websites WordPress pod"
+                    "description": "Build, verify, and deploy slytranslate.zip to the wp-loco WordPress pod"
+                },
+                {
+                    "label": "$(cloud-upload) Deploy plugin ZIP to SlyBase WordPress pod",
+                    "task": "SlyTranslate: Deploy Plugin ZIP to SlyBase WordPress Pod",
+                    "description": "Upload slytranslate.zip into the SlyBase WordPress pod in namespace websites"
+                },
+                {
+                    "label": "$(rocket) Build and deploy plugin ZIP to SlyBase WordPress pod",
+                    "task": "SlyTranslate: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
+                    "description": "Build, verify, and deploy slytranslate.zip to the SlyBase WordPress pod"
                 }
             ]
         }

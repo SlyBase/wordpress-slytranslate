@@ -12,43 +12,47 @@ After **every** code change, update both changelog files:
 - `CHANGELOG.md` (repository root) is the canonical changelog in Markdown.
 - `slytranslate/changelog.txt` is the plain-text mirror (text content only; no Markdown headings/tables/links).
 
-### Was a version number specified?
+### Version block rules
 
-**Yes** - Add the entry directly under the specified version in **both** files (create the version blocks if needed).
+Always add entries directly under the current version block in **both** files. Never use an `Unreleased` block. If the version block does not exist yet, create it at the top.
 
-If the specified version includes a beta suffix (for example `1.6.0-beta.1`), always use the base version without suffix (that is, `1.6.0`) in both changelog files.
+If the version includes a beta suffix (for example `1.6.0-beta.1`), always use the base version without suffix (that is, `1.6.0`) in both changelog files.
+
+### Categories
+
+Group entries within a version block by category. Use exactly these three categories (omit a category if it has no entries):
 
 `CHANGELOG.md`:
 
 ```md
 ## [X.Y.Z]
-- <Change>
+### Features
+- <New capability or addition>
+
+### Changes
+- <Behavioral or non-breaking change>
+
+### Fixes
+- <Bug fix>
 ```
 
 `slytranslate/changelog.txt`:
 
 ```txt
 = X.Y.Z =
-* <Change>
+Features:
+* <New capability or addition>
+
+Changes:
+* <Behavioral or non-breaking change>
+
+Fixes:
+* <Bug fix>
 ```
 
-**No** - Add the entry to an `Unreleased` block at the top of **both** files:
+### Keep entries concise
 
-`CHANGELOG.md`:
-
-```md
-## [Unreleased]
-- <Change>
-```
-
-`slytranslate/changelog.txt`:
-
-```txt
-= Unreleased =
-* <Change>
-```
-
-At release time, the `Unreleased` block is renamed to the real version block.
+Each entry should be one short sentence. Strip implementation details, internal class/method names, and test coverage notes — only document what matters to a user or integrator.
 
 ## 2) Release workflow source for GitHub releases
 
@@ -168,8 +172,3 @@ For beta versions (`X.Y.Z-beta.N`), use the base version `X.Y.Z` for this synchr
 | `slytranslate/readme.txt` | `Stable tag: X.Y.Z` |
 | `slytranslate/ai-translate.php` | Plugin header `Version: X.Y.Z` |
 | `slytranslate/ai-translate.php` | Class constant `private const VERSION = 'X.Y.Z';` |
-
-Also rename changelog `Unreleased` blocks (if present):
-
-- `CHANGELOG.md`: `## [Unreleased]` to `## [X.Y.Z]`
-- `slytranslate/changelog.txt`: `= Unreleased =` to `= X.Y.Z =`
