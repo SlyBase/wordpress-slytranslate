@@ -1,6 +1,6 @@
 ---
 applyTo: '**'
-description: 'Completion workflow for Autopilot work: local tests must pass, then create a beta commit based on the plugin version, run Build and Deploy Plugin ZIP, and perform an MCP test translation for post 1109 with gemma-4-e4b-it-Q6_K.'
+description: 'Completion workflow for Autopilot work: local tests must pass, then create a beta commit based on the plugin version, run Build and Deploy Plugin ZIP, and perform an MCP test translation for post 1109 with Ministral-8B-Instruct-2410-Q4_K_M.'
 ---
 
 # Autopilot Completion Workflow
@@ -30,7 +30,7 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 - After a successful deploy, run a test translation for post `1109` through the WordPress MCP tools.
 - If needed, first use `mcp_wordpress-sly_mcp-adapter-discover-abilities` to confirm the available translation ability.
 - For the actual run, execute the appropriate translation ability through `mcp_wordpress-sly_mcp-adapter-execute-ability`.
-- Always use the model `gemma-4-e4b-it-Q6_K`.
+- Always use the model `Ministral-8B-Instruct-2410-Q4_K_M`.
 - The additional instruction must contain this exact text: `Anreden mit "du" statt "Sie". junger aber professioneller ton.`
 - Until this smoke test succeeds, the work must not be reported as complete.
 

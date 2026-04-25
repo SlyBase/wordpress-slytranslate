@@ -56,6 +56,33 @@ class RequestedModelSlugTest extends TestCase {
 		$this->assertSame( 1800, (int) ( $profile['retry_profile']['retry_chunk_chars'] ?? 0 ) );
 	}
 
+	public function test_ministral3_slug_maps_to_conservative_profile_rules(): void {
+		$model_slug = 'Ministral-3-3B-Instruct-2512-Q4_K_M';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'ministral3', $profile['id'] );
+		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
+		$this->assertSame( 'tower_conservative', TranslationRuntime::get_chunk_strategy_for_model( $model_slug ) );
+		$this->assertSame( 1400, (int) ( $profile['retry_profile']['retry_chunk_chars'] ?? 0 ) );
+	}
+
+	public function test_qwen_slug_maps_to_thinking_aware_profile(): void {
+		$model_slug = 'Qwen3.5-9B-Q4_K_M';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'qwen_thinking_aware', $profile['id'] );
+		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
+	}
+
+	public function test_gemma4_slug_maps_to_thinking_aware_profile(): void {
+		$model_slug = 'gemma-4-E4B-it-Q6_K';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'gemma4_thinking_aware', $profile['id'] );
+		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
+	}
+
 	public function test_translategemma_slug_maps_to_strict_direct_api_profile(): void {
 		$this->assertTrue( TranslationRuntime::model_requires_strict_direct_api( 'translategemma-4b-it.Q4_K_M' ) );
 	}
