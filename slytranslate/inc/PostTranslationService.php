@@ -63,6 +63,12 @@ class PostTranslationService {
 		$from = $adapter->get_post_language( $post_id ) ?? 'en';
 		$to   = sanitize_key( $to );
 
+		if ( $adapter instanceof WpMultilangAdapter ) {
+			$post->post_title   = $adapter->get_language_variant( (string) $post->post_title, $from );
+			$post->post_content = $adapter->get_language_variant( (string) $post->post_content, $from );
+			$post->post_excerpt = $adapter->get_language_variant( (string) $post->post_excerpt, $from );
+		}
+
 		if ( '' !== $from && $from === $to ) {
 			return new \WP_Error( 'same_language', __( 'Source and target languages must be different.', 'slytranslate' ) );
 		}

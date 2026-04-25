@@ -50,6 +50,18 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 		return '' !== $default_language ? $default_language : null;
 	}
 
+	public function get_language_variant( string $value, string $language_code ): string {
+		$language_code = sanitize_key( $language_code );
+		if ( '' === $language_code ) {
+			return $value;
+		}
+
+		$default_language = $this->get_default_language_code();
+		$variant          = $this->extract_language_value( $value, $language_code, $default_language );
+
+		return '' !== $variant ? $variant : $value;
+	}
+
 	public function get_post_translations( int $post_id ): array {
 		if ( ! $this->is_available() ) {
 			return array();
@@ -132,6 +144,9 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 		}
 
 		$source_language = $this->get_default_language_code();
+		$source_title    = $this->get_language_variant( (string) $post->post_title, $source_language );
+		$source_content  = $this->get_language_variant( (string) $post->post_content, $source_language );
+		$source_excerpt  = $this->get_language_variant( (string) $post->post_excerpt, $source_language );
 		$update_data     = array( 'ID' => $source_post_id );
 
 		if ( isset( $data['post_title'] ) ) {
@@ -140,7 +155,7 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 				$source_language,
 				$target_lang,
 				sanitize_text_field( (string) $data['post_title'] ),
-				(string) $post->post_title
+				$source_title
 			);
 		}
 
@@ -150,7 +165,7 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 				$source_language,
 				$target_lang,
 				(string) $data['post_content'],
-				(string) $post->post_content
+				$source_content
 			);
 		}
 
@@ -160,7 +175,7 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 				$source_language,
 				$target_lang,
 				(string) $data['post_excerpt'],
-				(string) $post->post_excerpt
+				$source_excerpt
 			);
 		}
 

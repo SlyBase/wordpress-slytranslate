@@ -2,6 +2,7 @@
 = Unreleased =
 * Adapter: added WpMultilangAdapter and adapter auto-discovery now supports both Polylang and WP Multilang.
 * Translation compatibility: post-type validation and source-content queries now honor the active language adapter (including lang=all for WP Multilang).
+* Translation quality: WP Multilang translations now extract the source-language variant before AI translation to avoid re-translating [:lang]...[:] wrapper markup.
 * Dev workflow: deploy script/task now target the dynamic wp-loco test pod via configurable namespace/selector and resilient kubectl binary resolution.
 
 = 1.6.0 =
