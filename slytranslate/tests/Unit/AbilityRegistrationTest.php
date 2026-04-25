@@ -6,8 +6,19 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\AbilityRegistrar;
+use AI_Translate\TranslationPluginAdapter;
 
 class AbilityRegistrationTest extends TestCase {
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setStaticProperty( AI_Translate::class, 'adapter', null );
+	}
+
+	protected function tearDown(): void {
+		$this->setStaticProperty( AI_Translate::class, 'adapter', null );
+		parent::tearDown();
+	}
 
 	public function test_register_ability_category_registers_expected_category_contract(): void {
 		$registered_categories = array();
@@ -55,6 +66,39 @@ class AbilityRegistrationTest extends TestCase {
 			$this->assertSchemaContract( $ability_definition['output_schema'], $expected_contract['output_schema'] );
 			$this->assertSame( $expected_contract['meta'], $ability_definition['meta'] );
 		}
+	}
+
+	public function test_register_abilities_omits_set_post_language_when_adapter_cannot_mutate_language(): void {
+		$adapter = new class() implements TranslationPluginAdapter {
+			public function is_available(): bool {
+				return true;
+			}
+
+			public function get_languages(): array {
+				return array( 'en' => 'English', 'de' => 'Deutsch' );
+			}
+
+			public function get_post_language( int $post_id ): ?string {
+				return 'en';
+			}
+
+			public function get_post_translations( int $post_id ): array {
+				return array( 'en' => $post_id );
+			}
+
+			public function create_translation( int $source_post_id, string $target_lang, array $data ) {
+				return 0;
+			}
+
+			public function link_translation( int $source_post_id, int $translated_post_id, string $target_lang ): bool {
+				return true;
+			}
+		};
+
+		$this->setStaticProperty( AI_Translate::class, 'adapter', $adapter );
+		$registered_abilities = $this->capture_registered_abilities();
+
+		$this->assertArrayNotHasKey( 'ai-translate/set-post-language', $registered_abilities );
 	}
 
 	public function test_ability_permission_callbacks_follow_translation_and_admin_capabilities(): void {
@@ -205,12 +249,13 @@ class AbilityRegistrationTest extends TestCase {
 				),
 				'output_schema'    => array(
 					'type'          => 'object',
-					'property_keys' => array( 'source_post_id', 'source_post_type', 'source_title', 'source_language', 'translations' ),
+					'property_keys' => array( 'source_post_id', 'source_post_type', 'source_title', 'source_language', 'single_entry_mode', 'translations' ),
 					'properties'    => array(
 						'source_post_id'   => array( 'type' => 'integer' ),
 						'source_post_type' => array( 'type' => 'string' ),
 						'source_title'     => array( 'type' => 'string' ),
 						'source_language'  => array( 'type' => 'string' ),
+						'single_entry_mode' => array( 'type' => 'boolean', 'description' => 'True when the active language plugin stores all language variants in one post (WP Multilang).' ),
 						'translations'     => array(
 							'type'  => 'array',
 							'items' => array(
@@ -408,7 +453,7 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'source_language' => array(
 							'type'        => 'string',
-							'description' => 'Optional source language code. For WP Multilang this selects which language variant is used as source.',
+							'description' => 'Optional source language code. Omit when unsure. In single_entry_mode, pass only get-translation-status.source_language or another explicit variant from get-languages.',
 						),
 						'target_language' => array(
 							'type'        => 'string',

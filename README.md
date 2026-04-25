@@ -49,12 +49,12 @@ Use SlyTranslate when you need one consistent translation workflow for:
 | Ability | Purpose |
 | --- | --- |
 | `ai-translate/get-languages` | List languages exposed by the active language plugin |
-| `ai-translate/get-translation-status` | Show translation status for a content item |
-| `ai-translate/set-post-language` | Change the language assignment of an existing content item |
+| `ai-translate/get-translation-status` | Show translation status for a content item, including `source_language` and `single_entry_mode` |
+| `ai-translate/set-post-language` | Change the language assignment of an existing content item (only exposed when supported, e.g. Polylang) |
 | `ai-translate/get-untranslated` | Find content still missing a target translation |
 | `ai-translate/translate-text` | Translate arbitrary text |
 | `ai-translate/translate-blocks` | Translate serialized Gutenberg blocks |
-| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry (supports optional `source_language` and `overwrite`) |
+| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry (call `get-translation-status` first; optional `source_language` + `overwrite`) |
 | `ai-translate/translate-content-bulk` | Bulk-translate multiple entries (supports optional `source_language` and `overwrite`) |
 | `ai-translate/get-progress` | Return live progress for a running translation |
 | `ai-translate/cancel-translation` | Cancel a running translation |
@@ -124,7 +124,7 @@ In the list-table dialog, **Overwrite existing translation** is off by default. 
 
 ### Can I change the language assignment of an existing post without running translation?
 
-Yes, if the active language plugin supports language mutation (currently Polylang). Use `ai-translate/set-post-language` with `post_id` and `target_language`. By default language conflicts fail with `language_conflict`; use `force` to opt in, and pass `relink=true` when translation relations should be rewritten.
+Yes, when the active language plugin supports language mutation (currently Polylang). In that case `ai-translate/set-post-language` is exposed and can be called with `post_id` and `target_language`. By default language conflicts fail with `language_conflict`; use `force` to opt in, and pass `relink=true` when translation relations should be rewritten. In WP Multilang mode this ability is not exposed.
 
 ### How do I control prompts and style?
 

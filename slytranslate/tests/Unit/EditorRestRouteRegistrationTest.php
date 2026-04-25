@@ -6,8 +6,19 @@ namespace AI_Translate\Tests\Unit;
 
 use AI_Translate\AI_Translate;
 use AI_Translate\Plugin;
+use AI_Translate\TranslationPluginAdapter;
 
 class EditorRestRouteRegistrationTest extends TestCase {
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setStaticProperty( AI_Translate::class, 'adapter', null );
+	}
+
+	protected function tearDown(): void {
+		$this->setStaticProperty( AI_Translate::class, 'adapter', null );
+		parent::tearDown();
+	}
 
 	public function test_register_editor_rest_routes_registers_expected_plugin_rest_bridge(): void {
 		$registered_routes = array();
@@ -51,5 +62,53 @@ class EditorRestRouteRegistrationTest extends TestCase {
 			$this->assertIsCallable( $registered_route['args']['callback'] );
 			$this->assertIsCallable( $registered_route['args']['permission_callback'] );
 		}
+	}
+
+	public function test_register_editor_rest_routes_omits_set_post_language_when_adapter_cannot_mutate_language(): void {
+		$registered_routes = array();
+
+		$this->setStaticProperty(
+			AI_Translate::class,
+			'adapter',
+			new class() implements TranslationPluginAdapter {
+				public function is_available(): bool {
+					return true;
+				}
+
+				public function get_languages(): array {
+					return array( 'en' => 'English', 'de' => 'Deutsch' );
+				}
+
+				public function get_post_language( int $post_id ): ?string {
+					return 'en';
+				}
+
+				public function get_post_translations( int $post_id ): array {
+					return array( 'en' => $post_id );
+				}
+
+				public function create_translation( int $source_post_id, string $target_lang, array $data ) {
+					return 0;
+				}
+
+				public function link_translation( int $source_post_id, int $translated_post_id, string $target_lang ): bool {
+					return true;
+				}
+			}
+		);
+
+		$this->stubWpFunction(
+			'register_rest_route',
+			static function ( string $namespace, string $route, array $args ) use ( &$registered_routes ): void {
+				$registered_routes[ $route ] = array(
+					'namespace' => $namespace,
+					'args'      => $args,
+				);
+			}
+		);
+
+		AI_Translate::register_editor_rest_routes();
+
+		$this->assertArrayNotHasKey( '/ai-translate/set-post-language/run', $registered_routes );
 	}
 }

@@ -370,6 +370,9 @@ class AI_Translate {
 				'permission_callback' => $translation_permission,
 			),
 		);
+		if ( ! LanguageMutationService::can_mutate_post_language() ) {
+			unset( $routes['/ai-translate/set-post-language/run'] );
+		}
 
 		foreach ( $routes as $route => $config ) {
 			register_rest_route(

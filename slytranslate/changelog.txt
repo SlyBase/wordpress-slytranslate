@@ -15,6 +15,7 @@ Changes:
 * Performance: MAX_OUTPUT_TOKENS_CEILING raised from 8,192 to 32,768 tokens; chunk char limit cached per job.
 * Performance: expanded and corrected KNOWN_MODEL_CONTEXT_WINDOWS with many new model families (GPT-5, GPT-4.1 @ 1 M, o1/o3/o4-mini, Mistral variants, Phi-4, GLM, Moonshot, Yi, Cohere, Falcon, Baichuan, and more).
 * API: content-translation abilities now accept an optional source language for stricter WP Multilang requests.
+* MCP: get-translation-status now publicly advertises single_entry_mode, and translate-content guidance now documents the safer source-language call order.
 
 Fixes:
 * Validation: gemma-4 context window corrected to 131,072 tokens (was 8,192), fixing excessive over-chunking.
@@ -28,6 +29,7 @@ Fixes:
 * WP Multilang: translation status now treats placeholder titles as untranslated when the target content is empty.
 * WP Multilang: list-table translations now return a dedicated source-language mismatch error when the selected source is not the active language.
 * WP Multilang: source_language can now explicitly select the source variant in MCP and bulk ability calls instead of being locked to the active language.
+* MCP: set-post-language is now hidden from discovery when the active language plugin cannot mutate post-language assignments.
 * Gutenberg: recursive list-wrapper reconstruction now preserves valid block comment names to prevent malformed list blocks.
 * Stability: translated posts now clear inherited _oembed_* cache meta so corrupted embed cache values can no longer crash the editor preload.
 * Reliability: connector timeout errors now trigger an automatic smaller-chunk retry instead of failing the whole translation immediately.

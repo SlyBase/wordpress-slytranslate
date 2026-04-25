@@ -19,7 +19,9 @@ class AbilityRegistrar {
 	public static function register_abilities(): void {
 		self::register_get_languages_ability();
 		self::register_get_translation_status_ability();
-		self::register_set_post_language_ability();
+		if ( LanguageMutationService::can_mutate_post_language() ) {
+			self::register_set_post_language_ability();
+		}
 		self::register_get_untranslated_ability();
 		self::register_translate_text_ability();
 		self::register_translate_blocks_ability();
@@ -85,7 +87,7 @@ class AbilityRegistrar {
 	private static function register_get_translation_status_ability(): void {
 		wp_register_ability( 'ai-translate/get-translation-status', array(
 			'label'               => __( 'Get Translation Status', 'slytranslate' ),
-			'description'         => __( 'Returns the translation status for a post, page, or custom post type entry. Use this before translate-content when you need to inspect existing target posts or decide whether overwrite should be enabled.', 'slytranslate' ),
+			'description'         => __( 'Returns translation status for one content item, including source_language and whether the site runs in single_entry_mode. Call this before translate-content to choose overwrite safely and avoid source-language mismatches.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -101,6 +103,10 @@ class AbilityRegistrar {
 					'source_post_type' => array( 'type' => 'string' ),
 					'source_title'     => array( 'type' => 'string' ),
 					'source_language'  => array( 'type' => 'string' ),
+					'single_entry_mode' => array(
+						'type'        => 'boolean',
+						'description' => 'True when the active language plugin stores all language variants in one post (WP Multilang).',
+					),
 					'translations'     => array(
 						'type'  => 'array',
 						'items' => array(
@@ -128,7 +134,7 @@ class AbilityRegistrar {
 	private static function register_set_post_language_ability(): void {
 		wp_register_ability( 'ai-translate/set-post-language', array(
 			'label'               => __( 'Set Post Language', 'slytranslate' ),
-			'description'         => __( 'Changes the language of a post, page, or custom post type entry. Use force to override a target-language conflict. Pass relink=true when translation relations should be rewritten to match the new language.', 'slytranslate' ),
+			'description'         => __( 'Changes the language assignment of a post, page, or custom post type entry. This ability is exposed only when the active language plugin supports post-language mutation (for example Polylang). Use force to override a target-language conflict and relink=true to rewrite translation relations.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -244,13 +250,13 @@ class AbilityRegistrar {
 	private static function register_translate_content_ability(): void {
 		wp_register_ability( 'ai-translate/translate-content', array(
 			'label'               => __( 'Translate Content', 'slytranslate' ),
-			'description'         => __( 'Translates one post, page, or custom post type entry and creates or updates exactly one target translation post.', 'slytranslate' ),
+			'description'         => __( 'Translates one post, page, or custom post type entry and creates or updates exactly one target translation post. Call get-translation-status first, then pass source_language only when you intentionally pin the source variant.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
 					'post_id'           => array( 'type' => 'integer', 'description' => 'The source content item ID.' ),
-					'source_language'   => array( 'type' => 'string', 'description' => 'Optional source language code. For WP Multilang this selects which language variant is used as source.' ),
+					'source_language'   => array( 'type' => 'string', 'description' => 'Optional source language code. Omit when unsure. In single_entry_mode, pass only get-translation-status.source_language or another explicit variant from get-languages.' ),
 					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
 					'post_status'       => array( 'type' => 'string', 'description' => 'Optional post status for the translated item. Defaults to the source status when possible.' ),
 					'translate_title'   => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),

@@ -9,6 +9,25 @@ defined( 'ABSPATH' ) || exit;
  */
 class LanguageMutationService {
 
+	/**
+	 * Resolve whether post-language mutation should be exposed in discovery.
+	 *
+	 * When no adapter is active yet, keep discovery fail-open to preserve the
+	 * existing contract for environments where adapter loading happens later.
+	 */
+	public static function can_mutate_post_language(): bool {
+		$adapter = AI_Translate::get_adapter();
+		if ( null === $adapter ) {
+			return true;
+		}
+
+		if ( ! ( $adapter instanceof TranslationMutationAdapter ) ) {
+			return false;
+		}
+
+		return $adapter->supports_mutation_capability( TranslationMutationAdapter::CAPABILITY_SET_POST_LANGUAGE );
+	}
+
 	public static function execute_set_post_language( $input ): mixed {
 		$input = is_array( $input ) ? $input : array();
 
