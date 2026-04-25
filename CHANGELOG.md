@@ -27,12 +27,14 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - Validation: `gemma-4` context window corrected to 131,072 tokens (was 8,192), fixing excessive over-chunking.
 - Validation: bilingual label leakage (`German:` / `Deutsch:`) normalized before validation to reduce false failures.
 - Validation: added passthrough detection for English carry-over in German-target translations.
+- Validation: translations are now rejected when Gutenberg block comments change open/close direction, preventing malformed list formatting.
 - Content: German target translations no longer silently keep English block text when passthrough is detected; the block now retries a dedicated recovery path and fails explicitly when recovery is impossible.
 - Retry: bilingual-frame retries now enforce a hard target-language requirement to recover from mixed-language outputs.
 - Reliability: direct API transport now treats llama.cpp router capacity errors as retryable backoff events, reducing hard failures on single-model setups.
 - Reliability: increased default API timeout from 120 s to 300 s to prevent double-timeout cascades on large model load times.
 - WP Multilang: translation status now treats placeholder titles as untranslated when the target content is empty.
 - WP Multilang: list-table translations now return a dedicated source-language mismatch error when the selected source is not the active language.
+- WP Multilang: `source_language` can now explicitly select the source variant in MCP and bulk ability calls instead of being locked to the active language.
 - Gutenberg: recursive list-wrapper reconstruction now preserves valid block comment names to prevent malformed list blocks.
 - Stability: translated posts now clear inherited `_oembed_*` cache meta so corrupted embed cache values can no longer crash the editor preload.
 - Reliability: connector timeout errors now trigger an automatic smaller-chunk retry instead of failing the whole translation immediately.

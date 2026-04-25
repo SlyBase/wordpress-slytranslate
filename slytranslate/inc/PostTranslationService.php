@@ -66,11 +66,15 @@ class PostTranslationService {
 		$to   = sanitize_key( $to );
 
 		if ( $adapter instanceof WpMultilangAdapter ) {
-			if ( '' !== $requested_source_lang && $requested_source_lang !== $from ) {
-				return new \WP_Error(
-					'source_language_mismatch',
-					__( 'The selected source language must match the currently active language.', 'slytranslate' )
-				);
+			if ( '' !== $requested_source_lang ) {
+				$available_languages = $adapter->get_languages();
+				if ( ! isset( $available_languages[ $requested_source_lang ] ) ) {
+					return new \WP_Error(
+						'invalid_source_language',
+						__( 'The selected source language is not available.', 'slytranslate' )
+					);
+				}
+				$from = $requested_source_lang;
 			}
 
 			$post->post_title   = $adapter->get_language_variant( (string) $post->post_title, $from );

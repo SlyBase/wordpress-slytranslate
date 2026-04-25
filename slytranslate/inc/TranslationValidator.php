@@ -302,9 +302,19 @@ class TranslationValidator {
 	}
 
 	private static function has_structural_translation_drift( string $source_text, string $translated_text ): bool {
-		$source_block_comment_count     = self::count_pattern_matches( '/<!--\s*\/?wp:[^>]+-->/iu', $source_text );
-		$translated_block_comment_count = self::count_pattern_matches( '/<!--\s*\/?wp:[^>]+-->/iu', $translated_text );
+		$source_block_comment_sequence     = self::extract_block_comment_signature_sequence( $source_text );
+		$translated_block_comment_sequence = self::extract_block_comment_signature_sequence( $translated_text );
+		$source_block_comment_count        = count( $source_block_comment_sequence );
+		$translated_block_comment_count    = count( $translated_block_comment_sequence );
 		if ( $source_block_comment_count > 0 && $source_block_comment_count !== $translated_block_comment_count ) {
+			return true;
+		}
+
+		// Count parity alone is too weak: models can keep the same number of block
+		// comments but flip direction (e.g. `<!-- /wp:list-item -->` ->
+		// `<!-- wp:list-item /-->`), which breaks Gutenberg validation while passing
+		// a pure count check.
+		if ( $source_block_comment_count > 0 && $source_block_comment_sequence !== $translated_block_comment_sequence ) {
 			return true;
 		}
 
@@ -366,6 +376,48 @@ class TranslationValidator {
 		$count = preg_match_all( $pattern, $text, $matches );
 
 		return false === $count ? 0 : $count;
+	}
+
+	/**
+	 * Return Gutenberg block comments as a normalized signature sequence.
+	 *
+	 * Each entry uses one of:
+	 * - open:block-name
+	 * - close:block-name
+	 * - self:block-name
+	 */
+	private static function extract_block_comment_signature_sequence( string $text ): array {
+		$matches = array();
+		$count   = preg_match_all(
+			'/<!--\s*(\/?)wp:([a-z0-9_-]+(?:\/[a-z0-9_-]+)?)(?:\s+[^>]*)?-->/iu',
+			$text,
+			$matches,
+			PREG_SET_ORDER
+		);
+
+		if ( false === $count || $count < 1 || ! is_array( $matches ) ) {
+			return array();
+		}
+
+		$sequence = array();
+		foreach ( $matches as $match ) {
+			$full_comment = isset( $match[0] ) ? (string) $match[0] : '';
+			$prefix       = isset( $match[1] ) ? (string) $match[1] : '';
+			$block_name   = isset( $match[2] ) ? strtolower( (string) $match[2] ) : '';
+
+			if ( '' === $block_name ) {
+				continue;
+			}
+
+			$type = '/' === $prefix ? 'close' : 'open';
+			if ( 'close' !== $type && 1 === preg_match( '/\/\s*-->$/u', $full_comment ) ) {
+				$type = 'self';
+			}
+
+			$sequence[] = $type . ':' . $block_name;
+		}
+
+		return $sequence;
 	}
 
 	/**

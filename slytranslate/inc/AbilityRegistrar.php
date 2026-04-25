@@ -250,7 +250,7 @@ class AbilityRegistrar {
 				'type'       => 'object',
 				'properties' => array(
 					'post_id'           => array( 'type' => 'integer', 'description' => 'The source content item ID.' ),
-					'source_language'   => array( 'type' => 'string', 'description' => 'Optional source language code. For WP Multilang this must match the currently active language.' ),
+					'source_language'   => array( 'type' => 'string', 'description' => 'Optional source language code. For WP Multilang this selects which language variant is used as source.' ),
 					'target_language'   => array( 'type' => 'string', 'description' => 'Target language code.' ),
 					'post_status'       => array( 'type' => 'string', 'description' => 'Optional post status for the translated item. Defaults to the source status when possible.' ),
 					'translate_title'   => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),
@@ -292,7 +292,7 @@ class AbilityRegistrar {
 					'post_ids'        => array( 'type' => 'array', 'description' => 'Array of post IDs to translate. Use this when the exact source posts are already known.', 'items' => array( 'type' => 'integer' ), 'minItems' => 1, 'maxItems' => 50 ),
 					'post_type'       => array( 'type' => 'string', 'description' => 'Optional post type used to discover source posts when post_ids are not provided.' ),
 					'limit'           => array( 'type' => 'integer', 'description' => 'Maximum number of items to fetch when post_type is used.', 'default' => 20, 'minimum' => 1, 'maximum' => 50 ),
-					'source_language' => array( 'type' => 'string', 'description' => 'Optional source language code applied to each item. For WP Multilang this must match the currently active language.' ),
+					'source_language' => array( 'type' => 'string', 'description' => 'Optional source language code applied to each item. For WP Multilang this selects which language variant is used as source.' ),
 					'target_language' => array( 'type' => 'string', 'description' => 'Target language code.' ),
 					'post_status'     => array( 'type' => 'string', 'description' => 'Optional post status for the translated items. Defaults to the source status when possible.' ),
 					'translate_title' => array( 'type' => 'boolean', 'description' => 'Whether the post title should be translated.', 'default' => true ),

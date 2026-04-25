@@ -408,7 +408,7 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'source_language' => array(
 							'type'        => 'string',
-							'description' => 'Optional source language code. For WP Multilang this must match the currently active language.',
+							'description' => 'Optional source language code. For WP Multilang this selects which language variant is used as source.',
 						),
 						'target_language' => array(
 							'type'        => 'string',
@@ -482,7 +482,7 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'source_language' => array(
 							'type'        => 'string',
-							'description' => 'Optional source language code applied to each item. For WP Multilang this must match the currently active language.',
+							'description' => 'Optional source language code applied to each item. For WP Multilang this selects which language variant is used as source.',
 						),
 						'target_language' => array(
 							'type'        => 'string',

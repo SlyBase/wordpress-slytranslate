@@ -118,6 +118,25 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertNull( $result );
 	}
 
+	public function test_rejects_gutenberg_comment_direction_drift_with_same_comment_count(): void {
+		$source_text = "<!-- wp:list -->\n<ul>\n<!-- wp:list-item -->\n<li>Select model</li>\n<!-- /wp:list-item -->\n</ul>\n<!-- /wp:list -->";
+		$translated  = "<!-- wp:list -->\n<ul>\n<!-- wp:list-item -->\n<li>Modell waehlen</li>\n<!-- wp:list-item /-->\n</ul>\n<!-- /wp:list -->";
+
+		$result = TranslationValidator::validate( $source_text, $translated );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_structure_drift', $result->get_error_code() );
+	}
+
+	public function test_allows_matching_self_closing_block_comment_sequence(): void {
+		$source_text = '<!-- wp:image {"id":527} /-->';
+		$translated  = '<!-- wp:image {"id":527} /-->';
+
+		$result = TranslationValidator::validate( $source_text, $translated );
+
+		$this->assertNull( $result );
+	}
+
 	public function test_placeholder_content_skips_html_tag_count_check(): void {
 		// Stripped content (block comments replaced with SLYWPC placeholders) may lose
 		// inline HTML tags like <strong>/<code> via small translation models without it
