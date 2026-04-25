@@ -172,12 +172,22 @@ class ContextWindowTest extends TestCase {
 		$this->assertSame( 1474, $result );
 	}
 
-	public function test_maybe_adjust_chunk_limit_returns_zero_at_min_chunk_size(): void {
+	public function test_maybe_adjust_chunk_limit_allows_smaller_timeout_retry_chunks(): void {
 		$error  = new \WP_Error( 'prompt_network_error', 'Network error: cURL error 28: Operation timed out after 30002 milliseconds with 0 bytes received.' );
 		$result = $this->invokeStatic(
 			TranslationRuntime::class,
 			'maybe_adjust_chunk_limit_from_error',
 			[ $error, 1200 ]
+		);
+		$this->assertSame( 720, $result );
+	}
+
+	public function test_maybe_adjust_chunk_limit_returns_zero_when_timeout_chunk_cannot_shrink(): void {
+		$error  = new \WP_Error( 'prompt_network_error', 'Network error: cURL error 28: Operation timed out after 30002 milliseconds with 0 bytes received.' );
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'maybe_adjust_chunk_limit_from_error',
+			[ $error, 400 ]
 		);
 		$this->assertSame( 0, $result );
 	}

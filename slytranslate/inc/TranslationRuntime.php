@@ -35,6 +35,7 @@ class TranslationRuntime {
 	// raising the output ceiling would truncate the model response.
 	private const MAX_TRANSLATION_CHARS         = 48000;
 	private const SAFE_CHARS_PER_CONTEXT_TOKEN  = 0.5;
+	private const TIMEOUT_RETRY_MIN_CHARS       = 400;
 	// Upper bound for `max_tokens` / `max_output_tokens` per request.
 	// Scaled to MAX_TRANSLATION_CHARS so a chunk that fills the char
 	// ceiling can emit a full-size translation. Formula:
@@ -1300,7 +1301,7 @@ class TranslationRuntime {
 		}
 
 		$adjusted = (int) floor( $chunk_char_limit * 0.6 );
-		$adjusted = max( self::MIN_TRANSLATION_CHARS, min( $chunk_char_limit - 1, $adjusted ) );
+		$adjusted = max( self::TIMEOUT_RETRY_MIN_CHARS, min( $chunk_char_limit - 1, $adjusted ) );
 
 		return $adjusted >= $chunk_char_limit ? 0 : $adjusted;
 	}
