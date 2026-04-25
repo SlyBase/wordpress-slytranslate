@@ -243,6 +243,7 @@ class PostTranslationService {
 			) );
 
 			if ( $saving_ok ) {
+				self::clear_embed_cache_meta( (int) $result );
 				TranslationProgressTracker::complete_phase( 'saving' );
 				TranslationProgressTracker::set_progress( 'done' );
 			}
@@ -254,6 +255,27 @@ class PostTranslationService {
 			// Remove terminal progress state so a later retry cannot briefly
 			// inherit the last percentage from this completed/failed job.
 			TranslationProgressTracker::clear_progress( $post_id );
+		}
+	}
+
+	private static function clear_embed_cache_meta( int $post_id ): void {
+		if ( $post_id < 1 ) {
+			return;
+		}
+
+		$all_meta = get_post_meta( $post_id );
+		if ( ! is_array( $all_meta ) || empty( $all_meta ) ) {
+			return;
+		}
+
+		foreach ( array_keys( $all_meta ) as $meta_key ) {
+			$key = is_string( $meta_key ) ? $meta_key : '';
+			if ( '' === $key ) {
+				continue;
+			}
+			if ( str_starts_with( $key, '_oembed_' ) ) {
+				delete_post_meta( $post_id, $key );
+			}
 		}
 	}
 

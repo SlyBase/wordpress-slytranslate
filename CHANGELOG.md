@@ -34,6 +34,7 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - WP Multilang: translation status now treats placeholder titles as untranslated when the target content is empty.
 - WP Multilang: list-table translations now return a dedicated source-language mismatch error when the selected source is not the active language.
 - Gutenberg: recursive list-wrapper reconstruction now preserves valid block comment names to prevent malformed list blocks.
+- Stability: translated posts now clear inherited `_oembed_*` cache meta so corrupted embed cache values can no longer crash the editor preload.
 
 
 ## [1.5.6]

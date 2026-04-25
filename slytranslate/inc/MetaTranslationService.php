@@ -27,6 +27,10 @@ class MetaTranslationService {
 		'_pingme',
 	);
 
+	private const INTERNAL_META_PREFIXES_TO_SKIP = array(
+		'_oembed_',
+	);
+
 	/* ---------------------------------------------------------------
 	 * Per-request cache
 	 * ------------------------------------------------------------- */
@@ -113,7 +117,7 @@ class MetaTranslationService {
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
 			}
 
-			if ( in_array( $key, self::INTERNAL_META_KEYS_TO_SKIP, true ) ) {
+			if ( self::should_skip_meta_key( (string) $key ) ) {
 				continue;
 			}
 
@@ -188,7 +192,7 @@ class MetaTranslationService {
 		$candidates = array();
 
 		foreach ( $meta as $key => $values ) {
-			if ( in_array( $key, self::INTERNAL_META_KEYS_TO_SKIP, true ) ) {
+			if ( self::should_skip_meta_key( (string) $key ) ) {
 				continue;
 			}
 			if ( ! in_array( $key, $meta_key_config['translate'], true ) ) {
@@ -380,12 +384,30 @@ class MetaTranslationService {
 			if ( ! is_string( $meta_key ) ) {
 				continue;
 			}
-			if ( in_array( $meta_key, self::INTERNAL_META_KEYS_TO_SKIP, true ) ) {
+			if ( self::should_skip_meta_key( $meta_key ) ) {
 				continue;
 			}
 			$meta_keys[] = $meta_key;
 		}
 		return SeoPluginDetector::normalize_meta_keys( $meta_keys );
+	}
+
+	private static function should_skip_meta_key( string $meta_key ): bool {
+		if ( '' === $meta_key ) {
+			return true;
+		}
+
+		if ( in_array( $meta_key, self::INTERNAL_META_KEYS_TO_SKIP, true ) ) {
+			return true;
+		}
+
+		foreach ( self::INTERNAL_META_PREFIXES_TO_SKIP as $prefix ) {
+			if ( str_starts_with( $meta_key, $prefix ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/* ---------------------------------------------------------------

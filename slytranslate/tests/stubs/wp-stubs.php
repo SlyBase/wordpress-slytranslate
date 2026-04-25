@@ -298,6 +298,12 @@ function get_post_meta( int $post_id, string $key = '', bool $single = false ) {
 	} );
 }
 
+function delete_post_meta( int $post_id, string $meta_key, $meta_value = '' ): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
 function get_edit_post_link( int $post_id = 0, string $context = 'display' ): string {
 	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
 		return '';
