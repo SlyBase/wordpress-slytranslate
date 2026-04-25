@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Beta releases (for example 1.6.0-beta.1) are documented under their base version (for example 1.6.0).
 
 
+## [Unreleased]
+- Adapter: added `WpMultilangAdapter` and adapter auto-discovery now supports both Polylang and WP Multilang.
+- Translation compatibility: post-type validation and source-content queries now honor the active language adapter (including `lang=all` for WP Multilang).
+- Dev workflow: deploy script/task now target the dynamic `wp-loco` test pod via configurable namespace/selector and resilient kubectl binary resolution.
+
 ## [1.6.0]
 - Prompting: removed the hardcoded DE formality rule so tone/style requirements come only from the user-provided `additional_prompt`.
 - Tests: added explicit coverage that bilingual-frame payloads and retry prompts keep the user-provided `additional_prompt` text verbatim.

@@ -484,7 +484,7 @@ class AbilityRegistrar {
 					'prompt_addon'          => array( 'type' => 'string', 'description' => 'Optional site-wide addition always appended after the prompt template. Applied to every translation request.' ),
 					'meta_keys_translate'   => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to translate. Use a plain string, not an array.' ),
 					'meta_keys_clear'       => array( 'type' => 'string', 'description' => 'Whitespace-separated list of meta keys to clear. Use a plain string, not an array.' ),
-					'auto_translate_new'    => array( 'type' => 'boolean', 'description' => 'Auto-translate new translation posts in Polylang.' ),
+					'auto_translate_new'    => array( 'type' => 'boolean', 'description' => 'Auto-translate new translation posts in the active language plugin.' ),
 					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.', 'minimum' => 0, 'maximum' => 4000000 ),
 					'model_slug'            => array( 'type' => 'string', 'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.' ),
 					'direct_api_url'        => array( 'type' => 'string', 'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). When set, the plugin sends translation requests directly to this endpoint instead of using the WP AI Client. Works with llama.cpp, ollama, mlx-lm, vLLM, or any OpenAI-compatible server. Leave empty to use the standard AI Client. When saving, the plugin automatically probes whether the server supports chat_template_kwargs for optimized translation.' ),

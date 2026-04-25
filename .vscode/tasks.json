@@ -76,7 +76,13 @@
                 "${workspaceFolder}/slytranslate.zip"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "SLYTRANSLATE_DEPLOY_NAMESPACE": "default",
+                    "SLYTRANSLATE_DEPLOY_POD_SELECTOR": "app.kubernetes.io/instance=wp-loco,app.kubernetes.io/name=wordpress",
+                    "SLYTRANSLATE_DEPLOY_CONTAINER": "wordpress",
+                    "SLYTRANSLATE_KUBECTL_BIN": "/opt/homebrew/bin/kubectl"
+                }
             },
             "dependsOrder": "sequence",
             "dependsOn": [

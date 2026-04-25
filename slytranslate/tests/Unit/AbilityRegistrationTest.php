@@ -636,7 +636,7 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'auto_translate_new' => array(
 							'type'        => 'boolean',
-							'description' => 'Auto-translate new translation posts in Polylang.',
+							'description' => 'Auto-translate new translation posts in the active language plugin.',
 						),
 						'context_window_tokens' => array(
 							'type'        => 'integer',

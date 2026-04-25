@@ -111,9 +111,21 @@ class AI_Translate {
 
 	public static function get_adapter(): ?TranslationPluginAdapter {
 		if ( null === self::$adapter ) {
-			$polylang = new PolylangAdapter();
-			if ( $polylang->is_available() ) {
-				self::$adapter = $polylang;
+			$candidates = apply_filters(
+				'slytranslate_adapter_candidates',
+				array(
+					new PolylangAdapter(),
+					new WpMultilangAdapter(),
+				)
+			);
+
+			if ( is_array( $candidates ) ) {
+				foreach ( $candidates as $candidate ) {
+					if ( $candidate instanceof TranslationPluginAdapter && $candidate->is_available() ) {
+						self::$adapter = $candidate;
+						break;
+					}
+				}
 			}
 		}
 		return self::$adapter;

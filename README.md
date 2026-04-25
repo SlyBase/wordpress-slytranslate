@@ -65,14 +65,15 @@ Use SlyTranslate when you need one consistent translation workflow for:
 - WordPress 7.0+
 - PHP 8.1+
 - An AI connector configured in WordPress (Settings > Connectors)
-- Polylang for content-translation workflows across posts/pages/CPTs
+- A supported language plugin (Polylang or WP Multilang) for content-translation workflows across posts/pages/CPTs
 - WordPress MCP Adapter if you want MCP discovery
 
 ## Supported plugins
 
 ### Language plugin
 
-- Polylang (current content-translation adapter)
+- Polylang
+- WP Multilang
 
 ### SEO plugins
 
@@ -94,7 +95,7 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 1. Ensure WordPress 7.0+ and PHP 8.1+ are running.
 2. Install and configure an AI connector in Settings > Connectors.
-3. Optional for content translation: install and activate Polylang.
+3. Optional for content translation: install and activate Polylang or WP Multilang.
 4. Optional for local llama.cpp models: install AI Provider for llama.cpp.
 5. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
 6. Optional for MCP discovery: install and activate WordPress MCP Adapter.
@@ -103,9 +104,9 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 ## FAQ
 
-### Does this work without Polylang?
+### Does this work without a language plugin?
 
-Yes, for text and block translation (`translate-text`, `translate-blocks`, inline selected-text workflow). Content translation workflows require a language plugin, currently Polylang.
+Yes, for text and block translation (`translate-text`, `translate-blocks`, inline selected-text workflow). Content translation workflows require a supported language plugin (Polylang or WP Multilang).
 
 ### Where are API keys configured?
 
@@ -117,7 +118,7 @@ Yes. Use `translate-content-bulk` through abilities or the wp-admin list-table t
 
 ### Can I change the language assignment of an existing post without running translation?
 
-Yes. Use `ai-translate/set-post-language` with `post_id` and `target_language`. By default language conflicts fail with `language_conflict`; use `force` to opt in, and pass `relink=true` when translation relations should be rewritten.
+Yes, if the active language plugin supports language mutation (currently Polylang). Use `ai-translate/set-post-language` with `post_id` and `target_language`. By default language conflicts fail with `language_conflict`; use `force` to opt in, and pass `relink=true` when translation relations should be rewritten.
 
 ### How do I control prompts and style?
 

@@ -208,18 +208,26 @@ class TranslationQueryService {
 	}
 
 	public static function query_post_ids_by_type( string $post_type, int $limit ): array {
-		$post_ids = get_posts( array(
+		$query_args = array(
 			'post_type'              => $post_type,
 			'post_status'            => self::get_queryable_source_post_statuses(),
 			'posts_per_page'         => max( 1, $limit ),
 			'orderby'                => 'date',
 			'order'                  => 'DESC',
 			'fields'                 => 'ids',
-			'lang'                   => '',
 			'no_found_rows'          => true,
 			'update_post_meta_cache' => false,
 			'update_post_term_cache' => false,
-		) );
+		);
+
+		$adapter = AI_Translate::get_adapter();
+		if ( $adapter instanceof PolylangAdapter ) {
+			$query_args['lang'] = '';
+		} elseif ( $adapter instanceof WpMultilangAdapter ) {
+			$query_args['lang'] = 'all';
+		}
+
+		$post_ids = get_posts( $query_args );
 
 		if ( ! is_array( $post_ids ) ) {
 			return array();
@@ -245,12 +253,25 @@ class TranslationQueryService {
 			return new \WP_Error( 'invalid_post_type', __( 'The requested post type does not exist.', 'slytranslate' ) );
 		}
 
-		if ( function_exists( 'pll_is_translated_post_type' ) && ! pll_is_translated_post_type( $post_type ) ) {
+		$adapter = AI_Translate::get_adapter();
+
+		if ( $adapter instanceof PolylangAdapter && function_exists( 'pll_is_translated_post_type' ) && ! pll_is_translated_post_type( $post_type ) ) {
 			return new \WP_Error(
 				'post_type_not_translatable',
 				sprintf(
 					/* translators: %s: post type slug. */
 					__( 'The post type "%s" is not enabled for translation in Polylang.', 'slytranslate' ),
+					$post_type
+				)
+			);
+		}
+
+		if ( $adapter instanceof WpMultilangAdapter && function_exists( 'wpm_get_post_config' ) && null === wpm_get_post_config( $post_type ) ) {
+			return new \WP_Error(
+				'post_type_not_translatable',
+				sprintf(
+					/* translators: %s: post type slug. */
+					__( 'The post type "%s" is not enabled for translation in WP Multilang.', 'slytranslate' ),
 					$post_type
 				)
 			);
