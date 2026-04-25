@@ -29,6 +29,7 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - Validation: bilingual label leakage (`German:` / `Deutsch:`) normalized before validation to reduce false failures.
 - Validation: added passthrough detection for English carry-over in German-target translations.
 - Validation: translations are now rejected when Gutenberg block comments change open/close direction, preventing malformed list formatting.
+- Validation: block translations now fail over to source content when inline HTML tags (for example `<strong>`) are repeatedly degraded into markdown formatting.
 - Content: German target translations no longer silently keep English block text when passthrough is detected; the block now retries a dedicated recovery path and fails explicitly when recovery is impossible.
 - Retry: bilingual-frame retries now enforce a hard target-language requirement to recover from mixed-language outputs.
 - Reliability: direct API transport now treats llama.cpp router capacity errors as retryable backoff events, reducing hard failures on single-model setups.

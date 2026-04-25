@@ -109,5 +109,73 @@ class ContentTranslationPassthroughRecoveryTest extends TestCase {
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'invalid_translation_language_passthrough', $result->get_error_code() );
 	}
-}
 
+	public function test_inline_html_markdown_drift_keeps_source_block_when_strict_retry_still_loses_tags(): void {
+		$calls = array();
+
+		$serialized = "<!-- wp:paragraph -->\n<p><strong>KI-Kunde (<code>wp_ai_client_prompt()</code>):</strong>&nbsp;Eine einzelne PHP-Funktion.</p>\n<!-- /wp:paragraph -->";
+
+		$this->stubWpFunctionReturn( 'get_current_user_id', 1 );
+		$this->stubWpFunction( 'serialize_blocks',
+			static function ( array $blocks ) use ( $serialized ): string {
+				$block = $blocks[0] ?? array();
+				$name  = $block['blockName'] ?? '';
+
+				if ( 'core/paragraph' === $name ) {
+					return $serialized;
+				}
+
+				return '';
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$calls ) {
+				$calls[] = $text;
+
+				return new class {
+					public function using_system_instruction( string $prompt ) {
+						return $this;
+					}
+
+					public function using_temperature( int $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						return '**AI Customer (<code>wp_ai_client_prompt()</code>):** A single PHP function.';
+					}
+				};
+			}
+		);
+
+		$block = array(
+			'blockName'   => 'core/paragraph',
+			'attrs'       => array(),
+			'innerBlocks' => array(),
+			'innerHTML'   => '<p><strong>KI-Kunde (<code>wp_ai_client_prompt()</code>):</strong>&nbsp;Eine einzelne PHP-Funktion.</p>',
+			'innerContent' => array( '<p><strong>KI-Kunde (<code>wp_ai_client_prompt()</code>):</strong>&nbsp;Eine einzelne PHP-Funktion.</p>' ),
+		);
+
+		$result = $this->invokeStatic(
+			ContentTranslator::class,
+			'translate_single_block',
+			array(
+				$block,
+				'en',
+				'de',
+				'',
+			)
+		);
+
+		$this->assertSame( $serialized, $result );
+		$this->assertCount( 2, $calls );
+	}
+}

@@ -618,17 +618,11 @@ class ContentTranslator {
 						$retry_reconstructed = $unwrapped['open_tag'] . $retry_str . $unwrapped['close_tag'];
 						if ( ! self::has_inline_formatting_loss( $inner_html, $retry_reconstructed ) ) {
 							$translated_inner = $retry_reconstructed;
-						} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							TimingLogger::log( 'inline_formatting_loss_debug', array(
-								'context' => 'single_wrapper_strict_retry_kept_best_effort',
-								'preview' => mb_substr( preg_replace( '/\s+/', ' ', $translated_inner ) ?? '', 0, 200 ),
-							) );
+						} else {
+							return self::inline_formatting_loss_error();
 						}
-					} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						TimingLogger::log( 'inline_formatting_loss_debug', array(
-							'context' => 'single_wrapper_strict_retry_failed',
-							'preview' => mb_substr( preg_replace( '/\s+/', ' ', $translated_inner ) ?? '', 0, 200 ),
-						) );
+					} else {
+						return self::inline_formatting_loss_error();
 					}
 				}
 
@@ -656,11 +650,8 @@ class ContentTranslator {
 					&& ! self::has_inline_formatting_loss( $inner_html, (string) $retry_inline )
 				) {
 					$translated_inner = $retry_inline;
-				} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					TimingLogger::log( 'inline_formatting_loss_debug', array(
-						'context' => 'inner_html_strict_retry_kept_best_effort',
-						'preview' => mb_substr( preg_replace( '/\s+/', ' ', (string) $translated_inner ) ?? '', 0, 200 ),
-					) );
+				} else {
+					return self::inline_formatting_loss_error();
 				}
 			}
 
@@ -743,6 +734,13 @@ class ContentTranslator {
 		);
 
 		return $restored ?? $translated_stripped;
+	}
+
+	private static function inline_formatting_loss_error(): \WP_Error {
+		return new \WP_Error(
+			'invalid_translation_structure_drift',
+			__( 'The translated output lost required structure such as HTML, Gutenberg block comments, URLs, or code fences.', 'slytranslate' )
+		);
 	}
 
 	/**
