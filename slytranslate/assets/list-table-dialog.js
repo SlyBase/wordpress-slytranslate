@@ -171,7 +171,7 @@
 	var currentLang = '';
 	var currentModelSlug = '';
 
-	function doTranslate(postId, postTitle, lang, langName, modelSlug, additionalPrompt) {
+	function doTranslate(postId, postTitle, sourceLang, lang, langName, overwrite, modelSlug, additionalPrompt) {
 		showOverlay(langName);
 		currentLangName = langName;
 		currentPostId = postId;
@@ -186,9 +186,10 @@
 		apiPost('ai-translate/translate-content/run', {
 			input: {
 				post_id: postId,
+				source_language: sourceLang || undefined,
 				target_language: lang,
 				post_status: 'draft',
-				overwrite: false,
+				overwrite: !!overwrite,
 				translate_title: true,
 				model_slug: modelSlug || undefined,
 				additional_prompt: additionalPrompt || undefined,
@@ -284,10 +285,12 @@
 	var pickerTargetSel = document.getElementById('slytranslate-picker-target');
 	var pickerSwapBtn = document.getElementById('slytranslate-picker-swap');
 	var pickerPromptEl = document.getElementById('slytranslate-picker-additional-prompt');
+	var pickerOverwriteEl = document.getElementById('slytranslate-picker-overwrite');
 	var pickerOnConfirm = null;
 	var pickerLastSlug = '';
 	var pickerAllLanguages = [];
 	var pickerMissingCodes = {};
+	var pickerExistingCodes = {};
 	try { pickerLastSlug = (window.localStorage && window.localStorage.getItem('aiTranslateModelSlug')) || ''; } catch (e) { }
 
 	function readStoredAdditionalPrompt() {
@@ -388,13 +391,20 @@
 			? context.allLanguages
 			: (Array.isArray(context.languages) ? context.languages : []);
 		pickerMissingCodes = {};
+		pickerExistingCodes = {};
 		if (Array.isArray(context.languages)) {
 			context.languages.forEach(function (l) { if (l && l.code) { pickerMissingCodes[l.code] = true; } });
+		}
+		if (Array.isArray(context.existingLanguages)) {
+			context.existingLanguages.forEach(function (code) {
+				if (code) { pickerExistingCodes[code] = true; }
+			});
 		}
 		var sourceCode = context.sourceLang || (pickerAllLanguages[0] ? pickerAllLanguages[0].code : '');
 		fillLanguageSelect(pickerSourceSel, pickerAllLanguages, sourceCode);
 		refreshTargetOptions(context.preferredTarget || '');
 		pickerPromptEl.value = readStoredAdditionalPrompt();
+		if (pickerOverwriteEl) { pickerOverwriteEl.checked = false; }
 		pickerOverlay.style.display = 'flex';
 		loadPickerModels(false);
 	}
@@ -429,8 +439,16 @@
 		var targetLang = pickerTargetSel.value || '';
 		var targetOpt = pickerTargetSel.options[pickerTargetSel.selectedIndex];
 		var targetName = targetOpt ? (targetOpt.textContent || '').replace(/\s*\([^)]*\)\s*$/, '').trim() : targetLang;
+		var overwrite = pickerOverwriteEl ? !!pickerOverwriteEl.checked : false;
 		var additionalPrompt = pickerPromptEl.value || '';
 		if (!targetLang) { return; }
+		if (!overwrite && pickerExistingCodes[targetLang]) {
+			window.alert(S.pickerExistingTranslationNotice || '');
+			return;
+		}
+		if (overwrite && !window.confirm(S.pickerOverwriteWarning || '')) {
+			return;
+		}
 		storeTargetLang(targetLang);
 		storeAdditionalPrompt(additionalPrompt);
 		var cb = pickerOnConfirm;
@@ -441,6 +459,7 @@
 				sourceLang: sourceLang,
 				targetLang: targetLang,
 				targetLangName: targetName,
+				overwrite: overwrite,
 				additionalPrompt: additionalPrompt,
 			});
 		}
@@ -465,7 +484,7 @@
 		return titleEl ? (titleEl.textContent || '').trim() : '';
 	}
 
-	function runBulkTranslation(postIds, lang, langName, modelSlug, additionalPrompt) {
+	function runBulkTranslation(postIds, sourceLang, lang, langName, overwrite, modelSlug, additionalPrompt) {
 		var i = 0;
 		function next() {
 			if (i >= postIds.length) { return; }
@@ -475,9 +494,10 @@
 			apiPost('ai-translate/translate-content/run', {
 				input: {
 					post_id: postId,
+					source_language: sourceLang || undefined,
 					target_language: lang,
 					post_status: 'draft',
-					overwrite: false,
+					overwrite: !!overwrite,
 					translate_title: true,
 					model_slug: modelSlug || undefined,
 					additional_prompt: additionalPrompt || undefined,
@@ -520,10 +540,12 @@
 		var refLink = firstRow ? firstRow.querySelector('.slytranslate-ajax-translate') : null;
 		var languages = [];
 		var allLanguages = [];
+		var existingLanguages = [];
 		var sourceLang = '';
 		if (refLink) {
 			try { languages = JSON.parse(refLink.getAttribute('data-langs') || '[]'); } catch (err) { }
 			try { allLanguages = JSON.parse(refLink.getAttribute('data-all-langs') || '[]'); } catch (err) { }
+			try { existingLanguages = JSON.parse(refLink.getAttribute('data-existing-langs') || '[]'); } catch (err) { }
 			sourceLang = refLink.getAttribute('data-source-lang') || '';
 		}
 		if (!allLanguages.length) { allLanguages = languages; }
@@ -539,8 +561,9 @@
 			sourceLang: sourceLang,
 			languages: languages,
 			allLanguages: allLanguages,
+			existingLanguages: existingLanguages,
 		}, function (result) {
-			runBulkTranslation(ids, result.targetLang, result.targetLangName, result.modelSlug, result.additionalPrompt);
+			runBulkTranslation(ids, result.sourceLang, result.targetLang, result.targetLangName, result.overwrite, result.modelSlug, result.additionalPrompt);
 			if (topSel) { topSel.value = '-1'; }
 			if (botSel) { botSel.value = '-1'; }
 		});
@@ -555,8 +578,10 @@
 		var sourceLang = link.getAttribute('data-source-lang') || '';
 		var languages = [];
 		var allLanguages = [];
+		var existingLanguages = [];
 		try { languages = JSON.parse(link.getAttribute('data-langs') || '[]'); } catch (err) { }
 		try { allLanguages = JSON.parse(link.getAttribute('data-all-langs') || '[]'); } catch (err) { }
+		try { existingLanguages = JSON.parse(link.getAttribute('data-existing-langs') || '[]'); } catch (err) { }
 		if (!allLanguages.length) { allLanguages = languages; }
 		if (!postId || !allLanguages.length) { return; }
 
@@ -564,8 +589,9 @@
 			sourceLang: sourceLang,
 			languages: languages,
 			allLanguages: allLanguages,
+			existingLanguages: existingLanguages,
 		}, function (result) {
-			doTranslate(postId, postTitle, result.targetLang, result.targetLangName, result.modelSlug, result.additionalPrompt);
+			doTranslate(postId, postTitle, result.sourceLang, result.targetLang, result.targetLangName, result.overwrite, result.modelSlug, result.additionalPrompt);
 		});
 	});
 })();

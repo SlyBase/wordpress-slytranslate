@@ -95,6 +95,9 @@ class ContentTranslationListFastPathTest extends TestCase {
 
 		$this->assertIsString( $result );
 		$this->assertStringContainsString( 'Erster Eintrag', $result );
+		$this->assertStringContainsString( '<!-- wp:list -->', $result );
+		$this->assertStringContainsString( '<!-- /wp:list -->', $result );
+		$this->assertStringContainsString( '<!-- wp:list-item -->', $result );
 		$this->assertCount( 1, $calls, 'The outer list wrapper should not trigger its own model call before recursion.' );
 		$this->assertStringNotContainsString( 'SLYWPC', $calls[0] );
 	}

@@ -41,6 +41,8 @@ Use SlyTranslate when you need one consistent translation workflow for:
 - Exposes abilities over REST (`/wp-abilities/v1/`) and MCP discovery.
 - Supports long/structured content with chunking and output validation.
 - Optional `direct_api_url` supports OpenAI-compatible endpoints for model-specific payload needs.
+- In WP Multilang mode, translation state is detected from language-specific content so placeholder titles do not count as completed translations.
+- List-table translation now includes an explicit overwrite option with a confirmation step.
 
 ## Abilities
 
@@ -52,8 +54,8 @@ Use SlyTranslate when you need one consistent translation workflow for:
 | `ai-translate/get-untranslated` | Find content still missing a target translation |
 | `ai-translate/translate-text` | Translate arbitrary text |
 | `ai-translate/translate-blocks` | Translate serialized Gutenberg blocks |
-| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry |
-| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries |
+| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry (supports optional `source_language` and `overwrite`) |
+| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries (supports optional `source_language` and `overwrite`) |
 | `ai-translate/get-progress` | Return live progress for a running translation |
 | `ai-translate/cancel-translation` | Cancel a running translation |
 | `ai-translate/get-available-models` | List models from configured connectors |
@@ -115,6 +117,10 @@ In WordPress Settings > Connectors, not inside SlyTranslate.
 ### Can I use bulk translation from post/page lists?
 
 Yes. Use `translate-content-bulk` through abilities or the wp-admin list-table translation UI.
+
+### How does overwriting existing translations work?
+
+In the list-table dialog, **Overwrite existing translation** is off by default. If a translation already exists, you must enable overwrite and confirm before the translation starts.
 
 ### Can I change the language assignment of an existing post without running translation?
 

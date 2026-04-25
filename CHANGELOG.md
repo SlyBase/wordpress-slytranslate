@@ -6,38 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Beta releases (for example 1.6.0-beta.1) are documented under their base version (for example 1.6.0).
 
 
-## [Unreleased]
-- Adapter: added `WpMultilangAdapter` and adapter auto-discovery now supports both Polylang and WP Multilang.
-- Translation compatibility: post-type validation and source-content queries now honor the active language adapter (including `lang=all` for WP Multilang).
-- Translation quality: WP Multilang translations now extract the source-language variant before AI translation to avoid re-translating `[:lang]...[:]` wrapper markup.
-- WP Multilang UX: source language detection now follows the current WP Multilang language context (`wpm_get_language`) so translations use the actually selected language view.
-- WP Multilang UX: editor translation-status post links are hidden in single-entry mode (all language variants live in the same post), and list-table target-language options keep all non-source plugin languages selectable.
-- WP Multilang persistence: translation writes now persist using the active source-language context (instead of always default language), preventing duplicate or cross-language title/content merges.
-- Dev workflow: deploy script/task now target the dynamic `wp-loco` test pod via configurable namespace/selector and resilient kubectl binary resolution.
-- Prompting: bilingual-frame source/target labels are now derived generically from normalized language codes (for example `pt_BR` → `PT-BR`) instead of a hardcoded language-name list.
-- Reliability: direct API transport now treats llama.cpp router capacity errors (`HTTP 500` with `model limit reached, try again later`) as retryable backoff events, reducing hard failures on single-model (`models-max=1`) setups.
-- Reliability: increased default `slytranslate_direct_api_timeout` from 120 s to 300 s to cover large model load and swap times on integrated GPUs, preventing the double-timeout cascade (direct API → WP AI Client fallback) that caused ~300 s hard failures.
-
 ## [1.6.0]
-- Prompting: removed the hardcoded DE formality rule so tone/style requirements come only from the user-provided `additional_prompt`.
-- Prompting: bilingual-frame prompts now mark user rules as mandatory (`MANDATORY TRANSLATION RULES`) and retries reinforce that those user rules must still be obeyed.
-- Prompting: bilingual-frame prompts/retries now require a strict `<slytranslate-output>...</slytranslate-output>` wrapper and runtime extraction of that wrapper (or trailing `German:` label block) to reduce explanation/runaway leakage in long-model outputs.
-- Profiles: added family-specific AI1 profiles for Qwen, GLM, Gemma 4, and Nemotron that send `chat_template_kwargs.enable_thinking=false` when supported to avoid empty thinking-only outputs.
-- Profiles: added conservative bilingual profiles for EuroLLM, Llama 3.1/Sauerkraut, and Ministral-3 to improve robustness on long posts with stricter retry chunking.
-- Tests: added explicit coverage that bilingual-frame payloads and retry prompts keep the user-provided `additional_prompt` text verbatim.
-- Ministral: added a dedicated model profile (`ministral`, `ministral-8b`, `ministral-8b-instruct`) using user-only bilingual framing (`English:`/`German:`) with stricter validation-retry settings and 1,800-char retry chunking.
-- Retry: bilingual-frame profiles now always append a hard target-language requirement on validation retries, improving recovery from assistant-style or mixed-language outputs.
-- Validation: leading bilingual-frame label leakage (`German:` / `Deutsch:`) is normalized for German targets before validation, reducing false failures from prompt-frame artifacts.
-- Tests: added focused coverage for Ministral profile matching, prompt payload shape, retry chunk sizing, and passthrough-triggered retry behavior.
-- Performance: raised `MAX_OUTPUT_TOKENS_CEILING` from 8 192 to 32 768 tokens so large posts are no longer truncated mid-translation and fall back to slow per-block mode.
-- Performance: added `gemma-4` to the known model context-window table (131 072 tokens), fixing the substring match that caused gemma-4 variants to be handled with only 8 192 tokens, splitting a ~48 000-char post into 12 chunks instead of 1.
-- Performance: the computed chunk char limit is now cached for the duration of each translation job (cleared on model switch and between jobs), eliminating repeated option reads and model table lookups.
-- Performance: eligible short-string SEO meta values (e.g. Yoast/Slim SEO title and description) are now translated in a single batched AI call instead of one call per key, reducing meta-phase AI round-trips by up to N−1 calls.
-- Performance: expanded `KNOWN_MODEL_CONTEXT_WINDOWS` with many new model families (GPT-5, GPT-4.1 @ 1 M, GPT-4o-mini, o1/o3/o4-mini reasoning models, Mistral Codestral/Pixtral/Nemo, Phi-4/3.x, GLM, Moonshot/Kimi, Yi, InternLM, Cohere Command R, Nous Hermes, Falcon, Baichuan) and corrected existing entries (gpt-4.1 128 K → 1 048 576, o3/o4-mini 128 K → 200 K, mistral-large 32 K → 128 K).
-- Architecture: introduced a central model-profile registry (`slytranslate_model_profiles`) that drives request mode, prompt style, extra request body keys, chunk strategy, and retry behavior per model family.
-- TowerInstruct: added a built-in Tower profile with user-only bilingual framing (`English:`/`German:`), conservative chunk sizing, and stricter retry behavior for long-content stability.
-- Validation: added explicit German-target passthrough detection (`invalid_translation_language_passthrough`) so obvious English carry-over can trigger model-profile retries.
-- Transport: direct API request assembly is now profile-driven (system+user vs user-only and profile-defined extra payload keys) instead of model-specific branching in multiple places.
+### Features
+- WP Multilang: major new integration support for the WP Multilang plugin alongside the existing Polylang integration.
+- Architecture: introduced a central model-profile registry (`slytranslate_model_profiles`) driving prompt style, chunk strategy, and retry behavior per model family.
+- Profiles: added dedicated profiles for Ministral, Tower, Qwen, GLM, Gemma 4, Nemotron, EuroLLM, Llama 3.1/Sauerkraut, and Ministral-3.
+- Performance: SEO meta values (Yoast/Slim SEO title & description) are now translated in a single batched AI call instead of one per key.
+- Prompting: bilingual-frame language labels are now derived generically from normalized language codes (e.g. `pt_BR` → `PT-BR`).
+- UI: list-table translation now includes an explicit overwrite option with a confirmation warning.
+
+### Changes
+- Prompting: tone/formality rules now come solely from `additional_prompt`; hardcoded DE formality rule removed.
+- Prompting: bilingual-frame output must be wrapped in `<slytranslate-output>…</slytranslate-output>` to reduce runaway leakage.
+- Transport: direct API request assembly is now profile-driven instead of model-specific branching.
+- Performance: `MAX_OUTPUT_TOKENS_CEILING` raised from 8,192 to 32,768 tokens; chunk char limit cached per job.
+- Performance: expanded and corrected `KNOWN_MODEL_CONTEXT_WINDOWS` with many new model families (GPT-5, GPT-4.1 @ 1 M, o1/o3/o4-mini, Mistral variants, Phi-4, GLM, Moonshot, Yi, Cohere, Falcon, Baichuan, and more).
+- API: content-translation abilities now accept an optional source language for stricter WP Multilang requests.
+
+### Fixes
+- Validation: `gemma-4` context window corrected to 131,072 tokens (was 8,192), fixing excessive over-chunking.
+- Validation: bilingual label leakage (`German:` / `Deutsch:`) normalized before validation to reduce false failures.
+- Validation: added passthrough detection for English carry-over in German-target translations.
+- Content: German target translations no longer silently keep English block text when passthrough is detected; the block now retries a dedicated recovery path and fails explicitly when recovery is impossible.
+- Retry: bilingual-frame retries now enforce a hard target-language requirement to recover from mixed-language outputs.
+- Reliability: direct API transport now treats llama.cpp router capacity errors as retryable backoff events, reducing hard failures on single-model setups.
+- Reliability: increased default API timeout from 120 s to 300 s to prevent double-timeout cascades on large model load times.
+- WP Multilang: translation status now treats placeholder titles as untranslated when the target content is empty.
+- WP Multilang: list-table translations now return a dedicated source-language mismatch error when the selected source is not the active language.
+- Gutenberg: recursive list-wrapper reconstruction now preserves valid block comment names to prevent malformed list blocks.
 
 
 ## [1.5.6]

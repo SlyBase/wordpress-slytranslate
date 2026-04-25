@@ -399,12 +399,16 @@ class AbilityRegistrationTest extends TestCase {
 				'execute_callback' => array( AI_Translate::class, 'execute_translate_content' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'post_id', 'target_language', 'post_status', 'translate_title', 'overwrite', 'additional_prompt', 'model_slug' ),
+					'property_keys' => array( 'post_id', 'source_language', 'target_language', 'post_status', 'translate_title', 'overwrite', 'additional_prompt', 'model_slug' ),
 					'required'      => array( 'post_id', 'target_language' ),
 					'properties'    => array(
 						'post_id' => array(
 							'type'        => 'integer',
 							'description' => 'The source content item ID.',
+						),
+						'source_language' => array(
+							'type'        => 'string',
+							'description' => 'Optional source language code. For WP Multilang this must match the currently active language.',
 						),
 						'target_language' => array(
 							'type'        => 'string',
@@ -455,7 +459,7 @@ class AbilityRegistrationTest extends TestCase {
 				'execute_callback' => array( AI_Translate::class, 'execute_translate_posts' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'post_ids', 'post_type', 'limit', 'target_language', 'post_status', 'translate_title', 'overwrite', 'additional_prompt', 'model_slug' ),
+					'property_keys' => array( 'post_ids', 'post_type', 'limit', 'source_language', 'target_language', 'post_status', 'translate_title', 'overwrite', 'additional_prompt', 'model_slug' ),
 					'required'      => array( 'target_language' ),
 					'properties'    => array(
 						'post_ids' => array(
@@ -475,6 +479,10 @@ class AbilityRegistrationTest extends TestCase {
 							'default'     => 20,
 							'minimum'     => 1,
 							'maximum'     => 50,
+						),
+						'source_language' => array(
+							'type'        => 'string',
+							'description' => 'Optional source language code applied to each item. For WP Multilang this must match the currently active language.',
 						),
 						'target_language' => array(
 							'type'        => 'string',

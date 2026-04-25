@@ -23,6 +23,7 @@ class PostTranslationService {
 	 * @param bool   $overwrite       Whether to overwrite an existing translation.
 	 * @param bool   $translate_title Whether to translate the post title.
 	 * @param string $additional_prompt Per-request extra prompt instructions.
+	 * @param string $source_language Optional source language asserted by the caller.
 	 * @return int|\WP_Error Translated post ID or WP_Error on failure.
 	 */
 	public static function translate_post(
@@ -31,9 +32,11 @@ class PostTranslationService {
 		string $status = '',
 		bool $overwrite = false,
 		bool $translate_title = true,
-		string $additional_prompt = ''
+		string $additional_prompt = '',
+		string $source_language = ''
 	): mixed {
-		$additional_prompt = is_string( $additional_prompt ) ? sanitize_textarea_field( $additional_prompt ) : '';
+		$additional_prompt       = is_string( $additional_prompt ) ? sanitize_textarea_field( $additional_prompt ) : '';
+		$requested_source_lang   = is_string( $source_language ) ? sanitize_key( $source_language ) : '';
 
 		$adapter = AI_Translate::get_adapter();
 		if ( ! $adapter ) {
@@ -44,10 +47,6 @@ class PostTranslationService {
 		if ( ! $post ) {
 			return new \WP_Error( 'post_not_found', __( 'Source post not found.', 'slytranslate' ) );
 		}
-
-		$parsed_blocks = ( function_exists( 'parse_blocks' ) && '' !== trim( (string) $post->post_content ) )
-			? parse_blocks( $post->post_content )
-			: null;
 
 		$all_meta = function_exists( 'get_post_meta' ) ? get_post_meta( $post_id ) : array();
 		$all_meta = is_array( $all_meta ) ? $all_meta : array();
@@ -60,14 +59,28 @@ class PostTranslationService {
 			return $post_type_check;
 		}
 
-		$from = $adapter->get_post_language( $post_id ) ?? 'en';
+		$from = sanitize_key( (string) ( $adapter->get_post_language( $post_id ) ?? 'en' ) );
+		if ( '' === $from ) {
+			$from = 'en';
+		}
 		$to   = sanitize_key( $to );
 
 		if ( $adapter instanceof WpMultilangAdapter ) {
+			if ( '' !== $requested_source_lang && $requested_source_lang !== $from ) {
+				return new \WP_Error(
+					'source_language_mismatch',
+					__( 'The selected source language must match the currently active language.', 'slytranslate' )
+				);
+			}
+
 			$post->post_title   = $adapter->get_language_variant( (string) $post->post_title, $from );
 			$post->post_content = $adapter->get_language_variant( (string) $post->post_content, $from );
 			$post->post_excerpt = $adapter->get_language_variant( (string) $post->post_excerpt, $from );
 		}
+
+		$parsed_blocks = ( function_exists( 'parse_blocks' ) && '' !== trim( (string) $post->post_content ) )
+			? parse_blocks( $post->post_content )
+			: null;
 
 		if ( '' !== $from && $from === $to ) {
 			return new \WP_Error( 'same_language', __( 'Source and target languages must be different.', 'slytranslate' ) );

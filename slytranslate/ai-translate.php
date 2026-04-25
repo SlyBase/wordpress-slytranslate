@@ -515,12 +515,13 @@ class AI_Translate {
 
 				$target_language = self::require_language_code_input( $input, 'target_language', 'missing_target_language', __( 'Target language is required.', 'slytranslate' ) );
 				if ( is_wp_error( $target_language ) ) { return $target_language; }
+				$source_language = self::get_optional_sanitized_key_input( $input, 'source_language' );
 
 				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
 				if ( ! current_user_can( 'edit_others_posts' ) ) {
 					$additional_prompt = '';
 				}
-				$result            = self::translate_post( $post_id, $target_language, self::get_optional_sanitized_key_input( $input, 'post_status' ), $input['overwrite'] ?? false, $input['translate_title'] ?? true, $additional_prompt );
+				$result            = self::translate_post( $post_id, $target_language, self::get_optional_sanitized_key_input( $input, 'post_status' ), $input['overwrite'] ?? false, $input['translate_title'] ?? true, $additional_prompt, $source_language );
 				if ( is_wp_error( $result ) ) { return $result; }
 
 				$translated_post = get_post( $result );
@@ -559,6 +560,7 @@ class AI_Translate {
 				$failed    = 0;
 				$skipped   = 0;
 				$overwrite = ! empty( $input['overwrite'] );
+				$source_language = self::get_optional_sanitized_key_input( $input, 'source_language' );
 				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
 				if ( ! current_user_can( 'edit_others_posts' ) ) {
 					$additional_prompt = '';
@@ -585,7 +587,7 @@ class AI_Translate {
 						continue;
 					}
 
-					$result = self::translate_post( $post_id, $target_language, self::get_optional_sanitized_key_input( $input, 'post_status' ), $overwrite, $input['translate_title'] ?? true, $additional_prompt );
+					$result = self::translate_post( $post_id, $target_language, self::get_optional_sanitized_key_input( $input, 'post_status' ), $overwrite, $input['translate_title'] ?? true, $additional_prompt, $source_language );
 					if ( is_wp_error( $result ) ) {
 						$failed++;
 						$results[] = array( 'source_post_id' => $post_id, 'translated_post_id' => 0, 'status' => 'failed', 'error' => $result->get_error_message(), 'edit_link' => '' );
@@ -685,8 +687,8 @@ class AI_Translate {
 	 * Core translation methods – public API (must stay on AI_Translate)
 	 * ------------------------------------------------------------- */
 
-	public static function translate_post( $post_id, $to, $status = '', $overwrite = false, $translate_title = true, $additional_prompt = '' ) {
-		return PostTranslationService::translate_post( absint( $post_id ), (string) $to, (string) $status, (bool) $overwrite, (bool) $translate_title, (string) $additional_prompt );
+	public static function translate_post( $post_id, $to, $status = '', $overwrite = false, $translate_title = true, $additional_prompt = '', $source_language = '' ) {
+		return PostTranslationService::translate_post( absint( $post_id ), (string) $to, (string) $status, (bool) $overwrite, (bool) $translate_title, (string) $additional_prompt, (string) $source_language );
 	}
 
 	public static function translate( $text, $to, $from = 'en', $additional_prompt = '' ) {

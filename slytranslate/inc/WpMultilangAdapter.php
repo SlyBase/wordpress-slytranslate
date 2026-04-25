@@ -62,28 +62,18 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 	public function get_language_variant( string $value, string $language_code ): string {
 		$language_code = sanitize_key( $language_code );
 		if ( '' === $language_code || '' === $value ) {
-			return $value;
+			return '';
 		}
 
 		$decoded = wpm_string_to_ml_array( $value );
 		if ( ! is_array( $decoded ) ) {
-			return $value;
+			$default_language = $this->get_default_language_code();
+			return $language_code === $default_language ? $value : '';
 		}
 
 		$normalized = $this->normalize_language_map( $decoded );
 		if ( isset( $normalized[ $language_code ] ) && '' !== $normalized[ $language_code ] ) {
 			return $normalized[ $language_code ];
-		}
-
-		$default_language = $this->get_default_language_code();
-		if ( '' !== $default_language && isset( $normalized[ $default_language ] ) && '' !== $normalized[ $default_language ] ) {
-			return $normalized[ $default_language ];
-		}
-
-		foreach ( $normalized as $normalized_value ) {
-			if ( '' !== $normalized_value ) {
-				return $normalized_value;
-			}
 		}
 
 		return '';
@@ -112,22 +102,9 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 				continue;
 			}
 
-			$title_variant = $this->extract_language_value( (string) $post->post_title, $language_code, $default_language );
 			$content_variant = $this->extract_language_value( (string) $post->post_content, $language_code, $default_language );
-			$excerpt_variant = $this->extract_language_value( (string) $post->post_excerpt, $language_code, $default_language );
 
-			if ( '' !== trim( $title_variant ) || '' !== trim( $content_variant ) || '' !== trim( $excerpt_variant ) ) {
-				$translations[ $language_code ] = $post_id;
-			}
-		}
-
-		$stored_languages = get_post_meta( $post_id, '_languages', true );
-		if ( is_array( $stored_languages ) ) {
-			foreach ( $stored_languages as $stored_language ) {
-				$language_code = sanitize_key( (string) $stored_language );
-				if ( '' === $language_code || ! in_array( $language_code, $languages, true ) ) {
-					continue;
-				}
+			if ( '' !== trim( $content_variant ) ) {
 				$translations[ $language_code ] = $post_id;
 			}
 		}

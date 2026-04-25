@@ -293,6 +293,17 @@ class ContentTranslator {
 			$result = $recursive;
 		}
 
+		if ( is_wp_error( $result ) && 'invalid_translation_language_passthrough' === $result->get_error_code() ) {
+			$recovered = self::recover_passthrough_single_block_translation( $single_serialized, $to, $from, $additional_prompt );
+			if ( ! is_wp_error( $recovered ) ) {
+				TimingLogger::log( 'content_block_passthrough_recovered', array(
+					'block_name' => $block['blockName'] ?? '(unknown)',
+				) );
+				return $recovered;
+			}
+			$result = $recovered;
+		}
+
 		// Last-resort fallback: a single block that keeps failing validator
 		// checks (structural drift, length drift, plain-text missing, runaway
 		// output, assistant reply) would otherwise tear down the entire
@@ -302,6 +313,10 @@ class ContentTranslator {
 		// errors (cancellation, model errors, transport errors) are still
 		// propagated unchanged.
 		if ( self::is_validation_error( $result ) ) {
+			if ( 'invalid_translation_language_passthrough' === $result->get_error_code() ) {
+				return $result;
+			}
+
 			$reason = self::short_validation_reason( $result );
 			TimingLogger::log( 'content_block_kept_in_source', array(
 				'reason'     => $reason,
@@ -319,6 +334,73 @@ class ContentTranslator {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Retry a single-block translation without Gutenberg placeholders when the
+	 * model echoed source language content unchanged.
+	 *
+	 * @return string|\WP_Error
+	 */
+	private static function recover_passthrough_single_block_translation(
+		string $single_serialized,
+		string $to,
+		string $from,
+		string $additional_prompt
+	): mixed {
+		$matches = array();
+		$count   = preg_match_all( '/<!--\s*\/?wp:[^>]+-->/iu', $single_serialized, $matches );
+		if ( false === $count || empty( $matches[0] ) || ! is_array( $matches[0] ) ) {
+			return new \WP_Error( 'invalid_translation_language_passthrough', __( 'The translated output still appears to be in the source language instead of German.', 'slytranslate' ) );
+		}
+
+		$block_comments = $matches[0];
+		$inner_html     = self::extract_simple_wrapper_inner_html( $single_serialized, $block_comments );
+		if ( null === $inner_html ) {
+			return new \WP_Error( 'invalid_translation_language_passthrough', __( 'The translated output still appears to be in the source language instead of German.', 'slytranslate' ) );
+		}
+
+		$pass_through_hint = 'CRITICAL: The previous attempt returned source-language text unchanged. Translate every sentence into the target language and keep source-language carry-over to an absolute minimum.';
+		$plain_text_hint   = 'The input is a short plain-text snippet from one Gutenberg block. Return only the translated text, no explanations.';
+		$block_html_hint   = 'The input is HTML from one Gutenberg block. Translate only visible text and preserve HTML tags exactly. Return only translated HTML.';
+		$plain_text_prompt = trim( $additional_prompt . "\n\n" . $pass_through_hint . "\n\n" . $plain_text_hint );
+		$block_html_prompt = trim( $additional_prompt . "\n\n" . $pass_through_hint . "\n\n" . $block_html_hint );
+		$unwrapped         = self::unwrap_single_element( $inner_html );
+
+		if ( null !== $unwrapped ) {
+			$prompt             = self::unwrapped_content_prompt( $unwrapped['content'], $plain_text_prompt, $block_html_prompt );
+			$translated_content = TranslationRuntime::translate_text( $unwrapped['content'], $to, $from, $prompt );
+			if ( is_wp_error( $translated_content ) ) {
+				return $translated_content;
+			}
+
+			$translated_content_str = trim( (string) $translated_content );
+			if ( str_starts_with( $translated_content_str, $unwrapped['open_tag'] )
+				&& str_ends_with( $translated_content_str, $unwrapped['close_tag'] )
+			) {
+				$translated_content_str = trim( substr(
+					$translated_content_str,
+					strlen( $unwrapped['open_tag'] ),
+					-strlen( $unwrapped['close_tag'] )
+				) );
+			}
+
+			$translated_inner = $unwrapped['open_tag'] . $translated_content_str . $unwrapped['close_tag'];
+		} else {
+			$translated_inner = TranslationRuntime::translate_text( $inner_html, $to, $from, $block_html_prompt );
+			if ( is_wp_error( $translated_inner ) ) {
+				return $translated_inner;
+			}
+			$translated_inner = (string) $translated_inner;
+		}
+
+		$reconstructed = $block_comments[0] . "\n" . $translated_inner . "\n" . $block_comments[ count( $block_comments ) - 1 ];
+		$validation    = TranslationValidator::validate( $single_serialized, $reconstructed, $to );
+		if ( is_wp_error( $validation ) ) {
+			return $validation;
+		}
+
+		return $reconstructed;
 	}
 
 	/**
@@ -408,12 +490,23 @@ class ContentTranslator {
 		}
 
 		// Wrap with the outer block comment.
-		$block_name = $block['blockName'] ?? '';
+		$block_name = self::normalize_block_comment_name( (string) ( $block['blockName'] ?? '' ) );
 		$attrs_json = ! empty( $block['attrs'] ) ? ' ' . wp_json_encode( $block['attrs'] ) : '';
 		$open_comment  = '<!-- wp:' . $block_name . $attrs_json . ' -->';
 		$close_comment = '<!-- /wp:' . $block_name . ' -->';
 
 		return $open_comment . "\n" . $output . "\n" . $close_comment;
+	}
+
+	/**
+	 * Gutenberg block comments omit the core/ namespace for core blocks.
+	 */
+	private static function normalize_block_comment_name( string $block_name ): string {
+		$block_name = trim( $block_name );
+		if ( str_starts_with( $block_name, 'core/' ) ) {
+			return substr( $block_name, 5 );
+		}
+		return $block_name;
 	}
 
 	/**

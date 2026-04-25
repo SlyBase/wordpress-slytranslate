@@ -72,17 +72,22 @@ class ListTableTranslation {
 		// rendered by the inline JS reads these via data-langs and lets the user
 		// choose any of them (or change the source language) at translation time.
 		$missing_languages = array();
+		$existing_languages = array();
 		foreach ( $languages as $code => $name ) {
 			if ( $code === $source_lang ) {
 				continue;
 			}
 
-			if ( ! $single_entry_mode && isset( $translations[ $code ] ) ) {
+			if ( isset( $translations[ $code ] ) ) {
 				$tid = absint( $translations[ $code ] );
 				if ( $tid > 0 && false !== get_post_status( $tid ) ) {
-					continue;
+					$existing_languages[] = (string) $code;
+					if ( ! $single_entry_mode ) {
+						continue;
+					}
 				}
 			}
+
 			$missing_languages[] = array( 'code' => (string) $code, 'name' => (string) $name );
 		}
 
@@ -99,12 +104,13 @@ class ListTableTranslation {
 		}
 
 		$actions['ai_translate'] = sprintf(
-			'<a href="#" class="slytranslate-ajax-translate" data-post-id="%d" data-post-title="%s" data-source-lang="%s" data-langs="%s" data-all-langs="%s">%s</a>',
+			'<a href="#" class="slytranslate-ajax-translate" data-post-id="%d" data-post-title="%s" data-source-lang="%s" data-langs="%s" data-all-langs="%s" data-existing-langs="%s">%s</a>',
 			$post->ID,
 			esc_attr( $post->post_title ),
 			esc_attr( (string) $source_lang ),
 			esc_attr( wp_json_encode( $missing_languages ) ),
 			esc_attr( wp_json_encode( $all_languages ) ),
+			esc_attr( wp_json_encode( $existing_languages ) ),
 			esc_html__( 'Translate', 'slytranslate' )
 		);
 
@@ -357,6 +363,9 @@ class ListTableTranslation {
 			'pickerSwapTitle'   => esc_html__( 'Swap source and target language', 'slytranslate' ),
 			'pickerAdditionalPromptLabel' => esc_html__( 'Additional instructions (optional)', 'slytranslate' ),
 			'pickerAdditionalPromptHelp'  => esc_html__( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
+			'pickerOverwriteLabel'        => esc_html__( 'Overwrite existing translation', 'slytranslate' ),
+			'pickerExistingTranslationNotice' => esc_html__( 'A translation already exists for the selected language. Enable overwrite to update it.', 'slytranslate' ),
+			'pickerOverwriteWarning'      => esc_html__( 'This will overwrite already translated posts/pages in the selected language. Continue?', 'slytranslate' ),
 			'pickerStart'      => esc_html__( 'Start translation', 'slytranslate' ),
 			'pickerCancel'     => esc_html__( 'Cancel', 'slytranslate' ),
 			'pickerRefresh'    => esc_html__( 'Refresh model list', 'slytranslate' ),
@@ -393,6 +402,10 @@ class ListTableTranslation {
 				<label for="slytranslate-picker-additional-prompt" style="display:block;font-size:12px;color:#50575e;margin:12px 0 6px;"><?php echo esc_html( $strings['pickerAdditionalPromptLabel'] ); ?></label>
 				<textarea id="slytranslate-picker-additional-prompt" rows="3" style="width:100%;resize:vertical;"></textarea>
 				<div style="margin-top:4px;font-size:11px;color:#50575e;"><?php echo esc_html( $strings['pickerAdditionalPromptHelp'] ); ?></div>
+				<label for="slytranslate-picker-overwrite" style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:#50575e;">
+					<input id="slytranslate-picker-overwrite" type="checkbox" />
+					<span><?php echo esc_html( $strings['pickerOverwriteLabel'] ); ?></span>
+				</label>
 				<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
 					<button id="slytranslate-model-picker-cancel" type="button" class="button button-secondary"><?php echo esc_html( $strings['pickerCancel'] ); ?></button>
 					<button id="slytranslate-model-picker-start"  type="button" class="button button-primary"><?php echo esc_html( $strings['pickerStart'] ); ?></button>
