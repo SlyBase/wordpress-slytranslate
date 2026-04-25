@@ -66,6 +66,7 @@ class ListTableTranslation {
 		$languages    = $adapter->get_languages();
 		$translations = $adapter->get_post_translations( $post->ID );
 		$source_lang  = $adapter->get_post_language( $post->ID );
+		$single_entry_mode = $adapter instanceof WpMultilangAdapter;
 
 		// Build the list of still-missing target languages. The picker dialog
 		// rendered by the inline JS reads these via data-langs and lets the user
@@ -75,7 +76,8 @@ class ListTableTranslation {
 			if ( $code === $source_lang ) {
 				continue;
 			}
-			if ( isset( $translations[ $code ] ) ) {
+
+			if ( ! $single_entry_mode && isset( $translations[ $code ] ) ) {
 				$tid = absint( $translations[ $code ] );
 				if ( $tid > 0 && false !== get_post_status( $tid ) ) {
 					continue;

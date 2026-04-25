@@ -3,6 +3,9 @@
 * Adapter: added WpMultilangAdapter and adapter auto-discovery now supports both Polylang and WP Multilang.
 * Translation compatibility: post-type validation and source-content queries now honor the active language adapter (including lang=all for WP Multilang).
 * Translation quality: WP Multilang translations now extract the source-language variant before AI translation to avoid re-translating [:lang]...[:] wrapper markup.
+* WP Multilang UX: source language detection now follows the current WP Multilang language context (wpm_get_language) so translations use the actually selected language view.
+* WP Multilang UX: editor translation-status post links are hidden in single-entry mode (all language variants live in the same post), and list-table target-language options keep all non-source plugin languages selectable.
+* WP Multilang persistence: translation writes now persist using the active source-language context (instead of always default language), preventing duplicate or cross-language title/content merges.
 * Dev workflow: deploy script/task now target the dynamic wp-loco test pod via configurable namespace/selector and resilient kubectl binary resolution.
 * Prompting: bilingual-frame source/target labels are now derived generically from normalized language codes (for example pt_BR -> PT-BR) instead of a hardcoded language-name list.
 

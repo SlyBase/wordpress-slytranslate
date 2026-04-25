@@ -46,20 +46,47 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 	}
 
 	public function get_post_language( int $post_id ): ?string {
+		if ( $this->is_available() && function_exists( 'wpm_get_language' ) ) {
+			$current_language = sanitize_key( (string) wpm_get_language() );
+			$languages        = $this->get_languages();
+
+			if ( '' !== $current_language && isset( $languages[ $current_language ] ) ) {
+				return $current_language;
+			}
+		}
+
 		$default_language = $this->get_default_language_code();
 		return '' !== $default_language ? $default_language : null;
 	}
 
 	public function get_language_variant( string $value, string $language_code ): string {
 		$language_code = sanitize_key( $language_code );
-		if ( '' === $language_code ) {
+		if ( '' === $language_code || '' === $value ) {
 			return $value;
 		}
 
-		$default_language = $this->get_default_language_code();
-		$variant          = $this->extract_language_value( $value, $language_code, $default_language );
+		$decoded = wpm_string_to_ml_array( $value );
+		if ( ! is_array( $decoded ) ) {
+			return $value;
+		}
 
-		return '' !== $variant ? $variant : $value;
+		$normalized = $this->normalize_language_map( $decoded );
+		if ( isset( $normalized[ $language_code ] ) && '' !== $normalized[ $language_code ] ) {
+			return $normalized[ $language_code ];
+		}
+
+		$default_language = $this->get_default_language_code();
+		if ( '' !== $default_language && isset( $normalized[ $default_language ] ) && '' !== $normalized[ $default_language ] ) {
+			return $normalized[ $default_language ];
+		}
+
+		foreach ( $normalized as $normalized_value ) {
+			if ( '' !== $normalized_value ) {
+				return $normalized_value;
+			}
+		}
+
+		return '';
 	}
 
 	public function get_post_translations( int $post_id ): array {
@@ -143,7 +170,16 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 			);
 		}
 
-		$source_language = $this->get_default_language_code();
+		$source_language = '';
+		if ( isset( $data['source_language'] ) ) {
+			$requested_source_language = sanitize_key( (string) $data['source_language'] );
+			if ( '' !== $requested_source_language && isset( $available_languages[ $requested_source_language ] ) ) {
+				$source_language = $requested_source_language;
+			}
+		}
+		if ( '' === $source_language ) {
+			$source_language = $this->get_default_language_code();
+		}
 		$source_title    = $this->get_language_variant( (string) $post->post_title, $source_language );
 		$source_content  = $this->get_language_variant( (string) $post->post_content, $source_language );
 		$source_excerpt  = $this->get_language_variant( (string) $post->post_excerpt, $source_language );

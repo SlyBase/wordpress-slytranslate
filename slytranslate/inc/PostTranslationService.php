@@ -218,6 +218,7 @@ class PostTranslationService {
 				'post_status'  => $target_status,
 				'meta'         => $processed_meta,
 				'overwrite'    => $overwrite,
+				'source_language' => $from,
 			) );
 
 			$saving_ok = ! is_wp_error( $result );

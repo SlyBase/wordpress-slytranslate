@@ -50,24 +50,41 @@ class TranslationQueryService {
 		$source_lang  = $adapter->get_post_language( $post_id );
 		$translations = $adapter->get_post_translations( $post_id );
 		$languages    = $adapter->get_languages();
+		$is_single_entry_mode = $adapter instanceof WpMultilangAdapter;
+		$source_title         = $post->post_title;
+
+		if ( $is_single_entry_mode ) {
+			$source_title = $adapter->get_language_variant( (string) $post->post_title, (string) $source_lang );
+		}
 
 		$status = array();
 		foreach ( $languages as $code => $name ) {
 			if ( $code === $source_lang ) {
 				continue;
 			}
-			$status[] = self::build_translation_status_entry(
-				$code,
-				isset( $translations[ $code ] ) ? absint( $translations[ $code ] ) : 0
-			);
+
+			if ( $is_single_entry_mode ) {
+				$status[] = array(
+					'lang'        => (string) $code,
+					'post_id'     => 0,
+					'exists'      => isset( $translations[ $code ] ) && absint( $translations[ $code ] ) > 0,
+					'title'       => '',
+					'post_status' => '',
+					'edit_link'   => '',
+				);
+				continue;
+			}
+
+			$status[] = self::build_translation_status_entry( $code, isset( $translations[ $code ] ) ? absint( $translations[ $code ] ) : 0 );
 		}
 
 		return array(
 			'source_post_id'   => $post_id,
 			'source_post_type' => $post->post_type,
-			'source_title'     => $post->post_title,
+			'source_title'     => $source_title,
 			'source_language'  => $source_lang ?? '',
 			'translations'     => $status,
+			'single_entry_mode' => $is_single_entry_mode,
 		);
 	}
 

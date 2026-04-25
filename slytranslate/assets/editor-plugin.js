@@ -632,6 +632,10 @@
         return availableLanguages[0] ? availableLanguages[0].code : '';
     }
 
+    function isSingleEntryTranslationMode() {
+        return !!(settings && settings.singleEntryTranslationMode);
+    }
+
     function AiTranslatePanel() {
         const postContext = useSelect(function (select) {
             const editorStore = select('core/editor');
@@ -870,7 +874,7 @@
                     saveAdditionalPromptPreference(additionalPrompt);
                     setSuccessState({
                         message: wasExistingTranslation ? text('translationUpdatedNotice', 'Translation updated successfully.') : text('translationCreatedNotice', 'Translation created successfully.'),
-                        editLink: response && response.edit_link ? response.edit_link : '',
+                        editLink: !isSingleEntryTranslationMode() && response && response.edit_link ? response.edit_link : '',
                     });
                     refreshData();
                 })
@@ -903,6 +907,7 @@
         }
 
         const statusItems = Array.isArray(statusData && statusData.translations) ? statusData.translations : [];
+        const showTranslationStatusList = !isSingleEntryTranslationMode() && statusItems.length > 0;
 
         return createElement(
             PluginDocumentSettingPanel,
@@ -1057,7 +1062,7 @@
                     )
                 ) : null
             ),
-            statusItems.length ? createElement(
+            showTranslationStatusList ? createElement(
                 'div',
                 { style: { textAlign: 'left' } },
                 createElement('p', { style: { margin: '0 0 4px', textAlign: 'left' } }, createElement('strong', null, text('translationStatusLabel', 'Translation status'))),
@@ -1094,7 +1099,7 @@
             ) : null,
             createElement(
                 'div',
-                { style: { marginTop: statusItems.length ? '12px' : 0 } },
+                { style: { marginTop: showTranslationStatusList ? '12px' : 0 } },
                 createElement(Button, {
                     variant: 'secondary',
                     onClick: refreshData,
