@@ -1280,20 +1280,39 @@ class TranslationRuntime {
 
 	public static function maybe_adjust_chunk_limit_from_error( \WP_Error $error, int $chunk_char_limit ): int {
 		$context_window_tokens = self::extract_context_window_tokens_from_error( $error );
-		if ( $context_window_tokens < 1 ) {
+		if ( $context_window_tokens > 0 ) {
+			self::remember_context_window_tokens( $context_window_tokens );
+
+			$adjusted = self::get_chunk_char_limit_from_context_window( $context_window_tokens );
+			if ( $adjusted >= $chunk_char_limit ) {
+				$adjusted = (int) floor( $chunk_char_limit / 2 );
+			}
+
+			$adjusted = max( self::MIN_TRANSLATION_CHARS, min( $chunk_char_limit - 1, $adjusted ) );
+
+			return $adjusted >= $chunk_char_limit ? 0 : $adjusted;
+		}
+
+		// Some connectors hard-timeout around 30s and return transport errors
+		// (often cURL error 28) for large prompts. Shrink chunk size and retry.
+		if ( ! self::is_timeout_transport_error( $error ) ) {
 			return 0;
 		}
 
-		self::remember_context_window_tokens( $context_window_tokens );
-
-		$adjusted = self::get_chunk_char_limit_from_context_window( $context_window_tokens );
-		if ( $adjusted >= $chunk_char_limit ) {
-			$adjusted = (int) floor( $chunk_char_limit / 2 );
-		}
-
+		$adjusted = (int) floor( $chunk_char_limit * 0.6 );
 		$adjusted = max( self::MIN_TRANSLATION_CHARS, min( $chunk_char_limit - 1, $adjusted ) );
 
 		return $adjusted >= $chunk_char_limit ? 0 : $adjusted;
+	}
+
+	private static function is_timeout_transport_error( \WP_Error $error ): bool {
+		foreach ( $error->get_error_messages() as $message ) {
+			if ( preg_match( '/cURL\s+error\s+28|timed?\s+out|timeout/i', (string) $message ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public static function extract_context_window_tokens_from_error( \WP_Error $error ): int {

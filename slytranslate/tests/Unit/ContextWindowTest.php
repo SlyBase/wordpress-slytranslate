@@ -157,4 +157,48 @@ class ContextWindowTest extends TestCase {
 		);
 		$this->assertSame( 4096, $result );
 	}
+
+	// -----------------------------------------------------------------------
+	// maybe_adjust_chunk_limit_from_error
+	// -----------------------------------------------------------------------
+
+	public function test_maybe_adjust_chunk_limit_reduces_on_transport_timeout(): void {
+		$error  = new \WP_Error( 'prompt_network_error', 'Network error: cURL error 28: Operation timed out after 30002 milliseconds with 0 bytes received.' );
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'maybe_adjust_chunk_limit_from_error',
+			[ $error, 2457 ]
+		);
+		$this->assertSame( 1474, $result );
+	}
+
+	public function test_maybe_adjust_chunk_limit_returns_zero_at_min_chunk_size(): void {
+		$error  = new \WP_Error( 'prompt_network_error', 'Network error: cURL error 28: Operation timed out after 30002 milliseconds with 0 bytes received.' );
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'maybe_adjust_chunk_limit_from_error',
+			[ $error, 1200 ]
+		);
+		$this->assertSame( 0, $result );
+	}
+
+	public function test_maybe_adjust_chunk_limit_does_not_reduce_on_non_timeout_network_error(): void {
+		$error  = new \WP_Error( 'prompt_network_error', 'Network error: Connection refused.' );
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'maybe_adjust_chunk_limit_from_error',
+			[ $error, 2457 ]
+		);
+		$this->assertSame( 0, $result );
+	}
+
+	public function test_maybe_adjust_chunk_limit_prefers_context_window_hint(): void {
+		$error  = new \WP_Error( 'prompt_network_error', 'maximum context length is 4096 tokens and request timed out' );
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'maybe_adjust_chunk_limit_from_error',
+			[ $error, 5000 ]
+		);
+		$this->assertSame( 2048, $result );
+	}
 }
