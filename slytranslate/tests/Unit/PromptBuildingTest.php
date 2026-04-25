@@ -120,10 +120,12 @@ class PromptBuildingTest extends TestCase {
 		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( 'towerinstruct-7b' ) );
 		$this->assertFalse( $payload['use_system_prompt'] );
 		$this->assertSame( '', $payload['system_prompt'] );
-		$this->assertStringContainsString( 'Translate the following text from English into German.', $payload['user_content'] );
-		$this->assertStringContainsString( 'Follow these translation rules: Prompt', $payload['user_content'] );
-		$this->assertStringContainsString( 'English:', $payload['user_content'] );
-		$this->assertStringContainsString( 'German:', $payload['user_content'] );
+		$this->assertStringContainsString( 'Translate the following text from EN into DE.', $payload['user_content'] );
+		$this->assertStringContainsString( 'CRITICAL OUTPUT FORMAT: Return only the translation enclosed in <slytranslate-output> and </slytranslate-output>.', $payload['user_content'] );
+		$this->assertStringContainsString( 'MANDATORY TRANSLATION RULES (obey exactly): Prompt', $payload['user_content'] );
+		$this->assertStringContainsString( 'CRITICAL: Apply every translation rule above exactly.', $payload['user_content'] );
+		$this->assertStringContainsString( 'EN:', $payload['user_content'] );
+		$this->assertStringContainsString( 'DE:', $payload['user_content'] );
 	}
 
 	public function test_ministral_profile_builds_bilingual_user_only_payload(): void {
@@ -140,10 +142,28 @@ class PromptBuildingTest extends TestCase {
 		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( 'ministral-8b-instruct' ) );
 		$this->assertFalse( $payload['use_system_prompt'] );
 		$this->assertSame( '', $payload['system_prompt'] );
-		$this->assertStringContainsString( 'Translate the following text from English into German.', $payload['user_content'] );
-		$this->assertStringContainsString( 'Follow these translation rules: Prompt', $payload['user_content'] );
-		$this->assertStringContainsString( 'English:', $payload['user_content'] );
-		$this->assertStringContainsString( 'German:', $payload['user_content'] );
+		$this->assertStringContainsString( 'Translate the following text from EN into DE.', $payload['user_content'] );
+		$this->assertStringContainsString( 'CRITICAL OUTPUT FORMAT: Return only the translation enclosed in <slytranslate-output> and </slytranslate-output>.', $payload['user_content'] );
+		$this->assertStringContainsString( 'MANDATORY TRANSLATION RULES (obey exactly): Prompt', $payload['user_content'] );
+		$this->assertStringContainsString( 'CRITICAL: Apply every translation rule above exactly.', $payload['user_content'] );
+		$this->assertStringContainsString( 'EN:', $payload['user_content'] );
+		$this->assertStringContainsString( 'DE:', $payload['user_content'] );
+	}
+
+	public function test_bilingual_payload_uses_generic_labels_for_any_language_codes(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'pt_BR' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'zh-hans' );
+
+		$profile = TranslationRuntime::get_model_profile( 'Ministral-8B-Instruct-2410-Q4_K_M' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array( 'Hello world', 'Prompt', $profile, false, 0 )
+		);
+
+		$this->assertStringContainsString( 'Translate the following text from PT-BR into ZH-HANS.', $payload['user_content'] );
+		$this->assertStringContainsString( 'PT-BR:', $payload['user_content'] );
+		$this->assertStringContainsString( 'ZH-HANS:', $payload['user_content'] );
 	}
 
 	public function test_ministral_bilingual_payload_keeps_user_additional_prompt_verbatim(): void {
@@ -164,8 +184,31 @@ class PromptBuildingTest extends TestCase {
 			)
 		);
 
-		$this->assertStringContainsString( 'Follow these translation rules: ' . $user_prompt, $payload['user_content'] );
+		$this->assertStringContainsString( 'MANDATORY TRANSLATION RULES (obey exactly): ' . $user_prompt, $payload['user_content'] );
+		$this->assertStringContainsString( 'CRITICAL: Apply every translation rule above exactly.', $payload['user_content'] );
 		$this->assertStringNotContainsString( 'STYLE REQUIREMENT (German):', $payload['user_content'] );
+	}
+
+	public function test_qwen_profile_adds_enable_thinking_false_kwargs_when_supported(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$profile = TranslationRuntime::get_model_profile( 'Qwen3.5-4B-Q4_K_M' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array( 'Hello world', 'Prompt', $profile, true, 0 )
+		);
+
+		$this->assertSame( 'qwen_thinking_aware', $profile['id'] ?? '' );
+		$this->assertSame(
+			array(
+				'chat_template_kwargs' => array(
+					'enable_thinking' => false,
+				),
+			),
+			$payload['extra_request_body']
+		);
 	}
 
 	public function test_default_profile_keeps_system_plus_user_payload_shape(): void {

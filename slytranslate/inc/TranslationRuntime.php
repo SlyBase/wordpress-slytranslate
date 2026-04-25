@@ -48,6 +48,8 @@ class TranslationRuntime {
 	private const REQUEST_MODE_USER_ONLY        = 'user_only';
 	private const PROMPT_STYLE_GENERIC_TEMPLATE = 'generic_template';
 	private const PROMPT_STYLE_BILINGUAL_FRAME  = 'bilingual_frame';
+	private const OUTPUT_WRAPPER_OPEN           = '<slytranslate-output>';
+	private const OUTPUT_WRAPPER_CLOSE          = '</slytranslate-output>';
 	private const CHUNK_STRATEGY_DEFAULT        = 'default';
 	private const CHUNK_STRATEGY_TOWER          = 'tower_conservative';
 	private const KNOWN_MODEL_CONTEXT_WINDOWS   = array(
@@ -514,24 +516,19 @@ class TranslationRuntime {
 
 	private static function resolve_language_label( ?string $language_code, string $fallback ): string {
 		$normalized = strtolower( trim( (string) $language_code ) );
-		switch ( $normalized ) {
-			case 'en':
-				return 'English';
-			case 'de':
-				return 'German';
-			case 'fr':
-				return 'French';
-			case 'es':
-				return 'Spanish';
-			case 'it':
-				return 'Italian';
-			case 'nl':
-				return 'Dutch';
-			case 'pl':
-				return 'Polish';
-			default:
-				return '' !== $normalized ? strtoupper( $normalized ) : $fallback;
+		if ( '' === $normalized ) {
+			return $fallback;
 		}
+
+		$normalized = str_replace( '_', '-', $normalized );
+		$normalized = preg_replace( '/[^a-z0-9-]+/i', '', $normalized );
+		if ( ! is_string( $normalized ) ) {
+			return $fallback;
+		}
+
+		$normalized = trim( $normalized, '-' );
+
+		return '' !== $normalized ? strtoupper( $normalized ) : $fallback;
 	}
 
 	private static function build_bilingual_frame_prompt( string $text, string $prompt, int $validation_attempt ): string {
@@ -540,8 +537,10 @@ class TranslationRuntime {
 
 		$parts   = array();
 		$parts[] = sprintf( 'Translate the following text from %1$s into %2$s.', $source_label, $target_label );
+		$parts[] = sprintf( 'CRITICAL OUTPUT FORMAT: Return only the translation enclosed in %1$s and %2$s. Do not output anything before or after these tags.', self::OUTPUT_WRAPPER_OPEN, self::OUTPUT_WRAPPER_CLOSE );
 		if ( '' !== trim( $prompt ) ) {
-			$parts[] = 'Follow these translation rules: ' . trim( $prompt );
+			$parts[] = 'MANDATORY TRANSLATION RULES (obey exactly): ' . trim( $prompt );
+			$parts[] = 'CRITICAL: Apply every translation rule above exactly.';
 		}
 		if ( $validation_attempt > 0 ) {
 			$parts[] = sprintf( 'CRITICAL: Return only %s. Do not copy sentences in %s.', $target_label, $source_label );
@@ -970,6 +969,10 @@ class TranslationRuntime {
 		string $prompt,
 		int $validation_attempt
 	): mixed {
+		if ( self::PROMPT_STYLE_BILINGUAL_FRAME === self::get_prompt_style_for_model( $model_slug ) ) {
+			$translated_text = self::extract_bilingual_frame_translation( $translated_text );
+		}
+
 		$translated_text  = self::unwrap_pseudo_tag_translation( $source_text, $translated_text );
 		$translated_text  = TranslationValidator::normalize_symbol_notation( $source_text, $translated_text );
 		$validation_error = TranslationValidator::validate( $source_text, $translated_text, self::$target_lang );
@@ -1546,12 +1549,72 @@ class TranslationRuntime {
 		$retry_prompt = $prompt . "\n\nCRITICAL: Return only the translated content. Preserve HTML tags, Gutenberg block comments, URLs, code fences, and source symbols exactly. Do not rewrite Unicode symbols or math notation as LaTeX or ASCII. Do not add explanations, bullet lists, markdown headings, or commentary. The output length MUST be approximately the same as the input length; do not append extra paragraphs.";
 		$uses_bilingual_prompt_style = self::PROMPT_STYLE_BILINGUAL_FRAME === self::get_prompt_style_for_model( $model_slug );
 
+		if ( $uses_bilingual_prompt_style ) {
+			$retry_prompt .= "\n\n" . sprintf( 'CRITICAL OUTPUT FORMAT: Return only the translation enclosed in %1$s and %2$s. Do not output anything before or after these tags.', self::OUTPUT_WRAPPER_OPEN, self::OUTPUT_WRAPPER_CLOSE );
+		}
+
 		if ( $uses_bilingual_prompt_style || 'invalid_translation_language_passthrough' === $validation_error_code ) {
 			$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'the target language' );
 			$retry_prompt .= "\n\nCRITICAL: The final output must be in {$target_label}. Do not keep source-language sentences unchanged.";
 		}
 
+		if ( '' !== trim( $prompt ) ) {
+			$retry_prompt .= "\n\nCRITICAL: Keep obeying the user-provided translation rules above.";
+		}
+
 		return $retry_prompt;
+	}
+
+	private static function extract_bilingual_frame_translation( string $translated_text ): string {
+		$trimmed = trim( $translated_text );
+		if ( '' === $trimmed ) {
+			return $translated_text;
+		}
+
+		$wrapped_pattern = '/' . preg_quote( self::OUTPUT_WRAPPER_OPEN, '/' ) . '(.*?)' . preg_quote( self::OUTPUT_WRAPPER_CLOSE, '/' ) . '/is';
+		if ( 1 === preg_match( $wrapped_pattern, $trimmed, $matches ) && isset( $matches[1] ) && is_string( $matches[1] ) ) {
+			$candidate = trim( $matches[1] );
+			if ( '' !== $candidate ) {
+				return $candidate;
+			}
+		}
+
+		$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, '' );
+		if ( '' === $target_label ) {
+			return $translated_text;
+		}
+
+		$label_pattern = '/(?:^|\R)\s*(?:\*\*)?'
+			. preg_quote( $target_label, '/' )
+			. '\s*:\s*(?:\*\*)?\s*/iu';
+
+		if ( 1 !== preg_match_all( $label_pattern, $trimmed, $label_matches, PREG_OFFSET_CAPTURE )
+			|| empty( $label_matches[0] )
+		) {
+			return $translated_text;
+		}
+
+		$last_label = end( $label_matches[0] );
+		if ( ! is_array( $last_label ) || ! isset( $last_label[0], $last_label[1] ) ) {
+			return $translated_text;
+		}
+
+		$offset = (int) $last_label[1] + strlen( (string) $last_label[0] );
+		if ( $offset >= strlen( $trimmed ) ) {
+			return $translated_text;
+		}
+
+		$candidate = trim( substr( $trimmed, $offset ) );
+		if ( '' === $candidate ) {
+			return $translated_text;
+		}
+
+		$tail_parts = preg_split( '/\R\s*(?:notes?|explanation|reasoning|analysis|source|english)\s*:\s*/iu', $candidate, 2 );
+		if ( is_array( $tail_parts ) && isset( $tail_parts[0] ) && is_string( $tail_parts[0] ) ) {
+			$candidate = trim( $tail_parts[0] );
+		}
+
+		return '' !== $candidate ? $candidate : $translated_text;
 	}
 
 	/* ---------------------------------------------------------------

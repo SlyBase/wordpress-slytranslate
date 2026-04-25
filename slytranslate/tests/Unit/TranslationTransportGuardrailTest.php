@@ -259,9 +259,9 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertSame( 'Hallo Welt', $result );
 		$this->assertCount( 1, $captured_body['messages'] ?? array() );
 		$this->assertSame( 'user', $captured_body['messages'][0]['role'] ?? null );
-		$this->assertStringContainsString( 'Translate the following text from English into German.', $captured_body['messages'][0]['content'] ?? '' );
-		$this->assertStringContainsString( 'English:', $captured_body['messages'][0]['content'] ?? '' );
-		$this->assertStringContainsString( 'German:', $captured_body['messages'][0]['content'] ?? '' );
+		$this->assertStringContainsString( 'Translate the following text from EN into DE.', $captured_body['messages'][0]['content'] ?? '' );
+		$this->assertStringContainsString( 'EN:', $captured_body['messages'][0]['content'] ?? '' );
+		$this->assertStringContainsString( 'DE:', $captured_body['messages'][0]['content'] ?? '' );
 	}
 
 	public function test_non_translategemma_still_falls_back_to_wp_ai_client(): void {

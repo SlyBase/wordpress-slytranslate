@@ -4,9 +4,14 @@
 * Translation compatibility: post-type validation and source-content queries now honor the active language adapter (including lang=all for WP Multilang).
 * Translation quality: WP Multilang translations now extract the source-language variant before AI translation to avoid re-translating [:lang]...[:] wrapper markup.
 * Dev workflow: deploy script/task now target the dynamic wp-loco test pod via configurable namespace/selector and resilient kubectl binary resolution.
+* Prompting: bilingual-frame source/target labels are now derived generically from normalized language codes (for example pt_BR -> PT-BR) instead of a hardcoded language-name list.
 
 = 1.6.0 =
 * Prompting: removed the hardcoded DE formality rule so tone/style requirements come only from the user-provided additional_prompt.
+* Prompting: bilingual-frame prompts now mark user rules as mandatory (MANDATORY TRANSLATION RULES) and retries reinforce that those user rules must still be obeyed.
+* Prompting: bilingual-frame prompts/retries now require a strict <slytranslate-output>...</slytranslate-output> wrapper and runtime extraction of that wrapper (or trailing German: label block) to reduce explanation/runaway leakage in long-model outputs.
+* Profiles: added family-specific AI1 profiles for Qwen, GLM, Gemma 4, and Nemotron that send chat_template_kwargs.enable_thinking=false when supported to avoid empty thinking-only outputs.
+* Profiles: added conservative bilingual profiles for EuroLLM, Llama 3.1/Sauerkraut, and Ministral-3 to improve robustness on long posts with stricter retry chunking.
 * Tests: added explicit coverage that bilingual-frame payloads and retry prompts keep the user-provided additional_prompt text verbatim.
 * Ministral: added a dedicated model profile (ministral, ministral-8b, ministral-8b-instruct) using user-only bilingual framing (English:/German:) with stricter validation-retry settings and 1,800-char retry chunking.
 * Retry: bilingual-frame profiles now always append a hard target-language requirement on validation retries, improving recovery from assistant-style or mixed-language outputs.

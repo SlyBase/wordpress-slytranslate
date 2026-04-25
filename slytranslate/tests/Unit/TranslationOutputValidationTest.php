@@ -56,6 +56,38 @@ class TranslationOutputValidationTest extends TestCase {
 		);
 
 		$this->assertStringContainsString( $user_prompt, $retry_prompt );
+		$this->assertStringContainsString( 'CRITICAL OUTPUT FORMAT: Return only the translation enclosed in <slytranslate-output> and </slytranslate-output>.', $retry_prompt );
+		$this->assertStringContainsString( 'CRITICAL: Keep obeying the user-provided translation rules above.', $retry_prompt );
+	}
+
+	public function test_extracts_wrapper_payload_from_bilingual_model_output(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$source_text = 'Please open your dashboard and continue.';
+		$model_output = "Sure, here is the translation.\n\n<slytranslate-output>Bitte oeffne dein Dashboard und fahre mit dem naechsten Schritt fort.</slytranslate-output>\n\nDone.";
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'finalize_translated_chunk',
+			array( $source_text, $model_output, 'Qwen3.5-9B-Instruct-2507-Q4_K_M', 'Prompt', 0 )
+		);
+
+		$this->assertSame( 'Bitte oeffne dein Dashboard und fahre mit dem naechsten Schritt fort.', $result );
+	}
+
+	public function test_extracts_trailing_target_label_block_from_bilingual_model_output(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$source_text = 'Please open your dashboard and continue.';
+		$model_output = "Reasoning: keep tone young but professional.\n\nDE:\nBitte oeffne dein Dashboard und fahre mit dem naechsten Schritt fort.";
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'finalize_translated_chunk',
+			array( $source_text, $model_output, 'Ministral-8B-Instruct-2410-Q4_K_M', 'Prompt', 0 )
+		);
+
+		$this->assertSame( 'Bitte oeffne dein Dashboard und fahre mit dem naechsten Schritt fort.', $result );
 	}
 
 	public function test_normalizes_leading_german_label_leakage_for_de_target(): void {
@@ -499,7 +531,7 @@ class TranslationOutputValidationTest extends TestCase {
 						$this->input_texts[] = $this->text;
 
 						if ( 1 === $this->call_count ) {
-							if ( preg_match( '/English:\\s*(.*?)\\s*German:\\s*$/s', $this->text, $matches ) && is_string( $matches[1] ?? null ) ) {
+							if ( preg_match( '/EN:\\s*(.*?)\\s*DE:\\s*$/s', $this->text, $matches ) && is_string( $matches[1] ?? null ) ) {
 								return trim( $matches[1] );
 							}
 
@@ -517,6 +549,6 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertIsString( $result );
 		$this->assertGreaterThanOrEqual( 3, $call_count );
 		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $input_texts[1] ?? '' );
-		$this->assertStringContainsString( 'CRITICAL: The final output must be in German.', $input_texts[1] ?? '' );
+		$this->assertStringContainsString( 'CRITICAL: The final output must be in DE.', $input_texts[1] ?? '' );
 	}
 }
