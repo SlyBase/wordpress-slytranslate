@@ -16,6 +16,7 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - Dev workflow: deploy script/task now target the dynamic `wp-loco` test pod via configurable namespace/selector and resilient kubectl binary resolution.
 - Prompting: bilingual-frame source/target labels are now derived generically from normalized language codes (for example `pt_BR` → `PT-BR`) instead of a hardcoded language-name list.
 - Reliability: direct API transport now treats llama.cpp router capacity errors (`HTTP 500` with `model limit reached, try again later`) as retryable backoff events, reducing hard failures on single-model (`models-max=1`) setups.
+- Reliability: increased default `slytranslate_direct_api_timeout` from 120 s to 300 s to cover large model load and swap times on integrated GPUs, preventing the double-timeout cascade (direct API → WP AI Client fallback) that caused ~300 s hard failures.
 
 ## [1.6.0]
 - Prompting: removed the hardcoded DE formality rule so tone/style requirements come only from the user-provided `additional_prompt`.

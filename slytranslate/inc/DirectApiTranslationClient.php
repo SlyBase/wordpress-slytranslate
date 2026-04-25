@@ -84,17 +84,20 @@ class DirectApiTranslationClient {
 				/**
 				 * HTTP timeout (seconds) for direct-API translation calls.
 				 *
-				 * Defaults to 120 because llama.cpp / vLLM endpoints can
-				 * legitimately take 60–90 s to generate a 1000-character
-				 * response on smaller models, and the previous 30 s default
-				 * caused single slow chunks to fail the entire content phase
-				 * even though the endpoint was healthy and recovering.
+				 * Defaults to 300 because llama.cpp router endpoints may need to
+				 * swap models on demand (unload one model and load another), which
+				 * can take 2–4 minutes for large models (≥ 13 GB) on integrated
+				 * GPUs. At 120 s the request timed out during the model-load phase,
+				 * triggering a WP-AI-Client fallback that also timed out, doubling
+				 * the total wait to ~300 s and causing the entire chunk to fail.
+				 * Raising the limit to 300 s covers even the slowest model swap
+				 * while keeping a finite safety bound on hung connections.
 				 *
 				 * @param int    $timeout    Timeout in seconds.
 				 * @param string $endpoint   Resolved API endpoint URL.
 				 * @param string $model_slug Model identifier sent to the endpoint.
 				 */
-				'timeout' => (int) apply_filters( 'slytranslate_direct_api_timeout', 120, $endpoint, $model_slug ),
+				'timeout' => (int) apply_filters( 'slytranslate_direct_api_timeout', 300, $endpoint, $model_slug ),
 			)
 		);
 		$transport_duration_ms = TimingLogger::stop( $transport_started );
