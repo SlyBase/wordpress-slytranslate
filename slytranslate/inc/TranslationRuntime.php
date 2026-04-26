@@ -793,13 +793,9 @@ class TranslationRuntime {
 	}
 
 	public static function translate_chunk( string $text, string $prompt, int $validation_attempt = 0 ): mixed {
-		$runtime_context           = self::get_runtime_context();
-		$model_slug                = self::$model_slug_override ?? $runtime_context['model_slug'];
-		$model_profile             = self::get_model_profile( $model_slug );
-		$requires_strict_direct_api = ! empty( $model_profile['requires_strict_direct_api'] );
-		$requires_chat_template_kwargs = ! empty( $model_profile['requires_chat_template_kwargs'] );
-		$direct_api_url            = $runtime_context['direct_api_url'];
-		$kwargs_supported          = self::direct_api_kwargs_supported();
+		$runtime_context = self::get_runtime_context();
+		$model_slug      = self::$model_slug_override ?? $runtime_context['model_slug'];
+		$model_profile   = self::get_model_profile( $model_slug );
 
 		if ( empty( $model_profile['supports_chat_completions'] ) ) {
 			$error_message = sprintf(
@@ -810,8 +806,6 @@ class TranslationRuntime {
 			self::record_transport_diagnostics( array(
 				'transport'        => 'blocked',
 				'model_slug'       => $model_slug,
-				'direct_api_url'   => is_string( $direct_api_url ) ? $direct_api_url : '',
-				'kwargs_supported' => $kwargs_supported,
 				'fallback_allowed' => false,
 				'failure_reason'   => 'chat_transport_unsupported',
 				'error_code'       => 'model_chat_transport_unsupported',
@@ -821,209 +815,9 @@ class TranslationRuntime {
 			return new \WP_Error( 'model_chat_transport_unsupported', $error_message );
 		}
 
-		if ( $requires_chat_template_kwargs && is_string( $direct_api_url ) && '' !== $direct_api_url && ! $kwargs_supported ) {
-			$kwargs_supported = self::refresh_direct_api_kwargs_detection( $direct_api_url, $model_slug );
-		}
-
-		if ( $requires_strict_direct_api ) {
-			if ( ! is_string( $direct_api_url ) || '' === $direct_api_url ) {
-				$error_message = __( 'TranslateGemma requires a direct API endpoint. Configure direct_api_url for your llama.cpp server or switch to an instruct model.', 'slytranslate' );
-				self::record_transport_diagnostics( array(
-					'transport'        => 'blocked',
-					'model_slug'       => $model_slug,
-					'direct_api_url'   => '',
-					'kwargs_supported' => false,
-					'fallback_allowed' => false,
-					'failure_reason'   => 'direct_api_required',
-					'error_code'       => 'translategemma_requires_direct_api',
-					'error_message'    => $error_message,
-				) );
-
-				return new \WP_Error(
-					'translategemma_requires_direct_api',
-					$error_message
-				);
-			}
-
-			if ( $requires_chat_template_kwargs && ! $kwargs_supported ) {
-				$error_message = __( 'TranslateGemma requires chat_template_kwargs support on the configured direct API endpoint. Re-save the direct API settings after the server is reachable, or switch to an instruct model.', 'slytranslate' );
-				self::record_transport_diagnostics( array(
-					'transport'        => 'blocked',
-					'model_slug'       => $model_slug,
-					'direct_api_url'   => $direct_api_url,
-					'kwargs_supported' => false,
-					'fallback_allowed' => false,
-					'failure_reason'   => 'kwargs_required',
-					'error_code'       => 'translategemma_requires_kwargs',
-					'error_message'    => $error_message,
-				) );
-
-				return new \WP_Error(
-					'translategemma_requires_kwargs',
-					$error_message
-				);
-			}
-		}
-
-		$input_chars = self::char_length( $text );
+		$input_chars       = self::char_length( $text );
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
-		$transport_payload = self::build_transport_payload( $text, $prompt, $model_profile, $kwargs_supported, $validation_attempt );
-
-		// Use the direct API only for strict model profiles that require
-		// chat-template kwargs (e.g. TranslateGemma). All normal models use the
-		// connector-managed WP AI Client transport.
-		if ( self::should_use_direct_api( $model_slug, (string) $direct_api_url ) ) {
-			$direct_started = TimingLogger::start();
-			$result         = DirectApiTranslationClient::translate(
-				(string) $transport_payload['user_content'],
-				(string) $transport_payload['system_prompt'],
-				! empty( $transport_payload['use_system_prompt'] ),
-				$model_slug,
-				$direct_api_url,
-				(float) $transport_payload['temperature'],
-				$max_output_tokens,
-				(array) $transport_payload['extra_request_body']
-			);
-			$direct_duration_ms = TimingLogger::stop( $direct_started );
-			TimingLogger::increment( 'ai_calls' );
-
-			if ( is_wp_error( $result ) ) {
-				$direct_error_code             = (string) $result->get_error_code();
-				$is_retryable_capacity_failure = in_array(
-					$direct_error_code,
-					array( 'direct_api_rate_limited', 'direct_api_model_limit_reached' ),
-					true
-				);
-				TimingLogger::log( 'ai_call', array(
-					'transport'   => 'direct',
-					'model'       => $model_slug,
-					'input_chars' => $input_chars,
-					'output_chars' => 0,
-					'duration_ms' => $direct_duration_ms,
-					'attempt'     => $validation_attempt,
-					'ok'          => false,
-					'reason'      => $is_retryable_capacity_failure ? 'rate_limited' : 'connection_error',
-				) );
-
-				// Retry transient direct-endpoint capacity errors:
-				//   - HTTP 429 provider-side rate limits
-				//   - HTTP 500 single-model router capacity errors
-				//     ("model limit reached, try again later").
-				//
-				// In both cases the endpoint is healthy and asks us to wait.
-				// Falling back to another transport for the same chunk usually
-				// hits the same bottleneck, so sleep-and-retry is better.
-				if ( $is_retryable_capacity_failure ) {
-					self::record_transport_diagnostics( array(
-						'transport'        => 'direct_api_failed',
-						'model_slug'       => $model_slug,
-						'direct_api_url'   => $direct_api_url,
-						'kwargs_supported' => $kwargs_supported,
-						'fallback_allowed' => ! $requires_strict_direct_api,
-						'failure_reason'   => $direct_error_code,
-						'error_code'       => $direct_error_code,
-						'error_message'    => $result->get_error_message(),
-					) );
-					return self::handle_rate_limit_and_retry( $result, $text, $prompt, $validation_attempt, $model_slug );
-				}
-
-				// Strict-direct-API models (e.g. TranslateGemma) cannot fall
-				// back to the WP AI Client because they require chat-template
-				// kwargs that the generic Client transport does not expose.
-				if ( $requires_strict_direct_api ) {
-					self::record_transport_diagnostics( array(
-						'transport'        => 'direct_api_failed',
-						'model_slug'       => $model_slug,
-						'direct_api_url'   => $direct_api_url,
-						'kwargs_supported' => $kwargs_supported,
-						'fallback_allowed' => false,
-						'failure_reason'   => 'direct_api_connection_error',
-						'error_code'       => $direct_error_code,
-						'error_message'    => $result->get_error_message(),
-					) );
-					return $result;
-				}
-
-				// For all other models, a single timeout / connection drop on
-				// the direct API must not tear down the entire content phase
-				// — the endpoint is typically healthy again on the very next
-				// chunk. Fall back to the WP AI Client transport for THIS
-				// chunk only and let subsequent chunks try the direct path
-				// again.
-				TimingLogger::increment( 'fallbacks' );
-				TimingLogger::log( 'ai_call_fallback', array(
-					'from'   => 'direct',
-					'to'     => 'wp_ai_client',
-					'reason' => 'direct_api_connection_error',
-					'model'  => $model_slug,
-				) );
-				self::record_transport_diagnostics( array(
-					'transport'        => 'direct_api_failed',
-					'model_slug'       => $model_slug,
-					'direct_api_url'   => $direct_api_url,
-					'kwargs_supported' => $kwargs_supported,
-					'fallback_allowed' => true,
-					'failure_reason'   => 'direct_api_connection_error',
-				) );
-			} elseif ( is_string( $result ) ) {
-				TimingLogger::log( 'ai_call', array(
-					'transport'    => 'direct',
-					'model'        => $model_slug,
-					'input_chars'  => $input_chars,
-					'output_chars' => self::char_length( $result ),
-					'duration_ms'  => $direct_duration_ms,
-					'attempt'      => $validation_attempt,
-					'ok'           => true,
-				) );
-				self::record_transport_diagnostics( array(
-					'transport'        => 'direct_api',
-					'model_slug'       => $model_slug,
-					'direct_api_url'   => $direct_api_url,
-					'kwargs_supported' => $kwargs_supported,
-					'fallback_allowed' => ! $requires_strict_direct_api,
-					'failure_reason'   => '',
-				) );
-				return self::finalize_translated_chunk( $text, $result, $model_slug, $prompt, $validation_attempt );
-			}
-
-			TimingLogger::log( 'ai_call', array(
-				'transport'    => 'direct',
-				'model'        => $model_slug,
-				'input_chars'  => $input_chars,
-				'output_chars' => 0,
-				'duration_ms'  => $direct_duration_ms,
-				'attempt'      => $validation_attempt,
-				'ok'           => false,
-				'reason'       => 'non_2xx_or_empty',
-			) );
-
-			if ( $requires_strict_direct_api ) {
-				$error_message = __( 'TranslateGemma direct API request failed. SlyTranslate did not fall back to the WordPress AI Client because TranslateGemma requires chat_template_kwargs for reliable translations.', 'slytranslate' );
-				self::record_transport_diagnostics( array(
-					'transport'        => 'direct_api_failed',
-					'model_slug'       => $model_slug,
-					'direct_api_url'   => $direct_api_url,
-					'kwargs_supported' => $kwargs_supported,
-					'fallback_allowed' => false,
-					'failure_reason'   => 'direct_api_failed',
-					'error_code'       => 'translategemma_direct_api_failed',
-					'error_message'    => $error_message,
-				) );
-
-				return new \WP_Error(
-					'translategemma_direct_api_failed',
-					$error_message
-				);
-			}
-
-			TimingLogger::increment( 'fallbacks' );
-			TimingLogger::log( 'ai_call_fallback', array(
-				'from'   => 'direct',
-				'to'     => 'wp_ai_client',
-				'reason' => 'direct_api_returned_null',
-				'model'  => $model_slug,
-			) );
-		}
+		$transport_payload = self::build_transport_payload( $text, $prompt, $model_profile, true, $validation_attempt );
 
 		$wp_started = TimingLogger::start();
 		$builder    = wp_ai_client_prompt( (string) $transport_payload['user_content'] );
@@ -1057,8 +851,6 @@ class TranslationRuntime {
 		self::record_transport_diagnostics( array(
 			'transport'        => 'wp_ai_client',
 			'model_slug'       => $model_slug,
-			'direct_api_url'   => is_string( $direct_api_url ) ? $direct_api_url : '',
-			'kwargs_supported' => $kwargs_supported,
 			'fallback_allowed' => true,
 			'failure_reason'   => '',
 		) );
@@ -1077,8 +869,6 @@ class TranslationRuntime {
 			self::record_transport_diagnostics( array(
 				'transport'        => 'wp_ai_client',
 				'model_slug'       => $model_slug,
-				'direct_api_url'   => is_string( $direct_api_url ) ? $direct_api_url : '',
-				'kwargs_supported' => $kwargs_supported,
 				'fallback_allowed' => true,
 				'failure_reason'   => $result->get_error_code(),
 				'error_code'       => $result->get_error_code(),
@@ -1103,90 +893,11 @@ class TranslationRuntime {
 			return $result;
 		}
 
-		$wp_result = $result;
-
-		// Some reasoning-capable models on connector transports can return an
-		// empty `content` field (with hidden reasoning output), which then
-		// hard-fails validation as invalid_translation_empty. Keep WP AI Client
-		// as the default transport, but try one direct-API recovery call when a
-		// compatible endpoint is configured.
-		if ( is_string( $result )
-			&& '' === trim( $result )
-			&& is_string( $direct_api_url )
-			&& '' !== $direct_api_url
-			&& '' !== $model_slug
-			&& ! $requires_strict_direct_api
-		) {
-			$direct_started = TimingLogger::start();
-			$direct_result  = DirectApiTranslationClient::translate(
-				(string) $transport_payload['user_content'],
-				(string) $transport_payload['system_prompt'],
-				! empty( $transport_payload['use_system_prompt'] ),
-				$model_slug,
-				$direct_api_url,
-				(float) $transport_payload['temperature'],
-				$max_output_tokens,
-				(array) $transport_payload['extra_request_body']
-			);
-			$direct_duration_ms = TimingLogger::stop( $direct_started );
-			TimingLogger::increment( 'ai_calls' );
-
-			if ( is_string( $direct_result ) && '' !== trim( $direct_result ) ) {
-				TimingLogger::increment( 'fallbacks' );
-				TimingLogger::log( 'ai_call_fallback', array(
-					'from'   => 'wp_ai_client',
-					'to'     => 'direct',
-					'reason' => 'wp_ai_client_empty_output',
-					'model'  => $model_slug,
-				) );
-				TimingLogger::log( 'ai_call', array(
-					'transport'    => 'direct',
-					'model'        => $model_slug,
-					'input_chars'  => $input_chars,
-					'output_chars' => self::char_length( $direct_result ),
-					'duration_ms'  => $direct_duration_ms,
-					'attempt'      => $validation_attempt,
-					'ok'           => true,
-				) );
-				self::record_transport_diagnostics( array(
-					'transport'        => 'direct_api',
-					'model_slug'       => $model_slug,
-					'direct_api_url'   => $direct_api_url,
-					'kwargs_supported' => $kwargs_supported,
-					'fallback_allowed' => true,
-					'failure_reason'   => '',
-				) );
-				$result = $direct_result;
-			} elseif ( is_wp_error( $direct_result ) ) {
-				TimingLogger::log( 'ai_call', array(
-					'transport'    => 'direct',
-					'model'        => $model_slug,
-					'input_chars'  => $input_chars,
-					'output_chars' => 0,
-					'duration_ms'  => $direct_duration_ms,
-					'attempt'      => $validation_attempt,
-					'ok'           => false,
-					'reason'       => $direct_result->get_error_code(),
-				) );
-			} else {
-				TimingLogger::log( 'ai_call', array(
-					'transport'    => 'direct',
-					'model'        => $model_slug,
-					'input_chars'  => $input_chars,
-					'output_chars' => 0,
-					'duration_ms'  => $direct_duration_ms,
-					'attempt'      => $validation_attempt,
-					'ok'           => false,
-					'reason'       => 'non_2xx_or_empty',
-				) );
-			}
-		}
-
 		TimingLogger::log( 'ai_call', array(
 			'transport'    => 'wp_ai_client',
 			'model'        => $model_slug,
 			'input_chars'  => $input_chars,
-			'output_chars' => is_string( $wp_result ) ? self::char_length( $wp_result ) : 0,
+			'output_chars' => is_string( $result ) ? self::char_length( $result ) : 0,
 			'duration_ms'  => $wp_duration_ms,
 			'attempt'      => $validation_attempt,
 			'ok'           => true,
@@ -1362,8 +1073,6 @@ class TranslationRuntime {
 			self::record_transport_diagnostics( array(
 				'transport'        => 'wp_ai_client_plain',
 				'model_slug'       => $model_slug,
-				'direct_api_url'   => '',
-				'kwargs_supported' => self::direct_api_kwargs_supported(),
 				'fallback_allowed' => true,
 				'failure_reason'   => $result->get_error_code(),
 				'error_code'       => $result->get_error_code(),
@@ -1394,8 +1103,6 @@ class TranslationRuntime {
 		self::record_transport_diagnostics( array(
 			'transport'        => 'wp_ai_client_plain',
 			'model_slug'       => $model_slug,
-			'direct_api_url'   => '',
-			'kwargs_supported' => self::direct_api_kwargs_supported(),
 			'fallback_allowed' => true,
 			'failure_reason'   => '',
 			'error_code'       => '',
@@ -1447,21 +1154,6 @@ class TranslationRuntime {
 		$runtime_context     = self::get_runtime_context();
 		$context_window_size = self::get_learned_context_window_tokens();
 
-		// Opportunistic: if a direct API endpoint is configured but we have
-		// not yet recorded a context window for the active model, probe the
-		// endpoint's model list once per day for OpenAI-compatible
-		// `context_window` / `meta.n_ctx_train` fields. This lets hosted
-		// providers (Groq, OpenRouter, …) and local servers (llama.cpp,
-		// llama-swap, vLLM) advertise their actual capacity without the
-		// plugin having to ship a hardcoded model-name table.
-		if ( $context_window_size < 1
-			&& '' !== $runtime_context['direct_api_url']
-			&& '' !== $runtime_context['model_slug']
-			&& self::maybe_autoprobe_direct_api_context_windows( $runtime_context['direct_api_url'] )
-		) {
-			$context_window_size = self::get_learned_context_window_tokens();
-		}
-
 		if ( $context_window_size < 1 ) {
 			$context_window_size = self::get_known_context_window_for_model( $runtime_context['model_slug'] );
 		}
@@ -1503,7 +1195,7 @@ class TranslationRuntime {
 			return self::$context;
 		}
 
-		$direct_api_url = (string) get_option( 'ai_translate_direct_api_url', '' );
+		$direct_api_url = '';
 		$model_slug     = self::normalize_requested_model_slug( get_option( 'ai_translate_model_slug', '' ) );
 
 		// Final fallback in the model-selection hierarchy:

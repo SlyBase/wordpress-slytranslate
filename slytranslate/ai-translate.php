@@ -49,7 +49,7 @@ class AI_Translate {
 				'request_mode'               => 'user_only',
 				'prompt_style'               => 'generic_template',
 				'supports_system_role'       => false,
-				'requires_strict_direct_api' => true,
+				'requires_strict_direct_api' => false,
 				'requires_chat_template_kwargs' => true,
 				'extra_request_body'         => array(
 					'chat_template_kwargs' => array(

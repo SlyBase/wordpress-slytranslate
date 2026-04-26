@@ -122,7 +122,13 @@ class RequestedModelSlugTest extends TestCase {
 		$this->assertSame( 'nvidia/nemotron-3-super-120b-a12b:free', $result );
 	}
 
-	public function test_translategemma_slug_maps_to_strict_direct_api_profile(): void {
-		$this->assertTrue( TranslationRuntime::model_requires_strict_direct_api( 'translategemma-4b-it.Q4_K_M' ) );
+	public function test_translategemma_slug_routes_through_wp_ai_client_with_chat_template_kwargs(): void {
+		$model_slug = 'translategemma-4b-it.Q4_K_M';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'translategemma', $profile['id'] );
+		$this->assertFalse( TranslationRuntime::model_requires_strict_direct_api( $model_slug ) );
+		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertArrayHasKey( 'chat_template_kwargs', $profile['extra_request_body'] );
 	}
 }
