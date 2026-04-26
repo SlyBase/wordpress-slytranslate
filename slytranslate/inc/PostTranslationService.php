@@ -264,14 +264,19 @@ class PostTranslationService {
 		$title_prompt = '' !== trim( $additional_prompt ) ? $additional_prompt . "\n\n" . $title_hint : $title_hint;
 		$translated   = TranslationRuntime::translate_text( $title, $target_language, $source_language, $title_prompt );
 
-		if ( ! is_wp_error( $translated ) || 'invalid_translation_empty' !== $translated->get_error_code() ) {
+		if ( ! is_wp_error( $translated ) ) {
+			return $translated;
+		}
+
+		$error_code = $translated->get_error_code();
+		if ( ! in_array( $error_code, array( 'invalid_translation_empty', 'invalid_translation_assistant_reply' ), true ) ) {
 			return $translated;
 		}
 
 		TimingLogger::increment( 'retries' );
 		TimingLogger::log( 'ai_validation_retry', array(
 			'model'    => TranslationRuntime::get_requested_model_slug(),
-			'reason'   => 'invalid_translation_empty',
+			'reason'   => $error_code,
 			'phase'    => 'title',
 			'strategy' => 'retry_without_title_hint',
 		) );
