@@ -238,6 +238,33 @@ class TranslationRuntime {
 	 * Model slug override (per-ability-call scope)
 	 * ------------------------------------------------------------- */
 
+	public static function normalize_requested_model_slug( $model_slug ): string {
+		if ( ! is_string( $model_slug ) ) {
+			return '';
+		}
+
+		$normalized = trim( sanitize_text_field( $model_slug ) );
+		if ( '' === $normalized ) {
+			return '';
+		}
+
+		if ( 1 === preg_match( '/^openrouter\s+(.+)$/i', $normalized, $matches )
+			&& is_string( $matches[1] )
+			&& false !== strpos( $matches[1], '/' )
+		) {
+			return trim( $matches[1] );
+		}
+
+		if ( 1 === preg_match( '/^[^:]+:\s+(.+)$/', $normalized, $matches )
+			&& is_string( $matches[1] )
+			&& false !== strpos( $matches[1], '/' )
+		) {
+			return trim( $matches[1] );
+		}
+
+		return $normalized;
+	}
+
 	public static function with_model_slug_override( $input, callable $callback ): mixed {
 		$previous                    = self::$model_slug_override;
 		$previous_context            = self::$context;
@@ -245,7 +272,7 @@ class TranslationRuntime {
 			&& isset( $input['model_slug'] )
 			&& is_string( $input['model_slug'] )
 			&& '' !== $input['model_slug']
-				? sanitize_text_field( $input['model_slug'] )
+				? self::normalize_requested_model_slug( $input['model_slug'] )
 				: null;
 		self::$context = null;
 
@@ -1353,7 +1380,7 @@ class TranslationRuntime {
 		}
 
 		$direct_api_url = (string) get_option( 'ai_translate_direct_api_url', '' );
-		$model_slug     = (string) get_option( 'ai_translate_model_slug', '' );
+		$model_slug     = self::normalize_requested_model_slug( get_option( 'ai_translate_model_slug', '' ) );
 
 		// Final fallback in the model-selection hierarchy:
 		//   1. per-call override (with_model_slug_override())
@@ -1375,10 +1402,10 @@ class TranslationRuntime {
 		// `slytranslate_default_model_slug` filter remains available so
 		// integrations can override the default explicitly.
 		if ( '' === $model_slug ) {
-			$model_slug = (string) apply_filters(
+			$model_slug = self::normalize_requested_model_slug( apply_filters(
 				'slytranslate_default_model_slug',
 				self::resolve_first_available_model_slug()
-			);
+			) );
 		}
 
 		if ( is_string( self::$model_slug_override ) && '' !== self::$model_slug_override ) {

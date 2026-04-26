@@ -155,7 +155,7 @@ class PromptBuildingTest extends TestCase {
 		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'de' );
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'en' );
 
-		$profile = TranslationRuntime::get_model_profile( 'openrouter nvidia/nemotron-3-super-120b-a12b:free' );
+		$profile = TranslationRuntime::get_model_profile( 'nvidia/nemotron-3-super-120b-a12b:free' );
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
@@ -163,7 +163,7 @@ class PromptBuildingTest extends TestCase {
 		);
 
 		$this->assertSame( 'openrouter_nemotron', $profile['id'] ?? '' );
-		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( 'openrouter nvidia/nemotron-3-super-120b-a12b:free' ) );
+		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( 'nvidia/nemotron-3-super-120b-a12b:free' ) );
 		$this->assertTrue( $payload['use_system_prompt'] );
 		$this->assertSame( 'Prompt', $payload['system_prompt'] );
 		$this->assertSame( 'Katze', $payload['user_content'] );

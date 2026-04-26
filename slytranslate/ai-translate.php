@@ -191,7 +191,7 @@ class AI_Translate {
 			),
 			array(
 				'id'                         => 'openrouter_nemotron',
-				'matchers'                   => array( 'openrouter nvidia/nemotron', 'openrouter nemotron' ),
+				'matchers'                   => array( 'nvidia/nemotron', 'openrouter nvidia/nemotron', 'openrouter nemotron' ),
 				'request_mode'               => 'system_plus_user',
 				'prompt_style'               => 'generic_template',
 				'supports_system_role'       => true,

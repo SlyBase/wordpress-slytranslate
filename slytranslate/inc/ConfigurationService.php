@@ -44,7 +44,7 @@ class ConfigurationService {
 			}
 		}
 		if ( array_key_exists( 'model_slug', $input ) ) {
-			$model_slug_value = is_string( $input['model_slug'] ) ? sanitize_text_field( $input['model_slug'] ) : '';
+			$model_slug_value = TranslationRuntime::normalize_requested_model_slug( $input['model_slug'] ?? '' );
 			if ( '' === $model_slug_value ) {
 				delete_option( 'ai_translate_model_slug' );
 			} else {

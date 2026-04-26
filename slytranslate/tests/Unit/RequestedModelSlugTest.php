@@ -103,12 +103,23 @@ class RequestedModelSlugTest extends TestCase {
 	}
 
 	public function test_openrouter_nemotron_slug_maps_to_system_prompt_profile(): void {
-		$model_slug = 'openrouter nvidia/nemotron-3-super-120b-a12b:free';
+		$model_slug = 'nvidia/nemotron-3-super-120b-a12b:free';
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );
 
 		$this->assertSame( 'openrouter_nemotron', $profile['id'] );
 		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
 		$this->assertFalse( ! empty( $profile['requires_chat_template_kwargs'] ) );
+	}
+
+	public function test_with_model_slug_override_normalizes_openrouter_label_prefix(): void {
+		$result = TranslationRuntime::with_model_slug_override(
+			array( 'model_slug' => 'openrouter nvidia/nemotron-3-super-120b-a12b:free' ),
+			static function (): string {
+				return TranslationRuntime::get_requested_model_slug();
+			}
+		);
+
+		$this->assertSame( 'nvidia/nemotron-3-super-120b-a12b:free', $result );
 	}
 
 	public function test_translategemma_slug_maps_to_strict_direct_api_profile(): void {
