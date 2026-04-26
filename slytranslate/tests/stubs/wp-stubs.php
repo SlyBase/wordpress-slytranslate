@@ -118,6 +118,55 @@ function wp_create_nonce( $action = -1 ): string {
 	} );
 }
 
+function wp_verify_nonce( $nonce, $action = -1 ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function check_admin_referer( $action = -1, $query_arg = '_wpnonce' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function plugins_url( $path = '', $plugin = '' ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $path = '' ) {
+		$base = 'https://example.test/wp-content/plugins/slytranslate/';
+		return $base . ltrim( (string) $path, '/' );
+	} );
+}
+
+function plugin_dir_path( $file ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $file ) {
+		return rtrim( dirname( (string) $file ), '/\\' ) . '/';
+	} );
+}
+
+function wp_enqueue_script( ...$args ): void {
+	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return null;
+	} );
+}
+
+function wp_localize_script( ...$args ): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return true;
+	} );
+}
+
+function wp_set_script_translations( ...$args ): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return true;
+	} );
+}
+
+function register_setting( ...$args ): void {
+	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return null;
+	} );
+}
+
 function wp_strip_all_tags( $string, bool $remove_breaks = false ): string {
 $string = preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $string );
 $string = strip_tags( $string );
@@ -155,6 +204,54 @@ function esc_html( $text ): string {
 
 function esc_attr( $text ): string {
 	return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
+}
+
+function _n( $single, $plural, $number, $domain = null ): string {
+	return (int) $number === 1 ? (string) $single : (string) $plural;
+}
+
+function number_format_i18n( $number, $decimals = 0 ): string {
+	return number_format( (float) $number, (int) $decimals, '.', ',' );
+}
+
+function wp_unslash( $value ) {
+	if ( is_array( $value ) ) {
+		return array_map( 'wp_unslash', $value );
+	}
+	return stripslashes( (string) $value );
+}
+
+function add_query_arg( ...$args ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, $args, static function () use ( $args ) {
+		if ( count( $args ) >= 3 && is_array( $args[0] ) ) {
+			$params = $args[0];
+			$base   = (string) $args[2];
+			$query  = http_build_query( $params );
+			return $base . ( str_contains( $base, '?' ) ? '&' : '?' ) . $query;
+		}
+
+		if ( count( $args ) >= 3 ) {
+			$key   = (string) $args[0];
+			$value = (string) $args[1];
+			$base  = (string) $args[2];
+			$query = http_build_query( array( $key => $value ) );
+			return $base . ( str_contains( $base, '?' ) ? '&' : '?' ) . $query;
+		}
+
+		return '';
+	} );
+}
+
+function admin_url( $path = '', $scheme = 'admin' ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $path = '' ) {
+		return 'https://example.test/wp-admin/' . ltrim( (string) $path, '/' );
+	} );
+}
+
+function wp_safe_redirect( $location, int $status = 302, $x_redirect_by = 'WordPress' ): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
 }
 
 function trailingslashit( $value ): string {

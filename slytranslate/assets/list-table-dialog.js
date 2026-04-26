@@ -291,10 +291,16 @@
 	var pickerAllLanguages = [];
 	var pickerMissingCodes = {};
 	var pickerExistingCodes = {};
+	var pickerBootstrapPrompt = _data.lastAdditionalPrompt || '';
 	try { pickerLastSlug = (window.localStorage && window.localStorage.getItem('aiTranslateModelSlug')) || ''; } catch (e) { }
 
 	function readStoredAdditionalPrompt() {
-		try { return (window.localStorage && window.localStorage.getItem('aiTranslateLastAdditionalPrompt')) || ''; } catch (e) { return ''; }
+		try {
+			var stored = (window.localStorage && window.localStorage.getItem('aiTranslateLastAdditionalPrompt')) || '';
+			return stored || pickerBootstrapPrompt || '';
+		} catch (e) {
+			return pickerBootstrapPrompt || '';
+		}
 	}
 	function storeAdditionalPrompt(value) {
 		try { if (window.localStorage) { window.localStorage.setItem('aiTranslateLastAdditionalPrompt', value || ''); } } catch (e) { }

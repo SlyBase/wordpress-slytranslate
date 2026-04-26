@@ -30,6 +30,32 @@ class Settings {
 		register_setting( $g, 'ai_translate_direct_api_kwargs_detected',       array( 'sanitize_callback' => 'sanitize_key',            'default' => '0' ) );
 		register_setting( $g, 'ai_translate_direct_api_kwargs_last_probed_at', array( 'sanitize_callback' => 'absint',                  'default' => 0 ) );
 		register_setting( $g, 'ai_translate_direct_api_models_last_probed_at', array( 'sanitize_callback' => 'absint',                  'default' => 0 ) );
-		register_setting( $g, 'ai_translate_learned_context_windows',          array( 'sanitize_callback' => null,                      'default' => array() ) );
+		register_setting( $g, 'ai_translate_learned_context_windows',          array( 'sanitize_callback' => array( self::class, 'sanitize_learned_context_windows' ), 'default' => array() ) );
+	}
+
+	/**
+	 * Sanitize learned model context windows.
+	 *
+	 * @param mixed $value Raw option value.
+	 * @return array<string,int>
+	 */
+	public static function sanitize_learned_context_windows( $value ): array {
+		if ( ! is_array( $value ) ) {
+			return array();
+		}
+
+		$sanitized = array();
+		foreach ( $value as $model_slug => $context_window ) {
+			$model_slug = sanitize_key( (string) $model_slug );
+			$tokens     = absint( $context_window );
+
+			if ( '' === $model_slug || $tokens < 1 ) {
+				continue;
+			}
+
+			$sanitized[ $model_slug ] = min( $tokens, 131072 );
+		}
+
+		return $sanitized;
 	}
 }

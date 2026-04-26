@@ -16,6 +16,8 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - UI: list-table translation now includes an explicit overwrite option with a confirmation warning.
 
 ### Changes
+- Admin: list-table dialog and background task bar scripts are now loaded through enqueued assets with localized bootstrap data instead of inline admin JavaScript.
+- Compatibility: plugin header and plugin readme metadata now declare WordPress 6.9 as minimum and tested version format.
 - Prompting: tone/formality rules now come solely from `additional_prompt`; hardcoded DE formality rule removed.
 - Prompting: bilingual-frame output must be wrapped in `<slytranslate-output>…</slytranslate-output>` to reduce runaway leakage.
 - Transport: direct API request assembly is now profile-driven instead of model-specific branching.
@@ -25,6 +27,9 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - MCP: `get-translation-status` now publicly advertises `single_entry_mode`, and `translate-content` guidance now documents the safer source-language call order.
 
 ### Fixes
+- Security: single and bulk translation admin notices now require a verified notice nonce before result parameters are read.
+- Security: `ai_translate_learned_context_windows` now sanitizes and bounds learned model context-window values via the Settings API callback.
+- Reliability: request runtime extension now applies only as an opt-in bounded value through `slytranslate_max_request_seconds`.
 - Validation: `gemma-4` context window corrected to 131,072 tokens (was 8,192), fixing excessive over-chunking.
 - Validation: bilingual label leakage (`German:` / `Deutsch:`) normalized before validation to reduce false failures.
 - Validation: added passthrough detection for English carry-over in German-target translations.

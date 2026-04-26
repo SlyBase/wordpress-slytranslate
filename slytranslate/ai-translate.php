@@ -2,11 +2,11 @@
 /*
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://wordpress.org/plugins/slytranslate/
-Description: AI translation abilities for WordPress using WordPress 7 native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
+Description: AI translation abilities for WordPress using native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
 Version: 1.6.0
 Author: Timon Först
 Author URI: https://github.com/SlyBase/wordpress-slytranslate
-Requires at least: 7.0
+Requires at least: 6.9
 Requires PHP: 8.1
 License: MIT
 Text Domain: slytranslate
@@ -502,9 +502,13 @@ class AI_Translate {
 		if ( function_exists( 'ignore_user_abort' ) ) {
 			ignore_user_abort( true );
 		}
-		if ( function_exists( 'set_time_limit' ) && ! ini_get( 'safe_mode' ) ) {
-			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- bounded runtime extension is required for long-running server-side translations.
-			set_time_limit( (int) apply_filters( 'slytranslate_max_request_seconds', 600 ) );
+		if ( function_exists( 'set_time_limit' ) ) {
+			$max_request_seconds = (int) apply_filters( 'slytranslate_max_request_seconds', 0 );
+			if ( $max_request_seconds > 0 ) {
+				$max_request_seconds = max( 30, min( 300, $max_request_seconds ) );
+				// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- opt-in runtime extension for long-running server-side translations.
+				set_time_limit( $max_request_seconds );
+			}
 		}
 		TranslationProgressTracker::clear_cancelled();
 		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;

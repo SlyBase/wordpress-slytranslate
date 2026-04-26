@@ -19,6 +19,9 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 - The commit title must follow the pattern `vX.Y.Z-beta.N`.
 - `X.Y.Z` is the current plugin version from `slytranslate/ai-translate.php` and `slytranslate/readme.txt`.
 - `N` increments within the current version line, for example `v1.5.6-beta.1`, then `v1.5.6-beta.2`.
+- Before creating the beta commit, run `SlyTranslate: Build Plugin ZIP` (or `.github/scripts/build-plugin-zip.sh`) once so generated language files are refreshed.
+- If that refresh updates tracked `.mo` files, stage them and include them in the same beta commit.
+- Do not create the beta commit while any tracked generated language file changes are still unstaged or uncommitted.
 
 ## 3) Build and deploy after the commit
 

@@ -1,8 +1,8 @@
 === SlyTranslate - AI Translation Abilities ===
 Contributors: timonf
 Tags: ai, translation, abilities-api, polylang, wp-multilang
-Requires at least: 7.0
-Tested up to: 7.0.0
+Requires at least: 6.9
+Tested up to: 6.9
 Requires PHP: 8.1
 Stable tag: 1.6.0
 License: MIT
@@ -12,7 +12,7 @@ AI translation abilities for WordPress using native AI Connectors, the AI Client
 
 == Description ==
 
-SlyTranslate brings practical AI translation to WordPress 7. It is built for teams that need translation directly in editing workflows and also want the same workflows available through REST and MCP automation.
+SlyTranslate brings practical AI translation to WordPress. It is built for teams that need translation directly in editing workflows and also want the same workflows available through REST and MCP automation.
 
 **Why this plugin?**
 
@@ -26,7 +26,7 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 **Internal flow (short):**
 
-* Uses native WordPress 7 AI connectors through `wp_ai_client_prompt()`.
+* Uses native WordPress AI connectors through `wp_ai_client_prompt()`.
 * Registers translation workflows as WordPress Abilities.
 * Exposes abilities over REST (`/wp-abilities/v1/`) and MCP discovery.
 * Supports long/structured content with chunking and output validation.
@@ -54,7 +54,7 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 **Requirements:**
 
-* WordPress 7.0+
+* WordPress 6.9+
 * PHP 8.1+
 * An AI connector configured in WordPress (Settings > Connectors)
 * A supported language plugin (Polylang or WP Multilang) for content-translation workflows across posts/pages/CPTs
@@ -73,7 +73,7 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 == Installation ==
 
-1. Ensure WordPress 7.0+ and PHP 8.1+ are running.
+1. Ensure WordPress 6.9+ and PHP 8.1+ are running.
 2. Install and configure an AI connector in Settings > Connectors.
 3. Optional for content translation: install and activate Polylang or WP Multilang.
 4. Optional for local llama.cpp models: install AI Provider for llama.cpp.

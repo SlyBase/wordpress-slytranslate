@@ -80,7 +80,13 @@ class HookRegistrationTest extends TestCase {
 					'accepted_args' => 1,
 				),
 				array(
-					'hook'          => 'admin_footer',
+					'hook'          => 'admin_enqueue_scripts',
+					'callback'      => array( ListTableTranslation::class, 'enqueue_list_table_assets' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'hook'          => 'admin_enqueue_scripts',
 					'callback'      => array( ListTableTranslation::class, 'enqueue_global_background_bar' ),
 					'priority'      => 10,
 					'accepted_args' => 1,
