@@ -1,0 +1,219 @@
+#slytranslate-model-picker,
+#slytranslate-list-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.45);
+	align-items: center;
+	justify-content: center;
+}
+
+#slytranslate-model-picker {
+	z-index: 100101;
+}
+
+#slytranslate-list-overlay {
+	z-index: 100100;
+}
+
+.slytranslate-modal-dialog {
+	background: #fff;
+	border-radius: 8px;
+	padding: 24px 28px;
+	width: 90%;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.slytranslate-model-picker-dialog {
+	max-width: 520px;
+}
+
+.slytranslate-list-dialog {
+	max-width: 420px;
+}
+
+.slytranslate-modal-title {
+	margin: 0 0 16px;
+	font-size: 15px;
+}
+
+.slytranslate-picker-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+	grid-template-areas:
+		"source-label switch-label target-label"
+		"source-control switch-control target-control";
+	column-gap: 14px;
+	row-gap: 6px;
+	align-items: start;
+	margin-bottom: 12px;
+}
+
+.slytranslate-picker-label {
+	display: block;
+	font-size: 12px;
+	line-height: 1.4;
+	color: #50575e;
+	margin: 0;
+	padding: 0;
+}
+
+.slytranslate-picker-label-source {
+	grid-area: source-label;
+}
+
+.slytranslate-picker-label-target {
+	grid-area: target-label;
+}
+
+.slytranslate-picker-switch-label {
+	grid-area: switch-label;
+	display: block;
+	font-size: 12px;
+	line-height: 1.4;
+	visibility: hidden;
+	overflow: hidden;
+	white-space: nowrap;
+	margin: 0;
+	padding: 0;
+}
+
+.slytranslate-picker-source {
+	grid-area: source-control;
+	width: 100%;
+	min-width: 0;
+	max-width: none;
+	height: 40px;
+	min-height: 40px;
+}
+
+.slytranslate-picker-target {
+	grid-area: target-control;
+	width: 100%;
+	min-width: 0;
+	max-width: none;
+	height: 40px;
+	min-height: 40px;
+}
+
+.slytranslate-picker-switch-wrap {
+	grid-area: switch-control;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	align-self: center;
+}
+
+.slytranslate-picker-icon-button {
+	width: 40px;
+	min-width: 40px;
+	height: 40px;
+	min-height: 40px;
+	padding: 0;
+	line-height: 0;
+	overflow: hidden;
+	text-align: center;
+}
+
+.slytranslate-picker-icon {
+	display: block;
+	margin: 10px auto;
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+	line-height: 1;
+}
+
+.slytranslate-picker-model-label {
+	margin-bottom: 6px;
+}
+
+.slytranslate-picker-model-row {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.slytranslate-picker-model-select {
+	flex: 1;
+	min-width: 0;
+	max-width: none;
+	height: 40px;
+}
+
+.slytranslate-picker-status {
+	margin-top: 8px;
+	font-size: 12px;
+	color: #50575e;
+	min-height: 18px;
+}
+
+.slytranslate-picker-prompt-label {
+	margin: 12px 0 6px;
+}
+
+.slytranslate-picker-prompt {
+	width: 100%;
+	resize: vertical;
+}
+
+.slytranslate-picker-prompt-help {
+	margin-top: 4px;
+	font-size: 11px;
+	color: #50575e;
+}
+
+.slytranslate-picker-overwrite-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 12px;
+	font-size: 12px;
+	color: #50575e;
+}
+
+.slytranslate-picker-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 16px;
+}
+
+.slytranslate-list-progress-wrap {
+	margin-bottom: 12px;
+}
+
+.slytranslate-list-progress-track {
+	height: 8px;
+	border-radius: 999px;
+	overflow: hidden;
+	background: #dcdcde;
+}
+
+.slytranslate-list-progress-bar {
+	width: 0%;
+	height: 100%;
+	background: linear-gradient(90deg, #3858e9 0%, #1d4ed8 100%);
+	transition: width 0.3s ease;
+}
+
+.slytranslate-list-progress-label {
+	font-size: 12px;
+	color: #50575e;
+	margin-top: 6px;
+}
+
+.slytranslate-list-result {
+	margin-bottom: 12px;
+	padding: 10px 12px;
+	border-radius: 4px;
+	font-size: 13px;
+}
+
+.slytranslate-list-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+}

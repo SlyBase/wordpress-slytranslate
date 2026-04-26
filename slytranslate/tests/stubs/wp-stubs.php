@@ -149,6 +149,12 @@ function wp_enqueue_script( ...$args ): void {
 	} );
 }
 
+function wp_enqueue_style( ...$args ): void {
+	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return null;
+	} );
+}
+
 function wp_localize_script( ...$args ): bool {
 	return (bool) slytranslate_test_call_override( __FUNCTION__, $args, static function () {
 		return true;

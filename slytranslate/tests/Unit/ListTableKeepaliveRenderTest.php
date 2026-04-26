@@ -10,6 +10,7 @@ class ListTableKeepaliveRenderTest extends TestCase {
 
 	public function test_list_table_assets_enqueue_script_with_bootstrap_data(): void {
 		$enqueued = array();
+		$enqueued_styles = array();
 		$localized = array();
 
 		$this->stubWpFunction(
@@ -33,6 +34,18 @@ class ListTableKeepaliveRenderTest extends TestCase {
 		);
 
 		$this->stubWpFunction(
+			'wp_enqueue_style',
+			static function ( string $handle, string $src, array $deps, string $ver ) use ( &$enqueued_styles ): void {
+				$enqueued_styles[] = array(
+					'handle'  => $handle,
+					'src'     => $src,
+					'deps'    => $deps,
+					'version' => $ver,
+				);
+			}
+		);
+
+		$this->stubWpFunction(
 			'wp_localize_script',
 			static function ( string $handle, string $object_name, array $data ) use ( &$localized ): bool {
 				$localized[] = array(
@@ -50,6 +63,10 @@ class ListTableKeepaliveRenderTest extends TestCase {
 		$this->stubWpFunctionReturn( 'wp_create_nonce', 'rest-test-nonce' );
 
 		ListTableTranslation::enqueue_list_table_assets( 'edit.php' );
+
+		$this->assertCount( 1, $enqueued_styles );
+		$this->assertSame( 'slytranslate-list-table-dialog-style', $enqueued_styles[0]['handle'] );
+		$this->assertStringContainsString( 'assets/list-table-dialog.css', $enqueued_styles[0]['src'] );
 
 		$this->assertCount( 1, $enqueued );
 		$this->assertSame( 'slytranslate-list-table-dialog', $enqueued[0]['handle'] );

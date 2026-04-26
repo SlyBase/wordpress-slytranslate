@@ -11,6 +11,7 @@ defined( 'ABSPATH' ) || exit;
 class ListTableTranslation {
 
 	private const LIST_TABLE_SCRIPT_HANDLE     = 'slytranslate-list-table-dialog';
+	private const LIST_TABLE_STYLE_HANDLE      = 'slytranslate-list-table-dialog-style';
 	private const BACKGROUND_BAR_SCRIPT_HANDLE = 'slytranslate-background-bar';
 
 	/* ---------------------------------------------------------------
@@ -285,7 +286,7 @@ class ListTableTranslation {
 			}
 		}
 
-		$bulk_ok = isset( $_GET['ai_translate_bulk_ok'] ) ? absint( $_GET['ai_translate_bulk_ok'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated below
+		$bulk_ok = isset( $_GET['ai_translate_bulk_ok'] ) ? absint( wp_unslash( $_GET['ai_translate_bulk_ok'] ) ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated below
 		if ( null === $bulk_ok ) {
 			return;
 		}
@@ -295,8 +296,8 @@ class ListTableTranslation {
 			return;
 		}
 
-		$bulk_skipped = absint( $_GET['ai_translate_bulk_skipped'] ?? 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
-		$bulk_errors  = absint( $_GET['ai_translate_bulk_errors']  ?? 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
+		$bulk_skipped = absint( wp_unslash( $_GET['ai_translate_bulk_skipped'] ?? 0 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
+		$bulk_errors  = absint( wp_unslash( $_GET['ai_translate_bulk_errors']  ?? 0 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
 
 		$parts = array();
 
@@ -348,6 +349,13 @@ class ListTableTranslation {
 		if ( ! AI_Translate::current_user_can_access_translation_abilities() ) {
 			return;
 		}
+
+		wp_enqueue_style(
+			self::LIST_TABLE_STYLE_HANDLE,
+			plugins_url( 'assets/list-table-dialog.css', self::plugin_base_file() ),
+			array(),
+			self::asset_version( 'assets/list-table-dialog.css' )
+		);
 
 		wp_enqueue_script(
 			self::LIST_TABLE_SCRIPT_HANDLE,
@@ -479,52 +487,52 @@ class ListTableTranslation {
 		$strings = self::get_list_table_strings();
 
 		?>
-		<div id="slytranslate-model-picker" style="display:none;position:fixed;inset:0;z-index:100101;background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
-			<div style="background:#fff;border-radius:8px;padding:24px 28px;max-width:520px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,.25);">
-				<h3 id="slytranslate-model-picker-title" style="margin:0 0 16px;font-size:15px;"></h3>
-				<div style="display:grid;grid-template-columns:minmax(0,1fr) 40px minmax(0,1fr);grid-template-areas:'source-label switch-label target-label' 'source-control switch-control target-control';column-gap:14px;row-gap:6px;align-items:start;margin-bottom:12px;">
-					<label for="slytranslate-picker-source" style="grid-area:source-label;display:block;font-size:12px;line-height:1.4;color:#50575e;margin:0;padding:0;"><?php echo esc_html( $strings['pickerSourceLabel'] ); ?></label>
-					<span aria-hidden="true" style="grid-area:switch-label;display:block;font-size:12px;line-height:1.4;visibility:hidden;overflow:hidden;white-space:nowrap;margin:0;padding:0;">&nbsp;</span>
-					<label for="slytranslate-picker-target" style="grid-area:target-label;display:block;font-size:12px;line-height:1.4;color:#50575e;margin:0;padding:0;"><?php echo esc_html( $strings['pickerTargetLabel'] ); ?></label>
-					<select id="slytranslate-picker-source" style="grid-area:source-control;width:100%;min-width:0;max-width:none;height:40px;min-height:40px;"></select>
-					<div style="grid-area:switch-control;display:flex;align-items:center;justify-content:center;align-self:center;">
-						<button id="slytranslate-picker-swap" type="button" class="button" title="<?php echo esc_attr( $strings['pickerSwapTitle'] ); ?>" style="width:40px;min-width:40px;height:40px;min-height:40px;padding:0;line-height:0;overflow:hidden;text-align:center;"><span class="dashicons dashicons-controls-repeat" style="display:block;margin:10px auto;font-size:20px;width:20px;height:20px;line-height:1;"></span></button>
+		<div id="slytranslate-model-picker" class="slytranslate-modal-overlay slytranslate-model-picker-overlay">
+			<div class="slytranslate-modal-dialog slytranslate-model-picker-dialog">
+				<h3 id="slytranslate-model-picker-title" class="slytranslate-modal-title"></h3>
+				<div class="slytranslate-picker-grid">
+					<label for="slytranslate-picker-source" class="slytranslate-picker-label slytranslate-picker-label-source"><?php echo esc_html( $strings['pickerSourceLabel'] ); ?></label>
+					<span aria-hidden="true" class="slytranslate-picker-switch-label">&nbsp;</span>
+					<label for="slytranslate-picker-target" class="slytranslate-picker-label slytranslate-picker-label-target"><?php echo esc_html( $strings['pickerTargetLabel'] ); ?></label>
+					<select id="slytranslate-picker-source" class="slytranslate-picker-source"></select>
+					<div class="slytranslate-picker-switch-wrap">
+						<button id="slytranslate-picker-swap" type="button" class="button slytranslate-picker-icon-button" title="<?php echo esc_attr( $strings['pickerSwapTitle'] ); ?>"><span class="dashicons dashicons-controls-repeat slytranslate-picker-icon"></span></button>
 					</div>
-					<select id="slytranslate-picker-target" style="grid-area:target-control;width:100%;min-width:0;max-width:none;height:40px;min-height:40px;"></select>
+					<select id="slytranslate-picker-target" class="slytranslate-picker-target"></select>
 				</div>
-				<label for="slytranslate-model-picker-select" style="display:block;font-size:12px;color:#50575e;margin-bottom:6px;"><?php echo esc_html( $strings['pickerModelLabel'] ); ?></label>
-				<div style="display:flex;gap:6px;align-items:center;width:100%;box-sizing:border-box;">
-					<select id="slytranslate-model-picker-select" style="flex:1;min-width:0;max-width:none;height:40px;"></select>
-					<button id="slytranslate-model-picker-refresh" type="button" class="button" title="<?php echo esc_attr( $strings['pickerRefresh'] ); ?>" style="flex-shrink:0;width:40px;min-width:40px;height:40px;min-height:40px;padding:0;line-height:0;overflow:hidden;text-align:center;"><span class="dashicons dashicons-update" style="display:block;margin:10px auto;font-size:20px;width:20px;height:20px;line-height:1;"></span></button>
+				<label for="slytranslate-model-picker-select" class="slytranslate-picker-label slytranslate-picker-model-label"><?php echo esc_html( $strings['pickerModelLabel'] ); ?></label>
+				<div class="slytranslate-picker-model-row">
+					<select id="slytranslate-model-picker-select" class="slytranslate-picker-model-select"></select>
+					<button id="slytranslate-model-picker-refresh" type="button" class="button slytranslate-picker-icon-button" title="<?php echo esc_attr( $strings['pickerRefresh'] ); ?>"><span class="dashicons dashicons-update slytranslate-picker-icon"></span></button>
 				</div>
-				<div id="slytranslate-model-picker-status" style="margin-top:8px;font-size:12px;color:#50575e;min-height:18px;"></div>
-				<label for="slytranslate-picker-additional-prompt" style="display:block;font-size:12px;color:#50575e;margin:12px 0 6px;"><?php echo esc_html( $strings['pickerAdditionalPromptLabel'] ); ?></label>
-				<textarea id="slytranslate-picker-additional-prompt" rows="3" style="width:100%;resize:vertical;"></textarea>
-				<div style="margin-top:4px;font-size:11px;color:#50575e;"><?php echo esc_html( $strings['pickerAdditionalPromptHelp'] ); ?></div>
-				<label for="slytranslate-picker-overwrite" style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:#50575e;">
+				<div id="slytranslate-model-picker-status" class="slytranslate-picker-status"></div>
+				<label for="slytranslate-picker-additional-prompt" class="slytranslate-picker-label slytranslate-picker-prompt-label"><?php echo esc_html( $strings['pickerAdditionalPromptLabel'] ); ?></label>
+				<textarea id="slytranslate-picker-additional-prompt" rows="3" class="slytranslate-picker-prompt"></textarea>
+				<div class="slytranslate-picker-prompt-help"><?php echo esc_html( $strings['pickerAdditionalPromptHelp'] ); ?></div>
+				<label for="slytranslate-picker-overwrite" class="slytranslate-picker-overwrite-row">
 					<input id="slytranslate-picker-overwrite" type="checkbox" />
 					<span><?php echo esc_html( $strings['pickerOverwriteLabel'] ); ?></span>
 				</label>
-				<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+				<div class="slytranslate-picker-actions">
 					<button id="slytranslate-model-picker-cancel" type="button" class="button button-secondary"><?php echo esc_html( $strings['pickerCancel'] ); ?></button>
 					<button id="slytranslate-model-picker-start"  type="button" class="button button-primary"><?php echo esc_html( $strings['pickerStart'] ); ?></button>
 				</div>
 			</div>
 		</div>
-		<div id="slytranslate-list-overlay" style="display:none;position:fixed;inset:0;z-index:100100;background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
-			<div style="background:#fff;border-radius:8px;padding:24px 28px;max-width:420px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,.25);">
-				<h3 id="slytranslate-list-title" style="margin:0 0 16px;font-size:15px;"></h3>
-				<div id="slytranslate-list-progress-wrap" style="margin-bottom:12px;">
-					<div style="height:8px;border-radius:999px;overflow:hidden;background:#dcdcde;">
-						<div id="slytranslate-list-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#3858e9 0%,#1d4ed8 100%);transition:width .3s ease;"></div>
+		<div id="slytranslate-list-overlay" class="slytranslate-modal-overlay slytranslate-list-overlay">
+			<div class="slytranslate-modal-dialog slytranslate-list-dialog">
+				<h3 id="slytranslate-list-title" class="slytranslate-modal-title"></h3>
+				<div id="slytranslate-list-progress-wrap" class="slytranslate-list-progress-wrap">
+					<div class="slytranslate-list-progress-track">
+						<div id="slytranslate-list-bar" class="slytranslate-list-progress-bar"></div>
 					</div>
-					<div id="slytranslate-list-label" style="font-size:12px;color:#50575e;margin-top:6px;"></div>
+					<div id="slytranslate-list-label" class="slytranslate-list-progress-label"></div>
 				</div>
-				<div id="slytranslate-list-result" style="display:none;margin-bottom:12px;padding:10px 12px;border-radius:4px;font-size:13px;"></div>
-				<div style="display:flex;gap:8px;justify-content:flex-end;">
-					<button id="slytranslate-list-bg" type="button" class="button" style="display:none;"><?php echo esc_html( $strings['background'] ); ?></button>
-					<button id="slytranslate-list-cancel" type="button" class="button button-secondary" style="display:none;"><?php echo esc_html( $strings['cancel'] ); ?></button>
-					<button id="slytranslate-list-close" type="button" class="button button-primary" style="display:none;"><?php echo esc_html( $strings['close'] ); ?></button>
+				<div id="slytranslate-list-result" class="slytranslate-list-result"></div>
+				<div class="slytranslate-list-actions">
+					<button id="slytranslate-list-bg" type="button" class="button"><?php echo esc_html( $strings['background'] ); ?></button>
+					<button id="slytranslate-list-cancel" type="button" class="button button-secondary"><?php echo esc_html( $strings['cancel'] ); ?></button>
+					<button id="slytranslate-list-close" type="button" class="button button-primary"><?php echo esc_html( $strings['close'] ); ?></button>
 				</div>
 			</div>
 		</div>
