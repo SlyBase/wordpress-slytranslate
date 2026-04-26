@@ -34,7 +34,7 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - Transport: normal translations now use the WordPress AI Client by default, and legacy force-direct mode no longer overrides non-TranslateGemma models.
 - Reliability: when the WordPress AI Client returns an empty model output, SlyTranslate now performs one direct-API recovery attempt if a compatible endpoint is configured.
 - Reliability: reasoning-capable llama.cpp models (Qwen3 family) that exhaust the token budget on chain-of-thought now automatically retry once with thinking disabled instead of failing with an empty translation.
-- Reliability: WordPress AI Client transport timeouts (cURL 28) and other 5xx/connection errors now fall back to the configured direct API endpoint for non-strict models, so slow llama.cpp loads no longer fail the whole chunk.
+- Reliability: chat_template_kwargs (e.g. `enable_thinking=false` for Qwen3 / GLM) configured in a model profile are now also injected into outgoing WordPress AI Client requests, so reasoning-aware models stop returning empty translations through the connector path as well.
 - Polylang: translation creation no longer fails when the new target draft already has the requested language.
 - Reliability: title translation now retries once without the title-specific prompt hint when a model returns an empty output.
 - Reliability: repeated empty model outputs now trigger a final plain-prompt retry before translation is aborted.

@@ -54,6 +54,12 @@ function add_filter( ...$args ): void {
 		return null;
 	} );
 }
+function remove_filter( ...$args ): bool {
+	$result = slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return true;
+	} );
+	return is_bool( $result ) ? $result : true;
+}
 function do_action( ...$args ): void {
 	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
 		return null;
