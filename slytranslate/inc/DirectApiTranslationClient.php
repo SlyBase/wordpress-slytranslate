@@ -75,6 +75,48 @@ class DirectApiTranslationClient {
 			$body[ $key ] = $value;
 		}
 
+		$result = self::send_request( $endpoint, $body, $model_slug );
+
+		// Reasoning-capable models served via llama.cpp (e.g. Qwen3 family)
+		// emit their chain-of-thought into a separate `reasoning_content`
+		// field. When the configured `max_tokens` budget is exhausted by
+		// reasoning before the model can produce the final translation, the
+		// response comes back with `content: ""` and `finish_reason: "length"`.
+		// Retry once with `chat_template_kwargs.enable_thinking=false` (a
+		// llama.cpp / Qwen-style switch) so the next call skips reasoning and
+		// returns the actual translation. Other servers that ignore the kwarg
+		// simply behave as on the first attempt.
+		if ( 'retry_without_thinking' === $result ) {
+			$retry_body                          = $body;
+			$retry_kwargs                        = isset( $retry_body['chat_template_kwargs'] ) && is_array( $retry_body['chat_template_kwargs'] )
+				? $retry_body['chat_template_kwargs']
+				: array();
+			$retry_kwargs['enable_thinking']     = false;
+			$retry_body['chat_template_kwargs']  = $retry_kwargs;
+
+			$result = self::send_request( $endpoint, $retry_body, $model_slug );
+			if ( 'retry_without_thinking' === $result ) {
+				return null;
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Send one chat-completions request and parse the response.
+	 *
+	 * @param string $endpoint   Resolved chat-completions URL.
+	 * @param array  $body       Request body (will be JSON-encoded).
+	 * @param string $model_slug Model identifier (used for logging only).
+	 * @return string|\WP_Error|null|string Returns the translated text, a
+	 *         WP_Error for retryable connection/capacity failures, null for
+	 *         non-retryable API errors, or the literal string
+	 *         `'retry_without_thinking'` when the response carries an empty
+	 *         `content` together with a populated `reasoning_content` field
+	 *         (caller should retry once with thinking disabled).
+	 */
+	private static function send_request( string $endpoint, array $body, string $model_slug ): string|\WP_Error|null {
 		$transport_started = TimingLogger::start();
 		$response = wp_remote_post(
 			$endpoint,
@@ -221,7 +263,25 @@ class DirectApiTranslationClient {
 			return null;
 		}
 
-		$content = $data['choices'][0]['message']['content'] ?? null;
+		$message           = $data['choices'][0]['message'] ?? null;
+		$content           = is_array( $message ) ? ( $message['content'] ?? null ) : null;
+		$reasoning_content = is_array( $message ) ? ( $message['reasoning_content'] ?? null ) : null;
+
+		if ( is_string( $content ) && '' !== $content ) {
+			return $content;
+		}
+
+		// Empty `content` paired with non-empty `reasoning_content` means a
+		// reasoning model consumed the token budget on chain-of-thought before
+		// emitting any translation. Signal the caller to retry once with the
+		// `enable_thinking=false` chat-template kwarg.
+		if ( ( ! is_string( $content ) || '' === $content )
+			&& is_string( $reasoning_content )
+			&& '' !== trim( $reasoning_content )
+		) {
+			return 'retry_without_thinking';
+		}
+
 		if ( ! is_string( $content ) ) {
 			return null;
 		}
