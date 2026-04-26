@@ -18,7 +18,9 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 - After successful local validation, exactly one commit must be created for each completed task.
 - The commit title must follow the pattern `vX.Y.Z-beta.N`.
 - `X.Y.Z` is the current plugin version from `slytranslate/ai-translate.php` and `slytranslate/readme.txt`.
-- `N` increments within the current version line, for example `v1.5.6-beta.1`, then `v1.5.6-beta.2`.
+- `N` must be computed as `highest existing beta number for the same X.Y.Z` + 1 (check existing git commit subjects/tags first).
+- Example: if `v1.6.0-beta.20` already exists, the next commit title must be `v1.6.0-beta.21`.
+- Never reset `N` based on local examples or task count; examples in this file are illustrative only.
 - Before creating the beta commit, run `SlyTranslate: Build Plugin ZIP` (or `.github/scripts/build-plugin-zip.sh`) once so generated language files are refreshed.
 - If that refresh updates tracked `.mo` files, stage them and include them in the same beta commit.
 - Do not create the beta commit while any tracked generated language file changes are still unstaged or uncommitted.
