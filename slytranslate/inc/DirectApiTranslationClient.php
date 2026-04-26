@@ -20,7 +20,7 @@ class DirectApiTranslationClient {
 	 * @param bool        $use_system_prompt Whether the system instruction should be sent.
 	 * @param string      $model_slug        Model slug (may be empty).
 	 * @param string      $api_url           Base URL of the API server.
-	 * @param int         $temperature       Sampling temperature.
+	 * @param float       $temperature       Sampling temperature.
 	 * @param int         $max_tokens        Maximum tokens to generate (0 = no explicit limit).
 	 * @param array       $extra_request_body Additional top-level request keys from the model profile.
 	 * @return string|\WP_Error|null Translated text, WP_Error on connection failure, or null for non-fatal API errors.
@@ -31,7 +31,7 @@ class DirectApiTranslationClient {
 		bool $use_system_prompt,
 		string $model_slug,
 		string $api_url,
-		int $temperature = 0,
+		float $temperature = 0.0,
 		int $max_tokens = 0,
 		array $extra_request_body = array()
 	): string|\WP_Error|null {

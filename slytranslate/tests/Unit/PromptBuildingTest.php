@@ -126,6 +126,7 @@ class PromptBuildingTest extends TestCase {
 		$this->assertStringContainsString( 'CRITICAL: Apply every translation rule above exactly.', $payload['user_content'] );
 		$this->assertStringContainsString( 'EN:', $payload['user_content'] );
 		$this->assertStringContainsString( 'DE:', $payload['user_content'] );
+		$this->assertEqualsWithDelta( 0.2, (float) ( $payload['temperature'] ?? 0.0 ), 0.0001 );
 	}
 
 	public function test_ministral_profile_builds_bilingual_user_only_payload(): void {

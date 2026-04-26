@@ -45,6 +45,25 @@ class RequestedModelSlugTest extends TestCase {
 		$this->assertTrue( TranslationRuntime::is_tower_model( $model_slug ) );
 	}
 
+	public function test_salamandra_slug_maps_to_conservative_bilingual_profile(): void {
+		$model_slug = 'salamandraTA_7B_inst_q4';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'salamandra', $profile['id'] );
+		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
+		$this->assertSame( 'tower_conservative', TranslationRuntime::get_chunk_strategy_for_model( $model_slug ) );
+		$this->assertSame( 1200, (int) ( $profile['retry_profile']['retry_chunk_chars'] ?? 0 ) );
+		$this->assertEqualsWithDelta( 0.2, (float) ( $profile['temperature'] ?? 0.0 ), 0.0001 );
+	}
+
+	public function test_madlad_slug_maps_to_chat_unsupported_profile(): void {
+		$model_slug = 'madlad400-10b-mt.Q4_K_M';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'madlad', $profile['id'] );
+		$this->assertFalse( ! empty( $profile['supports_chat_completions'] ) );
+	}
+
 	public function test_ministral_slug_maps_to_bilingual_profile_rules(): void {
 		$model_slug = 'Ministral-8B-Instruct-2410-Q4_K_M';
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );

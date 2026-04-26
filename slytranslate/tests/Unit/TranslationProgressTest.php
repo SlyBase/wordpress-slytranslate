@@ -77,7 +77,7 @@ class TranslationProgressTest extends TestCase {
 						return $this;
 					}
 
-					public function using_temperature( int $temperature ) {
+					public function using_temperature( float $temperature ) {
 						return $this;
 					}
 

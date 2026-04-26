@@ -382,6 +382,7 @@ class TranslationRuntime {
 			'request_mode'               => self::REQUEST_MODE_SYSTEM_PLUS_USER,
 			'prompt_style'               => self::PROMPT_STYLE_GENERIC_TEMPLATE,
 			'supports_system_role'       => true,
+			'supports_chat_completions'  => true,
 			'requires_strict_direct_api' => false,
 			'requires_chat_template_kwargs' => false,
 			'extra_request_body'         => array(),
@@ -427,10 +428,12 @@ class TranslationRuntime {
 		}
 
 		$normalized['supports_system_role']       = ! empty( $normalized['supports_system_role'] );
+		$normalized['supports_chat_completions']  = ! empty( $normalized['supports_chat_completions'] );
 		$normalized['requires_strict_direct_api'] = ! empty( $normalized['requires_strict_direct_api'] );
 		$normalized['requires_chat_template_kwargs'] = ! empty( $normalized['requires_chat_template_kwargs'] );
 		$normalized['max_chunk_chars']            = absint( $normalized['max_chunk_chars'] ?? 0 );
-		$normalized['temperature']                = (int) round( is_numeric( $normalized['temperature'] ?? null ) ? (float) $normalized['temperature'] : 0.0 );
+		$temperature                              = is_numeric( $normalized['temperature'] ?? null ) ? (float) $normalized['temperature'] : 0.0;
+		$normalized['temperature']                = max( 0.0, min( 2.0, $temperature ) );
 
 		if ( ! is_array( $normalized['extra_request_body'] ) ) {
 			$normalized['extra_request_body'] = array();
@@ -608,7 +611,7 @@ class TranslationRuntime {
 		$system_prompt  = $prompt;
 		$user_content   = $source_text;
 		$use_system     = self::REQUEST_MODE_SYSTEM_PLUS_USER === $request_mode && ! empty( $model_profile['supports_system_role'] );
-		$temperature    = (int) ( $model_profile['temperature'] ?? 0 );
+		$temperature    = is_numeric( $model_profile['temperature'] ?? null ) ? (float) $model_profile['temperature'] : 0.0;
 
 		if ( self::PROMPT_STYLE_BILINGUAL_FRAME === $prompt_style ) {
 			$user_content = self::build_bilingual_frame_prompt( $source_text, $prompt, $validation_attempt );
@@ -652,6 +655,26 @@ class TranslationRuntime {
 		$requires_chat_template_kwargs = ! empty( $model_profile['requires_chat_template_kwargs'] );
 		$direct_api_url            = $runtime_context['direct_api_url'];
 		$kwargs_supported          = self::direct_api_kwargs_supported();
+
+		if ( empty( $model_profile['supports_chat_completions'] ) ) {
+			$error_message = sprintf(
+				/* translators: %s: model slug. */
+				__( 'Model "%s" is not compatible with chat/completions translation in SlyTranslate. Please choose another model.', 'slytranslate' ),
+				'' !== $model_slug ? $model_slug : 'unknown'
+			);
+			self::record_transport_diagnostics( array(
+				'transport'        => 'blocked',
+				'model_slug'       => $model_slug,
+				'direct_api_url'   => is_string( $direct_api_url ) ? $direct_api_url : '',
+				'kwargs_supported' => $kwargs_supported,
+				'fallback_allowed' => false,
+				'failure_reason'   => 'chat_transport_unsupported',
+				'error_code'       => 'model_chat_transport_unsupported',
+				'error_message'    => $error_message,
+			) );
+
+			return new \WP_Error( 'model_chat_transport_unsupported', $error_message );
+		}
 
 		if ( $requires_chat_template_kwargs && is_string( $direct_api_url ) && '' !== $direct_api_url && ! $kwargs_supported ) {
 			$kwargs_supported = self::refresh_direct_api_kwargs_detection( $direct_api_url, $model_slug );
@@ -701,10 +724,9 @@ class TranslationRuntime {
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
 		$transport_payload = self::build_transport_payload( $text, $prompt, $model_profile, $kwargs_supported, $validation_attempt );
 
-		// Use the direct API only when explicitly opted in: either the model
-		// requires it (TranslateGemma via chat_template_kwargs) or the user
-		// explicitly set force_direct_api='1'. The model slug must be non-empty
-		// because the direct API endpoint requires an explicit model name.
+		// Use the direct API only for strict model profiles that require
+		// chat-template kwargs (e.g. TranslateGemma). All normal models use the
+		// connector-managed WP AI Client transport.
 		if ( self::should_use_direct_api( $model_slug, (string) $direct_api_url ) ) {
 			$direct_started = TimingLogger::start();
 			$result         = DirectApiTranslationClient::translate(
@@ -713,7 +735,7 @@ class TranslationRuntime {
 				! empty( $transport_payload['use_system_prompt'] ),
 				$model_slug,
 				$direct_api_url,
-				(int) $transport_payload['temperature'],
+				(float) $transport_payload['temperature'],
 				$max_output_tokens,
 				(array) $transport_payload['extra_request_body']
 			);
@@ -868,7 +890,13 @@ class TranslationRuntime {
 		}
 
 		if ( is_callable( array( $builder, 'using_temperature' ) ) ) {
-			$builder = $builder->using_temperature( (int) $transport_payload['temperature'] );
+			$temperature = is_numeric( $transport_payload['temperature'] ?? null ) ? (float) $transport_payload['temperature'] : 0.0;
+
+			try {
+				$builder = $builder->using_temperature( $temperature );
+			} catch ( \TypeError $e ) {
+				$builder = $builder->using_temperature( (int) round( $temperature ) );
+			}
 		}
 
 		if ( '' !== $model_slug && is_callable( array( $builder, 'using_model_preference' ) ) ) {
@@ -925,11 +953,90 @@ class TranslationRuntime {
 			return $result;
 		}
 
+		$wp_result = $result;
+
+		// Some reasoning-capable models on connector transports can return an
+		// empty `content` field (with hidden reasoning output), which then
+		// hard-fails validation as invalid_translation_empty. Keep WP AI Client
+		// as the default transport, but try one direct-API recovery call when a
+		// compatible endpoint is configured.
+		if ( is_string( $result )
+			&& '' === trim( $result )
+			&& is_string( $direct_api_url )
+			&& '' !== $direct_api_url
+			&& '' !== $model_slug
+			&& ! $requires_strict_direct_api
+		) {
+			$direct_started = TimingLogger::start();
+			$direct_result  = DirectApiTranslationClient::translate(
+				(string) $transport_payload['user_content'],
+				(string) $transport_payload['system_prompt'],
+				! empty( $transport_payload['use_system_prompt'] ),
+				$model_slug,
+				$direct_api_url,
+				(float) $transport_payload['temperature'],
+				$max_output_tokens,
+				(array) $transport_payload['extra_request_body']
+			);
+			$direct_duration_ms = TimingLogger::stop( $direct_started );
+			TimingLogger::increment( 'ai_calls' );
+
+			if ( is_string( $direct_result ) && '' !== trim( $direct_result ) ) {
+				TimingLogger::increment( 'fallbacks' );
+				TimingLogger::log( 'ai_call_fallback', array(
+					'from'   => 'wp_ai_client',
+					'to'     => 'direct',
+					'reason' => 'wp_ai_client_empty_output',
+					'model'  => $model_slug,
+				) );
+				TimingLogger::log( 'ai_call', array(
+					'transport'    => 'direct',
+					'model'        => $model_slug,
+					'input_chars'  => $input_chars,
+					'output_chars' => self::char_length( $direct_result ),
+					'duration_ms'  => $direct_duration_ms,
+					'attempt'      => $validation_attempt,
+					'ok'           => true,
+				) );
+				self::record_transport_diagnostics( array(
+					'transport'        => 'direct_api',
+					'model_slug'       => $model_slug,
+					'direct_api_url'   => $direct_api_url,
+					'kwargs_supported' => $kwargs_supported,
+					'fallback_allowed' => true,
+					'failure_reason'   => '',
+				) );
+				$result = $direct_result;
+			} elseif ( is_wp_error( $direct_result ) ) {
+				TimingLogger::log( 'ai_call', array(
+					'transport'    => 'direct',
+					'model'        => $model_slug,
+					'input_chars'  => $input_chars,
+					'output_chars' => 0,
+					'duration_ms'  => $direct_duration_ms,
+					'attempt'      => $validation_attempt,
+					'ok'           => false,
+					'reason'       => $direct_result->get_error_code(),
+				) );
+			} else {
+				TimingLogger::log( 'ai_call', array(
+					'transport'    => 'direct',
+					'model'        => $model_slug,
+					'input_chars'  => $input_chars,
+					'output_chars' => 0,
+					'duration_ms'  => $direct_duration_ms,
+					'attempt'      => $validation_attempt,
+					'ok'           => false,
+					'reason'       => 'non_2xx_or_empty',
+				) );
+			}
+		}
+
 		TimingLogger::log( 'ai_call', array(
 			'transport'    => 'wp_ai_client',
 			'model'        => $model_slug,
 			'input_chars'  => $input_chars,
-			'output_chars' => is_string( $result ) ? self::char_length( $result ) : 0,
+			'output_chars' => is_string( $wp_result ) ? self::char_length( $wp_result ) : 0,
 			'duration_ms'  => $wp_duration_ms,
 			'attempt'      => $validation_attempt,
 			'ok'           => true,
@@ -1348,20 +1455,19 @@ class TranslationRuntime {
 	 * Returns true when the direct API should be used for the given model
 	 * and endpoint URL.
 	 *
-	 * The direct API is activated in two cases:
-	 *  1. The model requires it (TranslateGemma via chat_template_kwargs).
-	 *  2. The user opted in via `ai_translate_force_direct_api = '1'`
-	 *     AND an explicit model slug is set (empty slug → HTTP 400 on most
-	 *     servers).
+	 * Default transport is the WordPress AI Client. Direct API is reserved
+	 * for strict model profiles that explicitly require it (for example
+	 * TranslateGemma with chat_template_kwargs requirements).
+	 *
+	 * Legacy `ai_translate_force_direct_api` values are intentionally ignored
+	 * here so normal models cannot be globally switched away from the
+	 * connector-managed WP AI Client transport.
 	 */
 	private static function should_use_direct_api( string $model_slug, string $direct_api_url ): bool {
 		if ( '' === $direct_api_url ) {
 			return false;
 		}
-		if ( self::model_requires_strict_direct_api( $model_slug ) ) {
-			return true;
-		}
-		return '' !== $model_slug && '1' === get_option( 'ai_translate_force_direct_api', '0' );
+		return self::model_requires_strict_direct_api( $model_slug );
 	}
 
 	public static function direct_api_kwargs_supported(): bool {

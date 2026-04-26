@@ -59,8 +59,18 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 			return new \WP_Error( 'unsupported_language_mutation', __( 'The active translation plugin does not support changing post languages.', 'slytranslate' ) );
 		}
 
+		$current_language = $this->get_post_language( $post_id );
+		if ( null !== $current_language && $current_language === $target_language ) {
+			return true;
+		}
+
 		$result = pll_set_post_language( $post_id, $target_language );
 		if ( false === $result ) {
+			$updated_language = $this->get_post_language( $post_id );
+			if ( null !== $updated_language && $updated_language === $target_language ) {
+				return true;
+			}
+
 			return new \WP_Error( 'polylang_update_failed', __( 'Polylang could not update the post language.', 'slytranslate' ) );
 		}
 

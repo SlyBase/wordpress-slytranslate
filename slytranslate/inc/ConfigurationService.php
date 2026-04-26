@@ -192,12 +192,18 @@ class ConfigurationService {
 			return false;
 		}
 
-		$content = $data['choices'][0]['message']['content'] ?? '';
-		if ( ! is_string( $content ) ) {
+		if ( ! isset( $data['choices'][0]['message'] ) || ! is_array( $data['choices'][0]['message'] ) ) {
 			return false;
 		}
 
-		return false !== stripos( $content, 'Katze' );
+		$message = $data['choices'][0]['message'];
+		$content = $message['content'] ?? null;
+		if ( is_string( $content ) ) {
+			return true;
+		}
+
+		$reasoning = $message['reasoning_content'] ?? null;
+		return is_string( $reasoning );
 	}
 
 	/**

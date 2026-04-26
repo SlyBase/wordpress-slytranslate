@@ -159,7 +159,7 @@ class TextSplittingTest extends TestCase {
 		$limit         = $this->invokeStatic( TranslationRuntime::class, 'apply_chunk_strategy_to_limit', array( 4096, $tower_profile ) );
 
 		$this->assertSame( 'tower_conservative', TranslationRuntime::get_chunk_strategy_for_model( 'towerinstruct-7b' ) );
-		$this->assertSame( 2457, $limit );
+		$this->assertSame( 1200, $limit );
 	}
 
 	public function test_default_chunk_strategy_does_not_change_limit(): void {

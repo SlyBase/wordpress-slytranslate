@@ -34,7 +34,7 @@ class ContentTranslationPassthroughRecoveryTest extends TestCase {
 						return $this;
 					}
 
-					public function using_temperature( int $temperature ) {
+					public function using_temperature( float $temperature ) {
 						return $this;
 					}
 
@@ -137,7 +137,7 @@ class ContentTranslationPassthroughRecoveryTest extends TestCase {
 						return $this;
 					}
 
-					public function using_temperature( int $temperature ) {
+					public function using_temperature( float $temperature ) {
 						return $this;
 					}
 

@@ -80,6 +80,20 @@ class TranslationValidator {
 			);
 		}
 
+		if ( self::has_prompt_instruction_leakage( $source_text, $translated_text ) ) {
+			return new \WP_Error(
+				'invalid_translation_assistant_reply',
+				__( 'The model leaked prompt instructions into the translated output instead of returning only translated content.', 'slytranslate' )
+			);
+		}
+
+		if ( self::has_uninformative_stopword_only_output( $source_plain, $translated_plain, $target_language ) ) {
+			return new \WP_Error(
+				'invalid_translation_low_information',
+				__( 'The translated output collapsed to a low-information stopword instead of a meaningful translation.', 'slytranslate' )
+			);
+		}
+
 		if ( self::is_obvious_language_passthrough( $source_plain, $translated_plain, $target_language ) ) {
 			return new \WP_Error(
 				'invalid_translation_language_passthrough',
@@ -208,6 +222,101 @@ class TranslationValidator {
 		}
 
 		return self::contains_review_markers( $translated_text ) || self::starts_with_assistant_preamble( self::normalize_text_for_validation( $translated_text ) );
+	}
+
+	private static function has_prompt_instruction_leakage( string $source_text, string $translated_text ): bool {
+		$source_lower     = strtolower( $source_text );
+		$translated_lower = strtolower( $translated_text );
+
+		$instruction_markers = array(
+			'critical output format',
+			'mandatory translation rules',
+			'critical: apply every translation rule above exactly',
+			'critical: keep obeying the user-provided translation rules above',
+		);
+
+		foreach ( $instruction_markers as $marker ) {
+			if ( false === strpos( $source_lower, $marker ) && false !== strpos( $translated_lower, $marker ) ) {
+				return true;
+			}
+		}
+
+		$source_has_critical_label     = false !== strpos( $source_lower, 'critical:' );
+		$translated_has_critical_label = false !== strpos( $translated_lower, 'critical:' );
+		if ( false === strpos( $source_lower, 'critical' ) && false !== strpos( $translated_lower, 'critical' ) ) {
+			return true;
+		}
+		if ( ! $source_has_critical_label && $translated_has_critical_label ) {
+			if ( 1 === preg_match( '/critical\s*:\s*(?:apply|keep|obey|return|format|rule|rules|translation|wenden|befolgen|ausgabe|regel|regeln|obigen|above|only)\b/iu', $translated_text ) ) {
+				return true;
+			}
+		}
+
+		$source_has_mandatory_label     = false !== strpos( $source_lower, 'mandatory:' );
+		$translated_has_mandatory_label = false !== strpos( $translated_lower, 'mandatory:' );
+		if ( false === strpos( $source_lower, 'mandatory' ) && false !== strpos( $translated_lower, 'mandatory' ) ) {
+			return true;
+		}
+		if ( ! $source_has_mandatory_label && $translated_has_mandatory_label ) {
+			if ( 1 === preg_match( '/mandatory\s*:\s*(?:translation|rule|rules|output|format|instruction|instructions|apply|obey|return|only)\b/iu', $translated_text ) ) {
+				return true;
+			}
+		}
+
+		if ( false === strpos( $source_lower, '<slytranslate' ) && false !== strpos( $translated_lower, '<slytranslate' ) ) {
+			return true;
+		}
+
+		$source_plain     = self::normalize_text_for_validation( $source_text );
+		$translated_plain = self::normalize_text_for_validation( $translated_text );
+
+		$source_has_bilingual_labels = 1 === preg_match( '/(?:^|\b)(?:source|target|en|de|english|german|deutsch)\s*:/iu', $source_plain );
+		if ( ! $source_has_bilingual_labels && 1 === preg_match( '/(?:^|\b)(?:source|target|en|de|english|german|deutsch)\s*:/iu', $translated_plain ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private static function has_uninformative_stopword_only_output( string $source_plain, string $translated_plain, ?string $target_language ): bool {
+		$target = strtolower( trim( (string) $target_language ) );
+		if ( '' === $target || 0 !== strpos( $target, 'de' ) ) {
+			return false;
+		}
+
+		$source_word_count = preg_match_all( '/\p{L}+/u', $source_plain, $source_words );
+		if ( $source_word_count < 2 || self::text_length( $source_plain ) < 12 ) {
+			return false;
+		}
+
+		$translated_word_count = preg_match_all( '/\p{L}+/u', $translated_plain, $translated_words );
+		if ( 1 !== $translated_word_count ) {
+			return false;
+		}
+
+		$token = '';
+		if ( isset( $translated_words[0][0] ) && is_string( $translated_words[0][0] ) ) {
+			$token = strtolower( $translated_words[0][0] );
+		}
+
+		if ( '' === $token ) {
+			return false;
+		}
+
+		$uninformative_tokens = array(
+			'and',
+			'or',
+			'but',
+			'und',
+			'oder',
+			'aber',
+			'sowie',
+			'also',
+			'dann',
+			'the',
+		);
+
+		return in_array( $token, $uninformative_tokens, true );
 	}
 
 	private static function contains_markdown_structure( string $text ): bool {

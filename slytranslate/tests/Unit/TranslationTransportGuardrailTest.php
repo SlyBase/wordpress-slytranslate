@@ -209,8 +209,15 @@ class TranslationTransportGuardrailTest extends TestCase {
 		);
 	}
 
-	public function test_tower_profile_direct_request_is_user_only_bilingual_frame(): void {
-		$captured_body = array();
+	public function test_tower_profile_with_force_direct_api_still_uses_wp_ai_client_transport(): void {
+		$direct_api_calls = 0;
+		$captured         = array(
+			'user_content'        => '',
+			'system_prompt_calls' => 0,
+			'system_prompt'       => '',
+			'temperature'         => null,
+			'model'               => '',
+		);
 
 		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
@@ -234,35 +241,85 @@ class TranslationTransportGuardrailTest extends TestCase {
 			}
 		);
 		$this->stubWpFunction( 'wp_remote_post',
-			static function ( string $endpoint, array $args ) use ( &$captured_body ) {
-				$decoded_body  = json_decode( $args['body'] ?? '', true );
-				$captured_body = is_array( $decoded_body ) ? $decoded_body : array();
+			static function () use ( &$direct_api_calls ) {
+				++$direct_api_calls;
+				throw new \RuntimeException( 'wp_remote_post must not be reached for non-strict models when force_direct_api is enabled.' );
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$captured ) {
+				$captured['user_content'] = $text;
 
-				return array(
-					'response' => array( 'code' => 200 ),
-					'body'     => wp_json_encode(
-						array(
-							'choices' => array(
-								array(
-									'message' => array(
-										'content' => 'Hallo Welt',
-									),
-								),
-							),
-						)
-					),
-				);
+				return new class( $captured ) {
+					private array $captured;
+
+					public function __construct( array &$captured ) {
+						$this->captured =& $captured;
+					}
+
+					public function using_system_instruction( string $prompt ) {
+						++$this->captured['system_prompt_calls'];
+						$this->captured['system_prompt'] = $prompt;
+						return $this;
+					}
+
+					public function using_temperature( $temperature ) {
+						$this->captured['temperature'] = (float) $temperature;
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						$this->captured['model'] = $model_slug;
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						return 'Hallo Welt';
+					}
+				};
 			}
 		);
 
 		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertSame( 'Hallo Welt', $result );
-		$this->assertCount( 1, $captured_body['messages'] ?? array() );
-		$this->assertSame( 'user', $captured_body['messages'][0]['role'] ?? null );
-		$this->assertStringContainsString( 'Translate the following text from EN into DE.', $captured_body['messages'][0]['content'] ?? '' );
-		$this->assertStringContainsString( 'EN:', $captured_body['messages'][0]['content'] ?? '' );
-		$this->assertStringContainsString( 'DE:', $captured_body['messages'][0]['content'] ?? '' );
+		$this->assertSame( 0, $direct_api_calls );
+		$this->assertStringContainsString( 'Translate the following text from EN into DE.', $captured['user_content'] );
+		$this->assertStringContainsString( 'EN:', $captured['user_content'] );
+		$this->assertStringContainsString( 'DE:', $captured['user_content'] );
+		$this->assertSame( 0, $captured['system_prompt_calls'] );
+		$this->assertEqualsWithDelta( 0.2, (float) $captured['temperature'], 0.0001 );
+		$this->assertSame( 'TowerInstruct-7B-v0.2.Q4_K_M', $captured['model'] );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
+	}
+
+	public function test_madlad_profile_is_blocked_before_chat_transport_is_called(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'madlad400-10b-mt.Q4_K_M',
+			'direct_api_url' => '',
+		) );
+
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function () {
+				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached for MadLad chat-transport guardrail.' );
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'model_chat_transport_unsupported', $result->get_error_code() );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'blocked', $diagnostics['transport'] );
+		$this->assertSame( 'chat_transport_unsupported', $diagnostics['failure_reason'] );
 	}
 
 	public function test_non_translategemma_still_falls_back_to_wp_ai_client(): void {
@@ -299,7 +356,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 						return $this;
 					}
 
-					public function using_temperature( int $temperature ) {
+					public function using_temperature( float $temperature ) {
 						return $this;
 					}
 
@@ -334,7 +391,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			static function () {
 				return new class {
 					public function using_system_instruction( string $prompt ) { return $this; }
-					public function using_temperature( int $temperature ) { return $this; }
+					public function using_temperature( float $temperature ) { return $this; }
 					public function using_model_preference( string $model_slug ) { return $this; }
 					public function using_max_tokens( int $max_tokens ) { return $this; }
 					public function generate_text(): \WP_Error {
@@ -385,7 +442,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 			static function () {
 				return new class {
 					public function using_system_instruction( string $prompt ) { return $this; }
-					public function using_temperature( int $temperature ) { return $this; }
+					public function using_temperature( float $temperature ) { return $this; }
 					public function using_model_preference( string $model_slug ) { return $this; }
 					public function generate_text(): string { return 'Hallo Welt'; }
 				};
@@ -427,9 +484,9 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertStringContainsString( 'model limit (500)', $result->get_error_message() );
 	}
 
-	public function test_non_translategemma_model_limit_error_retries_without_wp_ai_client_fallback(): void {
-		$calls      = 0;
-		$wp_fallback_calls = 0;
+	public function test_non_translategemma_force_direct_api_uses_wp_ai_client_transport(): void {
+		$direct_api_calls  = 0;
+		$wp_transport_calls = 0;
 
 		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
@@ -449,53 +506,40 @@ class TranslationTransportGuardrailTest extends TestCase {
 				return $default;
 			}
 		);
-		$this->stubWpFunction( 'wp_ai_client_prompt',
-			static function () use ( &$wp_fallback_calls ) {
-				++$wp_fallback_calls;
-				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached when direct API model-limit retry succeeds.' );
+		$this->stubWpFunction( 'wp_remote_post',
+			static function () use ( &$direct_api_calls ) {
+				++$direct_api_calls;
+				throw new \RuntimeException( 'wp_remote_post must not be reached for non-strict models when force_direct_api is enabled.' );
 			}
 		);
-		$this->stubWpFunction( 'wp_remote_post',
-			static function () use ( &$calls ) {
-				++$calls;
-				if ( 1 === $calls ) {
-					return array(
-						'response' => array( 'code' => 500 ),
-						'body'     => 'Internal Server Error (500) - model limit reached, try again later',
-					);
-				}
-
-				return array(
-					'response' => array( 'code' => 200 ),
-					'body'     => wp_json_encode(
-						array(
-							'choices' => array(
-								array(
-									'message' => array(
-										'content' => 'Hallo Welt',
-									),
-								),
-							),
-						)
-					),
-				);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function () use ( &$wp_transport_calls ) {
+				++$wp_transport_calls;
+				return new class {
+					public function using_system_instruction( string $prompt ) { return $this; }
+					public function using_temperature( float $temperature ) { return $this; }
+					public function using_model_preference( string $model_slug ) { return $this; }
+					public function using_max_tokens( int $max_tokens ) { return $this; }
+					public function generate_text(): string { return 'Hallo Welt'; }
+				};
 			}
 		);
 
 		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertSame( 'Hallo Welt', $result );
-		$this->assertSame( 2, $calls );
-		$this->assertSame( 0, $wp_fallback_calls );
+		$this->assertSame( 0, $direct_api_calls );
+		$this->assertSame( 1, $wp_transport_calls );
 
 		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
-		$this->assertSame( 'direct_api', $diagnostics['transport'] );
+		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
 		$this->assertSame( '', $diagnostics['failure_reason'] );
 	}
 
-	public function test_non_translategemma_direct_api_response_is_validated_and_retried(): void {
-		$calls      = array();
-		$call_count = 0;
+	public function test_non_translategemma_force_direct_api_keeps_validation_retry_on_wp_ai_client(): void {
+		$direct_api_calls = 0;
+		$attempt_calls    = array();
+		$call_count       = 0;
 
 		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
@@ -507,6 +551,91 @@ class TranslationTransportGuardrailTest extends TestCase {
 			static function ( $option, $default = false ) {
 				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
 					return '0';
+				}
+				if ( 'ai_translate_force_direct_api' === $option ) {
+					return '1';
+				}
+
+				return $default;
+			}
+		);
+		$this->stubWpFunction( 'wp_remote_post',
+			static function () use ( &$direct_api_calls ) {
+				++$direct_api_calls;
+				throw new \RuntimeException( 'wp_remote_post must not be reached for non-strict models when force_direct_api is enabled.' );
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$call_count, &$attempt_calls ) {
+				++$call_count;
+				$attempt_calls[ $call_count ] = array(
+					'user'   => $text,
+					'system' => '',
+				);
+
+				return new class( $call_count, $attempt_calls ) {
+					private int $index;
+					private array $attempt_calls;
+
+					public function __construct( int $index, array &$attempt_calls ) {
+						$this->index         = $index;
+						$this->attempt_calls =& $attempt_calls;
+					}
+
+					public function using_system_instruction( string $prompt ) {
+						$this->attempt_calls[ $this->index ]['system'] = $prompt;
+						return $this;
+					}
+
+					public function using_temperature( float $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						return 1 === $this->index
+							? "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure"
+							: 'Hallo Welt';
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertSame( 'Hallo Welt', $result );
+		$this->assertSame( 0, $direct_api_calls );
+		$this->assertCount( 2, $attempt_calls );
+		$this->assertSame( 'Prompt', $attempt_calls[1]['system'] );
+		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $attempt_calls[2]['system'] );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
+		$this->assertSame( '', $diagnostics['failure_reason'] );
+	}
+
+	public function test_empty_wp_ai_client_output_recovers_once_via_direct_api_when_available(): void {
+		$captured_direct_body = array();
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'gemma-4-E4B-it-UD-Q8_K_XL',
+			'direct_api_url' => 'http://llama.local:8080',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '1';
 				}
 				if ( 'ai_translate_force_direct_api' === $option ) {
 					return '1';
@@ -517,18 +646,19 @@ class TranslationTransportGuardrailTest extends TestCase {
 		);
 		$this->stubWpFunction( 'wp_ai_client_prompt',
 			static function () {
-				throw new \RuntimeException( 'wp_ai_client_prompt must not be reached when direct API retries succeed.' );
+				return new class {
+					public function using_system_instruction( string $prompt ) { return $this; }
+					public function using_temperature( float $temperature ) { return $this; }
+					public function using_model_preference( string $model_slug ) { return $this; }
+					public function using_max_tokens( int $max_tokens ) { return $this; }
+					public function generate_text(): string { return ''; }
+				};
 			}
 		);
 		$this->stubWpFunction( 'wp_remote_post',
-			static function ( string $endpoint, array $args ) use ( &$call_count, &$calls ) {
-				++$call_count;
-				$decoded_body = json_decode( $args['body'] ?? '', true );
-				$calls[]      = is_array( $decoded_body ) ? $decoded_body : array();
-
-				$content = 1 === $call_count
-					? "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure"
-					: 'Hallo Welt';
+			static function ( string $endpoint, array $args ) use ( &$captured_direct_body ) {
+				$decoded_body         = json_decode( $args['body'] ?? '', true );
+				$captured_direct_body = is_array( $decoded_body ) ? $decoded_body : array();
 
 				return array(
 					'response' => array( 'code' => 200 ),
@@ -537,7 +667,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 							'choices' => array(
 								array(
 									'message' => array(
-										'content' => $content,
+										'content' => '<slytranslate-output>Hallo Welt</slytranslate-output>',
 									),
 								),
 							),
@@ -550,13 +680,15 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
 
 		$this->assertSame( 'Hallo Welt', $result );
-		$this->assertCount( 2, $calls );
-		$this->assertSame( 'Prompt', $calls[0]['messages'][0]['content'] ?? null );
-		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $calls[1]['messages'][0]['content'] ?? '' );
+		$this->assertSame(
+			array(
+				'enable_thinking' => false,
+			),
+			$captured_direct_body['chat_template_kwargs'] ?? null
+		);
 
 		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'direct_api', $diagnostics['transport'] );
-		$this->assertSame( '', $diagnostics['failure_reason'] );
 	}
 
 	public function test_translategemma_invalid_direct_api_output_fails_closed(): void {

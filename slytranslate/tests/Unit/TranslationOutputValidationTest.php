@@ -31,6 +31,75 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
 	}
 
+	public function test_rejects_prompt_instruction_leakage_from_bilingual_frame_outputs(): void {
+		$source_text = 'Translate this short sentence into German.';
+		$translated  = 'CRITICAL OUTPUT FORMAT: Return only the translation enclosed in <slytranslate-output> and </slytranslate-output>.';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_rejects_localized_critical_rule_leakage_when_source_has_no_critical_label(): void {
+		$source_text = 'The heading should be translated naturally.';
+		$translated  = '<h2>CRITICAL: Wenden Sie alle obigen Uebersetzungsregeln genau an.</h2>';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_rejects_malformed_critical_banner_when_source_has_no_critical_term(): void {
+		$source_text = 'The sentence should remain a normal screenshot placeholder line.';
+		$translated  = '<p><strong><strong>CRITICAL</strong>:</strong>:</strong>:</strong></p>';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_rejects_leaked_bilingual_labels_when_source_has_none(): void {
+		$source_text = 'A normal heading without bilingual labels.';
+		$translated  = "Variant A: Something\n\nDE:";
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_rejects_html_wrapped_bilingual_labels_when_source_has_none(): void {
+		$source_text = 'Simple heading without bilingual role markers.';
+		$translated  = '<h3>DE: Ein Titel</h3>';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_rejects_low_information_stopword_only_output_for_multiword_source(): void {
+		$source_text = 'TEST EN Translation';
+		$translated  = 'und';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_low_information', $result->get_error_code() );
+	}
+
+	public function test_allows_single_word_source_translated_to_stopword(): void {
+		$source_text = 'and';
+		$translated  = 'und';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertNull( $result );
+	}
+
 	public function test_rejects_obvious_english_passthrough_when_target_is_german(): void {
 		$source_text = 'This is the source text in English and it should definitely be translated into German for the final output.';
 		$translated  = 'This is the source text in English and it should definitely be translated into German for the final output.';
@@ -318,7 +387,7 @@ class TranslationOutputValidationTest extends TestCase {
 						}
 
 						public function using_system_instruction( string $prompt ) { return $this; }
-						public function using_temperature( int $temperature ) { return $this; }
+						public function using_temperature( float $temperature ) { return $this; }
 						public function using_model_preference( string $model_slug ) { return $this; }
 						public function generate_text(): string { return $this->reply; }
 					};
@@ -392,7 +461,7 @@ class TranslationOutputValidationTest extends TestCase {
 						return $this;
 					}
 
-					public function using_temperature( int $temperature ) {
+					public function using_temperature( float $temperature ) {
 						return $this;
 					}
 
@@ -460,7 +529,7 @@ class TranslationOutputValidationTest extends TestCase {
 						return $this;
 					}
 
-					public function using_temperature( int $temperature ) {
+					public function using_temperature( float $temperature ) {
 						return $this;
 					}
 
@@ -533,7 +602,7 @@ class TranslationOutputValidationTest extends TestCase {
 						return $this;
 					}
 
-					public function using_temperature( int $temperature ) {
+					public function using_temperature( float $temperature ) {
 						return $this;
 					}
 

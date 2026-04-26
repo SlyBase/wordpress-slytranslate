@@ -495,8 +495,8 @@ class AbilityRegistrar {
 					'auto_translate_new'    => array( 'type' => 'boolean', 'description' => 'Auto-translate new translation posts in the active language plugin.' ),
 					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.', 'minimum' => 0, 'maximum' => 4000000 ),
 					'model_slug'            => array( 'type' => 'string', 'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.' ),
-					'direct_api_url'        => array( 'type' => 'string', 'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). When set, the plugin sends translation requests directly to this endpoint instead of using the WP AI Client. Works with llama.cpp, ollama, mlx-lm, vLLM, or any OpenAI-compatible server. Leave empty to use the standard AI Client. When saving, the plugin automatically probes whether the server supports chat_template_kwargs for optimized translation.' ),
-					'force_direct_api'      => array( 'type' => 'boolean', 'description' => 'When true, all translations use the direct API endpoint (requires direct_api_url and model_slug). By default the direct API is only used for TranslateGemma models that require chat_template_kwargs.' ),
+					'direct_api_url'        => array( 'type' => 'string', 'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). Normal translations use the WordPress AI Client transport; this endpoint is used for model profiles that explicitly require direct API handling (for example TranslateGemma). When saving, the plugin probes whether the endpoint supports chat_template_kwargs.' ),
+					'force_direct_api'      => array( 'type' => 'boolean', 'description' => 'Deprecated compatibility flag. Normal translations use the WordPress AI Client transport. Direct API remains reserved for models that explicitly require it (for example TranslateGemma).' ),
 				),
 			),
 			'output_schema'       => array(
