@@ -979,6 +979,36 @@ class TranslationRuntime {
 				return self::handle_rate_limit_and_retry( $result, $text, $prompt, $validation_attempt, $model_slug );
 			}
 
+			// WP AI Client connector path uses a relatively short HTTP timeout
+			// (~30 s) which is too tight for slow local llama.cpp models that
+			// must (a) load the GGUF on demand, or (b) emit lengthy reasoning
+			// output before the actual translation. When a compatible direct
+			// API endpoint is configured, fall back to it for this chunk —
+			// the direct transport has a 300 s timeout and also handles the
+			// reasoning_content retry.
+			if ( ! $requires_strict_direct_api
+				&& is_string( $direct_api_url )
+				&& '' !== $direct_api_url
+				&& '' !== $model_slug
+				&& self::is_transport_failure_recoverable_via_direct_api( $result )
+			) {
+				$direct_recovery = self::translate_chunk_via_direct_api_recovery(
+					$transport_payload,
+					$model_slug,
+					$direct_api_url,
+					$max_output_tokens,
+					$input_chars,
+					$validation_attempt,
+					$kwargs_supported,
+					'wp_ai_client_transport_error',
+					$result->get_error_code()
+				);
+
+				if ( is_string( $direct_recovery ) ) {
+					return self::finalize_translated_chunk( $text, $direct_recovery, $model_slug, $prompt, $validation_attempt );
+				}
+			}
+
 			return $result;
 		}
 
@@ -996,68 +1026,20 @@ class TranslationRuntime {
 			&& '' !== $model_slug
 			&& ! $requires_strict_direct_api
 		) {
-			$direct_started = TimingLogger::start();
-			$direct_result  = DirectApiTranslationClient::translate(
-				(string) $transport_payload['user_content'],
-				(string) $transport_payload['system_prompt'],
-				! empty( $transport_payload['use_system_prompt'] ),
+			$direct_recovery = self::translate_chunk_via_direct_api_recovery(
+				$transport_payload,
 				$model_slug,
 				$direct_api_url,
-				(float) $transport_payload['temperature'],
 				$max_output_tokens,
-				(array) $transport_payload['extra_request_body']
+				$input_chars,
+				$validation_attempt,
+				$kwargs_supported,
+				'wp_ai_client_empty_output',
+				''
 			);
-			$direct_duration_ms = TimingLogger::stop( $direct_started );
-			TimingLogger::increment( 'ai_calls' );
 
-			if ( is_string( $direct_result ) && '' !== trim( $direct_result ) ) {
-				TimingLogger::increment( 'fallbacks' );
-				TimingLogger::log( 'ai_call_fallback', array(
-					'from'   => 'wp_ai_client',
-					'to'     => 'direct',
-					'reason' => 'wp_ai_client_empty_output',
-					'model'  => $model_slug,
-				) );
-				TimingLogger::log( 'ai_call', array(
-					'transport'    => 'direct',
-					'model'        => $model_slug,
-					'input_chars'  => $input_chars,
-					'output_chars' => self::char_length( $direct_result ),
-					'duration_ms'  => $direct_duration_ms,
-					'attempt'      => $validation_attempt,
-					'ok'           => true,
-				) );
-				self::record_transport_diagnostics( array(
-					'transport'        => 'direct_api',
-					'model_slug'       => $model_slug,
-					'direct_api_url'   => $direct_api_url,
-					'kwargs_supported' => $kwargs_supported,
-					'fallback_allowed' => true,
-					'failure_reason'   => '',
-				) );
-				$result = $direct_result;
-			} elseif ( is_wp_error( $direct_result ) ) {
-				TimingLogger::log( 'ai_call', array(
-					'transport'    => 'direct',
-					'model'        => $model_slug,
-					'input_chars'  => $input_chars,
-					'output_chars' => 0,
-					'duration_ms'  => $direct_duration_ms,
-					'attempt'      => $validation_attempt,
-					'ok'           => false,
-					'reason'       => $direct_result->get_error_code(),
-				) );
-			} else {
-				TimingLogger::log( 'ai_call', array(
-					'transport'    => 'direct',
-					'model'        => $model_slug,
-					'input_chars'  => $input_chars,
-					'output_chars' => 0,
-					'duration_ms'  => $direct_duration_ms,
-					'attempt'      => $validation_attempt,
-					'ok'           => false,
-					'reason'       => 'non_2xx_or_empty',
-				) );
+			if ( is_string( $direct_recovery ) ) {
+				$result = $direct_recovery;
 			}
 		}
 
@@ -1617,6 +1599,147 @@ class TranslationRuntime {
 			return false;
 		}
 		return self::model_requires_strict_direct_api( $model_slug );
+	}
+
+	/**
+	 * Run a single direct-API translation attempt as recovery for a failing
+	 * WP AI Client call (transport error or empty output) and emit the
+	 * matching timing/diagnostics records. Returns the translated string on
+	 * success, or null when the direct API also fails / cannot be retried.
+	 */
+	private static function translate_chunk_via_direct_api_recovery(
+		array $transport_payload,
+		string $model_slug,
+		string $direct_api_url,
+		int $max_output_tokens,
+		int $input_chars,
+		int $validation_attempt,
+		bool $kwargs_supported,
+		string $fallback_reason,
+		string $upstream_error_code
+	): ?string {
+		$direct_started = TimingLogger::start();
+		$direct_result  = DirectApiTranslationClient::translate(
+			(string) $transport_payload['user_content'],
+			(string) $transport_payload['system_prompt'],
+			! empty( $transport_payload['use_system_prompt'] ),
+			$model_slug,
+			$direct_api_url,
+			(float) $transport_payload['temperature'],
+			$max_output_tokens,
+			(array) $transport_payload['extra_request_body']
+		);
+		$direct_duration_ms = TimingLogger::stop( $direct_started );
+		TimingLogger::increment( 'ai_calls' );
+
+		if ( is_string( $direct_result ) && '' !== trim( $direct_result ) ) {
+			TimingLogger::increment( 'fallbacks' );
+			TimingLogger::log( 'ai_call_fallback', array(
+				'from'           => 'wp_ai_client',
+				'to'             => 'direct',
+				'reason'         => $fallback_reason,
+				'model'          => $model_slug,
+				'upstream_error' => $upstream_error_code,
+			) );
+			TimingLogger::log( 'ai_call', array(
+				'transport'    => 'direct',
+				'model'        => $model_slug,
+				'input_chars'  => $input_chars,
+				'output_chars' => self::char_length( $direct_result ),
+				'duration_ms'  => $direct_duration_ms,
+				'attempt'      => $validation_attempt,
+				'ok'           => true,
+			) );
+			self::record_transport_diagnostics( array(
+				'transport'        => 'direct_api',
+				'model_slug'       => $model_slug,
+				'direct_api_url'   => $direct_api_url,
+				'kwargs_supported' => $kwargs_supported,
+				'fallback_allowed' => true,
+				'failure_reason'   => '',
+			) );
+
+			return $direct_result;
+		}
+
+		$failure_reason = is_wp_error( $direct_result )
+			? (string) $direct_result->get_error_code()
+			: 'non_2xx_or_empty';
+
+		TimingLogger::log( 'ai_call', array(
+			'transport'    => 'direct',
+			'model'        => $model_slug,
+			'input_chars'  => $input_chars,
+			'output_chars' => 0,
+			'duration_ms'  => $direct_duration_ms,
+			'attempt'      => $validation_attempt,
+			'ok'           => false,
+			'reason'       => $failure_reason,
+		) );
+
+		return null;
+	}
+
+	/**
+	 * Decide whether a WP AI Client transport-level WP_Error should trigger
+	 * a direct-API fallback attempt. Targets transient HTTP failures that the
+	 * direct path can recover from (longer timeout, native reasoning retry):
+	 *
+	 *   - cURL transport errors (`http_request_failed`, includes cURL 28
+	 *     "Operation timed out", cURL 7 "couldn't connect", cURL 52 "empty
+	 *     reply", …)
+	 *   - Generic upstream "5xx" / "bad gateway" connector errors
+	 *
+	 * Authentication, validation and provider-side rate-limit errors are
+	 * intentionally excluded — re-issuing them via the direct API would
+	 * just hit the same wall.
+	 */
+	private static function is_transport_failure_recoverable_via_direct_api( \WP_Error $error ): bool {
+		$code = strtolower( (string) $error->get_error_code() );
+		if ( '' === $code ) {
+			return false;
+		}
+
+		$transport_codes = array(
+			'http_request_failed',
+			'http_request_timeout',
+			'connect_error',
+			'connection_error',
+			'bad_gateway',
+			'gateway_timeout',
+			'service_unavailable',
+		);
+		foreach ( $transport_codes as $candidate ) {
+			if ( false !== strpos( $code, $candidate ) ) {
+				return true;
+			}
+		}
+
+		$message = strtolower( (string) $error->get_error_message() );
+		if ( '' === $message ) {
+			return false;
+		}
+
+		$transport_signals = array(
+			'curl error',
+			'timed out',
+			'timeout',
+			'connection refused',
+			'could not resolve host',
+			'bad gateway',
+			'gateway time-out',
+			'gateway timeout',
+			'502',
+			'503',
+			'504',
+		);
+		foreach ( $transport_signals as $needle ) {
+			if ( false !== strpos( $message, $needle ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public static function direct_api_kwargs_supported(): bool {
