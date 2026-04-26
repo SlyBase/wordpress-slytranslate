@@ -126,6 +126,7 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 		}
 
 		$translation_id = $existing;
+		$language_set_error = null;
 
 		// Use a filter to preserve the original post author.
 		$author_override = function ( $data ) use ( $post ) {
@@ -154,7 +155,7 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 
 			$set_result = $this->set_post_language( $translation_id, $target_lang );
 			if ( is_wp_error( $set_result ) ) {
-				return $set_result;
+				$language_set_error = $set_result;
 			}
 		}
 
@@ -220,7 +221,17 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 		}
 
 		// Link the translation.
-		$this->link_translation( $source_post_id, $translation_id, $target_lang );
+		if ( ! $this->link_translation( $source_post_id, $translation_id, $target_lang ) ) {
+			return new \WP_Error( 'polylang_update_failed', __( 'Polylang could not rewrite translation links.', 'slytranslate' ) );
+		}
+
+		if ( is_wp_error( $language_set_error ) ) {
+			$resolved_language = $this->get_post_language( $translation_id );
+			$resolved_target   = absint( pll_get_post( $source_post_id, $target_lang ) );
+			if ( $resolved_language !== $target_lang && $resolved_target !== $translation_id ) {
+				return $language_set_error;
+			}
+		}
 
 		return $translation_id;
 	}
@@ -230,10 +241,10 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 			return false;
 		}
 		$source_lang = pll_get_post_language( $source_post_id );
-		pll_save_post_translations( array(
+		$result = pll_save_post_translations( array(
 			$source_lang => $source_post_id,
 			$target_lang => $translated_post_id,
 		) );
-		return true;
+		return false !== $result;
 	}
 }

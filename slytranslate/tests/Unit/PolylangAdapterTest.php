@@ -7,6 +7,14 @@ namespace AI_Translate {
 	function pll_set_post_language( int $post_id, string $lang ): bool {
 		return \AI_Translate\Tests\Unit\PolylangAdapterTestDouble::invokeSetPostLanguage( $post_id, $lang );
 	}
+
+	function pll_get_post_language( int $post_id ) {
+		return \AI_Translate\Tests\Unit\PolylangAdapterTestDouble::invokeGetPostLanguage( $post_id );
+	}
+
+	function pll_save_post_translations( array $translations ): bool {
+		return \AI_Translate\Tests\Unit\PolylangAdapterTestDouble::invokeSavePostTranslations( $translations );
+	}
 }
 
 namespace AI_Translate\Tests\Unit {
@@ -78,6 +86,24 @@ namespace AI_Translate\Tests\Unit {
 			$this->assertInstanceOf( \WP_Error::class, $result );
 			$this->assertSame( 'polylang_update_failed', $result->get_error_code() );
 		}
+
+		public function test_link_translation_returns_false_when_polylang_relink_fails(): void {
+			$adapter   = new PolylangAdapterTestDouble();
+			$last_map  = array();
+
+			PolylangAdapterTestDouble::$get_post_language_callback = static function ( int $post_id ): string {
+				return 'en';
+			};
+			PolylangAdapterTestDouble::$save_post_translations_callback = static function ( array $translations ) use ( &$last_map ): bool {
+				$last_map = $translations;
+				return false;
+			};
+
+			$result = $adapter->link_translation( 100, 200, 'de' );
+
+			$this->assertFalse( $result );
+			$this->assertSame( array( 'en' => 100, 'de' => 200 ), $last_map );
+		}
 	}
 
 	class PolylangAdapterTestDouble extends PolylangAdapter {
@@ -87,9 +113,13 @@ namespace AI_Translate\Tests\Unit {
 		/** @var callable|null */
 		public static $set_post_language_callback = null;
 
+		/** @var callable|null */
+		public static $save_post_translations_callback = null;
+
 		public static function resetCallbacks(): void {
 			self::$get_post_language_callback = null;
 			self::$set_post_language_callback = null;
+			self::$save_post_translations_callback = null;
 		}
 
 		public static function invokeSetPostLanguage( int $post_id, string $lang ): bool {
@@ -97,6 +127,26 @@ namespace AI_Translate\Tests\Unit {
 				return (bool) call_user_func( self::$set_post_language_callback, $post_id, $lang );
 			}
 
+			return true;
+		}
+
+		public static function invokeGetPostLanguage( int $post_id ) {
+			if ( is_callable( self::$get_post_language_callback ) ) {
+				return call_user_func( self::$get_post_language_callback, $post_id );
+			}
+
+			return false;
+		}
+
+		public static function invokeSavePostTranslations( array $translations ): bool {
+			if ( is_callable( self::$save_post_translations_callback ) ) {
+				return (bool) call_user_func( self::$save_post_translations_callback, $translations );
+			}
+
+			return true;
+		}
+
+		public function is_available(): bool {
 			return true;
 		}
 
