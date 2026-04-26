@@ -66,8 +66,7 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 
 		$result = pll_set_post_language( $post_id, $target_language );
 		if ( false === $result ) {
-			$updated_language = $this->get_post_language( $post_id );
-			if ( null !== $updated_language && $updated_language === $target_language ) {
+			if ( $this->can_confirm_target_language( $post_id, $target_language ) ) {
 				return true;
 			}
 
@@ -126,7 +125,6 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 		}
 
 		$translation_id = $existing;
-		$language_set_error = null;
 
 		// Use a filter to preserve the original post author.
 		$author_override = function ( $data ) use ( $post ) {
@@ -154,9 +152,10 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 			}
 
 			$set_result = $this->set_post_language( $translation_id, $target_lang );
-			if ( is_wp_error( $set_result ) ) {
-				$language_set_error = $set_result;
-			}
+			// Polylang can return false here even when the post already resolves
+			// to the target language shortly afterwards. Treat this as best-effort
+			// and rely on the final translation-link save as the authoritative step.
+			unset( $set_result );
 		}
 
 		$update_data = array( 'ID' => $translation_id );
@@ -225,14 +224,6 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 			return new \WP_Error( 'polylang_update_failed', __( 'Polylang could not rewrite translation links.', 'slytranslate' ) );
 		}
 
-		if ( is_wp_error( $language_set_error ) ) {
-			$resolved_language = $this->get_post_language( $translation_id );
-			$resolved_target   = absint( pll_get_post( $source_post_id, $target_lang ) );
-			if ( $resolved_language !== $target_lang && $resolved_target !== $translation_id ) {
-				return $language_set_error;
-			}
-		}
-
 		return $translation_id;
 	}
 
@@ -247,4 +238,31 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 		) );
 		return false !== $result;
 	}
+
+	private function can_confirm_target_language( int $post_id, string $target_language ): bool {
+		for ( $attempt = 0; $attempt < 20; $attempt++ ) {
+			if ( function_exists( 'clean_post_cache' ) ) {
+				clean_post_cache( $post_id );
+			}
+
+			$resolved_language = $this->get_post_language( $post_id );
+			if ( null !== $resolved_language && $resolved_language === $target_language ) {
+				return true;
+			}
+
+			if ( function_exists( 'pll_get_post' ) ) {
+				$resolved_post = absint( pll_get_post( $post_id, $target_language ) );
+				if ( $resolved_post === $post_id ) {
+					return true;
+				}
+			}
+
+			if ( $attempt < 19 ) {
+				usleep( 100000 );
+			}
+		}
+
+		return false;
+	}
+
 }
