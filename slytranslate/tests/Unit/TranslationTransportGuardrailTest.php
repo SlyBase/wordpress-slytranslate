@@ -185,6 +185,69 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertStringContainsString( 'temporarily rate-limited upstream', $diagnostics['error_message'] );
 	}
 
+	public function test_translate_chunk_surfaces_nested_provider_message_from_generic_connector_502_error(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'nvidia/nemotron-3-super-120b-a12b:free',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$this->stubWpFunctionReturn( 'get_option', false );
+		$this->stubWpFunction(
+			'wp_ai_client_prompt',
+			static function () {
+				return new class {
+					public function using_system_instruction( string $prompt ) {
+						return $this;
+					}
+
+					public function using_temperature( $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text() {
+						return new \WP_Error(
+							'prompt_upstream_server_error',
+							'Bad Gateway (502) - Provider returned error',
+							array(
+								'body' => wp_json_encode(
+									array(
+										'error' => array(
+											'message'  => 'Provider returned error',
+											'metadata' => array(
+												'raw' => 'The upstream provider rejected model nvidia/nemotron-3-super-120b-a12b:free because the request payload was not supported.',
+											),
+										),
+									)
+								),
+							)
+						);
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'prompt_upstream_server_error', $result->get_error_code() );
+		$this->assertStringContainsString( 'request payload was not supported', $result->get_error_message() );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'prompt_upstream_server_error', $diagnostics['error_code'] );
+		$this->assertStringContainsString( 'request payload was not supported', $diagnostics['error_message'] );
+	}
+
 	public function test_translategemma_kwargs_request_omits_system_message(): void {
 		$captured_body = array();
 

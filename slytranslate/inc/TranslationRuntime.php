@@ -1938,16 +1938,34 @@ class TranslationRuntime {
 	 * actual rate-limit details inside nested response payloads.
 	 */
 	private static function normalize_transport_error( \WP_Error $error, string $model_slug ): \WP_Error {
-		if ( ! self::is_rate_limit_error( $error ) ) {
-			return $error;
+		if ( self::is_rate_limit_error( $error ) ) {
+			$message = self::extract_rate_limit_error_message( $error, $model_slug );
+			if ( '' === $message || $message === $error->get_error_message() ) {
+				return $error;
+			}
+
+			return self::clone_transport_error_with_message( $error, 'translation_provider_rate_limited', $message );
 		}
 
-		$message = self::extract_rate_limit_error_message( $error, $model_slug );
+		$message = self::extract_specific_transport_error_message( $error, $model_slug );
 		if ( '' === $message || $message === $error->get_error_message() ) {
 			return $error;
 		}
 
-		return new \WP_Error( 'translation_provider_rate_limited', $message );
+		return self::clone_transport_error_with_message( $error, (string) $error->get_error_code(), $message );
+	}
+
+	private static function clone_transport_error_with_message( \WP_Error $error, string $code, string $message ): \WP_Error {
+		$resolved_code = '' !== trim( $code ) ? $code : (string) $error->get_error_code();
+		$error_data    = method_exists( $error, 'get_error_data' )
+			? $error->get_error_data( (string) $error->get_error_code() )
+			: null;
+
+		if ( null !== $error_data ) {
+			return new \WP_Error( $resolved_code, $message, $error_data );
+		}
+
+		return new \WP_Error( $resolved_code, $message );
 	}
 
 	/**
@@ -2064,6 +2082,103 @@ class TranslationRuntime {
 			__( 'The translation provider temporarily rate-limited model "%s". Please retry shortly or switch to another model.', 'slytranslate' ),
 			'' !== $model_slug ? $model_slug : 'unknown'
 		);
+	}
+
+	private static function extract_specific_transport_error_message( \WP_Error $error, string $model_slug ): string {
+		$original_message = trim( (string) $error->get_error_message() );
+		$fragments        = self::get_transport_error_fragments( $error );
+		$candidates       = array();
+
+		foreach ( $fragments as $fragment ) {
+			if ( ! self::is_specific_transport_error_fragment( $fragment, $original_message, $model_slug ) ) {
+				continue;
+			}
+
+			$candidates[] = $fragment;
+		}
+
+		if ( ! empty( $candidates ) ) {
+			usort(
+				$candidates,
+				static fn( string $left, string $right ): int => strlen( $right ) <=> strlen( $left )
+			);
+
+			return trim( (string) $candidates[0] );
+		}
+
+		if ( self::looks_like_generic_connector_error_message( $original_message ) ) {
+			return sprintf(
+				/* translators: %s: model slug. */
+				__( 'The translation provider returned an upstream error for model "%s". No detailed provider message was exposed by the connector.', 'slytranslate' ),
+				'' !== $model_slug ? $model_slug : 'unknown'
+			);
+		}
+
+		return '';
+	}
+
+	private static function is_specific_transport_error_fragment( string $fragment, string $original_message, string $model_slug ): bool {
+		$fragment = trim( $fragment );
+		if ( '' === $fragment ) {
+			return false;
+		}
+
+		$normalized_fragment = strtolower( $fragment );
+		$normalized_original = strtolower( trim( $original_message ) );
+		$normalized_model    = strtolower( trim( $model_slug ) );
+
+		if ( '' !== $normalized_original && $normalized_fragment === $normalized_original ) {
+			return false;
+		}
+
+		if ( '' !== $normalized_model && $normalized_fragment === $normalized_model ) {
+			return false;
+		}
+
+		if ( preg_match( '/^\d{3}$/', $fragment ) ) {
+			return false;
+		}
+
+		if ( preg_match( '/^(?:error|message|metadata|raw|body|code|status)$/i', $fragment ) ) {
+			return false;
+		}
+
+		if ( false === preg_match( '/\s/u', $fragment ) && false !== strpos( $fragment, '/' ) ) {
+			return false;
+		}
+
+		if ( filter_var( $fragment, FILTER_VALIDATE_URL ) ) {
+			return false;
+		}
+
+		if ( self::looks_like_generic_connector_error_message( $fragment ) ) {
+			return false;
+		}
+
+		return strlen( $fragment ) >= 16 && 1 === preg_match( '/\s/u', $fragment );
+	}
+
+	private static function looks_like_generic_connector_error_message( string $message ): bool {
+		$normalized = strtolower( trim( $message ) );
+		if ( '' === $normalized ) {
+			return false;
+		}
+
+		$generic_markers = array(
+			'bad gateway (502) - provider returned error',
+			'provider returned error',
+			'upstream server error',
+			'prompt_upstream_server_error',
+			'http_bad_gateway',
+		);
+
+		foreach ( $generic_markers as $marker ) {
+			if ( false !== strpos( $normalized, $marker ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
