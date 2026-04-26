@@ -489,6 +489,81 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $prompts[1] );
 	}
 
+	public function test_translate_chunk_uses_plain_prompt_recovery_after_repeated_empty_output(): void {
+		$call_count = 0;
+		$inputs     = array();
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'gemma-4-E4B-it-UD-Q8_K_XL',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+
+				return $default;
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$call_count, &$inputs ) {
+				return new class( $text, $call_count, $inputs ) {
+					private string $text;
+					private int $call_count;
+					private array $inputs;
+
+					public function __construct( string $text, int &$call_count, array &$inputs ) {
+						$this->text       = $text;
+						$this->call_count = &$call_count;
+						$this->inputs     = &$inputs;
+					}
+
+					public function using_system_instruction( string $prompt ) {
+						return $this;
+					}
+
+					public function using_temperature( float $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						$this->call_count++;
+						$this->inputs[] = $this->text;
+
+						if ( $this->call_count < 3 ) {
+							return '';
+						}
+
+						return 'Testbeitrag zur Uebersetzung';
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'translate_chunk',
+			array( 'test Post for translation', 'Translate this.' )
+		);
+
+		$this->assertSame( 'Testbeitrag zur Uebersetzung', $result );
+		$this->assertCount( 3, $inputs );
+		$this->assertStringContainsString( 'Translate the following text from EN to DE.', $inputs[2] );
+	}
+
 	public function test_tower_profile_retries_validation_failure_with_smaller_chunks(): void {
 		$call_count  = 0;
 		$input_texts = array();

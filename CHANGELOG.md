@@ -32,6 +32,7 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - Reliability: when the WordPress AI Client returns an empty model output, SlyTranslate now performs one direct-API recovery attempt if a compatible endpoint is configured.
 - Polylang: translation creation no longer fails when the new target draft already has the requested language.
 - Reliability: title translation now retries once without the title-specific prompt hint when a model returns an empty output.
+- Reliability: repeated empty model outputs now trigger a final plain-prompt retry before translation is aborted.
 - Security: single and bulk translation admin notices now require a verified notice nonce before result parameters are read.
 - Security: `ai_translate_learned_context_windows` now sanitizes and bounds learned model context-window values via the Settings API callback.
 - Security: bulk admin notice counters now pass through `wp_unslash()` before numeric sanitization.

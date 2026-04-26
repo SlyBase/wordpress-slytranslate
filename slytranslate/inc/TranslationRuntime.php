@@ -1126,10 +1126,128 @@ class TranslationRuntime {
 				return self::translate_chunk( $source_text, $retry_prompt, 1 );
 			}
 
+			if ( 'invalid_translation_empty' === $validation_error_code && 1 === $validation_attempt ) {
+				TimingLogger::increment( 'retries' );
+				TimingLogger::increment( 'fallbacks' );
+				TimingLogger::log( 'ai_validation_retry', array(
+					'model'    => $model_slug,
+					'reason'   => $validation_error_code,
+					'strategy' => 'plain_prompt_recovery',
+				) );
+				TimingLogger::log( 'ai_call_fallback', array(
+					'from'   => 'wp_ai_client',
+					'to'     => 'wp_ai_client_plain_prompt',
+					'reason' => 'invalid_translation_empty',
+					'model'  => $model_slug,
+				) );
+
+				$plain_result = self::translate_chunk_with_plain_prompt_recovery( $source_text, $model_slug );
+				if ( is_wp_error( $plain_result ) ) {
+					return $plain_result;
+				}
+
+				return self::finalize_translated_chunk( $source_text, $plain_result, $model_slug, $prompt, 2 );
+			}
+
 			return $validation_error;
 		}
 
 		return $translated_text;
+	}
+
+	private static function translate_chunk_with_plain_prompt_recovery( string $source_text, string $model_slug ): mixed {
+		$input_chars       = self::char_length( $source_text );
+		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
+		$source_label      = self::resolve_language_label( is_string( self::$source_lang ) ? self::$source_lang : null, 'SOURCE' );
+		$target_label      = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'TARGET' );
+		$user_content      = sprintf(
+			'Translate the following text from %1$s to %2$s. Return only the translated text and preserve HTML, formatting, and symbols exactly.' . "\n\n" . '%3$s',
+			$source_label,
+			$target_label,
+			$source_text
+		);
+
+		$wp_started = TimingLogger::start();
+		$builder    = wp_ai_client_prompt( $user_content );
+
+		if ( is_callable( array( $builder, 'using_temperature' ) ) ) {
+			try {
+				$builder = $builder->using_temperature( 0.0 );
+			} catch ( \TypeError $e ) {
+				$builder = $builder->using_temperature( 0 );
+			}
+		}
+
+		if ( '' !== $model_slug && is_callable( array( $builder, 'using_model_preference' ) ) ) {
+			$builder = $builder->using_model_preference( $model_slug );
+		}
+
+		if ( is_callable( array( $builder, 'using_max_tokens' ) ) ) {
+			$builder = $builder->using_max_tokens( $max_output_tokens );
+		} elseif ( is_callable( array( $builder, 'using_max_output_tokens' ) ) ) {
+			$builder = $builder->using_max_output_tokens( $max_output_tokens );
+		}
+
+		$result         = $builder->generate_text();
+		$wp_duration_ms = TimingLogger::stop( $wp_started );
+		TimingLogger::increment( 'ai_calls' );
+
+		if ( is_wp_error( $result ) ) {
+			TimingLogger::log( 'ai_call', array(
+				'transport'    => 'wp_ai_client_plain',
+				'model'        => $model_slug,
+				'input_chars'  => $input_chars,
+				'output_chars' => 0,
+				'duration_ms'  => $wp_duration_ms,
+				'attempt'      => 2,
+				'ok'           => false,
+				'reason'       => $result->get_error_code(),
+			) );
+
+			self::record_transport_diagnostics( array(
+				'transport'        => 'wp_ai_client_plain',
+				'model_slug'       => $model_slug,
+				'direct_api_url'   => '',
+				'kwargs_supported' => self::direct_api_kwargs_supported(),
+				'fallback_allowed' => true,
+				'failure_reason'   => $result->get_error_code(),
+				'error_code'       => $result->get_error_code(),
+				'error_message'    => $result->get_error_message(),
+			) );
+
+			return $result;
+		}
+
+		$output_chars = is_string( $result ) ? self::char_length( $result ) : 0;
+		TimingLogger::log( 'ai_call', array(
+			'transport'    => 'wp_ai_client_plain',
+			'model'        => $model_slug,
+			'input_chars'  => $input_chars,
+			'output_chars' => $output_chars,
+			'duration_ms'  => $wp_duration_ms,
+			'attempt'      => 2,
+			'ok'           => is_string( $result ),
+		) );
+
+		if ( ! is_string( $result ) ) {
+			return new \WP_Error(
+				'invalid_translation_empty',
+				__( 'The model returned an empty translation result.', 'slytranslate' )
+			);
+		}
+
+		self::record_transport_diagnostics( array(
+			'transport'        => 'wp_ai_client_plain',
+			'model_slug'       => $model_slug,
+			'direct_api_url'   => '',
+			'kwargs_supported' => self::direct_api_kwargs_supported(),
+			'fallback_allowed' => true,
+			'failure_reason'   => '',
+			'error_code'       => '',
+			'error_message'    => '',
+		) );
+
+		return $result;
 	}
 
 	/* ---------------------------------------------------------------
