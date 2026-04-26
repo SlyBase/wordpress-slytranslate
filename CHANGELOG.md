@@ -28,6 +28,7 @@ Beta releases (for example 1.6.0-beta.1) are documented under their base version
 - MCP: `get-translation-status` now publicly advertises `single_entry_mode`, and `translate-content` guidance now documents the safer source-language call order.
 
 ### Fixes
+- Transport: connector errors now surface nested upstream rate-limit details from provider payloads instead of collapsing them to a generic 502 message.
 - Transport: normal translations now use the WordPress AI Client by default, and legacy force-direct mode no longer overrides non-TranslateGemma models.
 - Reliability: when the WordPress AI Client returns an empty model output, SlyTranslate now performs one direct-API recovery attempt if a compatible endpoint is configured.
 - Polylang: translation creation no longer fails when the new target draft already has the requested language.

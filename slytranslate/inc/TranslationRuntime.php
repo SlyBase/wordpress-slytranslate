@@ -924,6 +924,8 @@ class TranslationRuntime {
 		TimingLogger::increment( 'ai_calls' );
 
 		if ( is_wp_error( $result ) ) {
+			$result = self::normalize_transport_error( $result, $model_slug );
+
 			self::record_transport_diagnostics( array(
 				'transport'        => 'wp_ai_client',
 				'model_slug'       => $model_slug,
@@ -1193,6 +1195,8 @@ class TranslationRuntime {
 		TimingLogger::increment( 'ai_calls' );
 
 		if ( is_wp_error( $result ) ) {
+			$result = self::normalize_transport_error( $result, $model_slug );
+
 			TimingLogger::log( 'ai_call', array(
 				'transport'    => 'wp_ai_client_plain',
 				'model'        => $model_slug,
@@ -1881,25 +1885,158 @@ class TranslationRuntime {
 	 * when a 429 body is logged by the caller.
 	 */
 	public static function is_rate_limit_error( \WP_Error $error ): bool {
-		$code = $error->get_error_code();
-		if ( is_string( $code ) && ( false !== stripos( $code, 'rate_limit' ) || false !== stripos( $code, '429' ) ) ) {
-			return true;
-		}
-		foreach ( $error->get_error_messages() as $message ) {
-			if ( ! is_string( $message ) ) {
-				continue;
+		foreach ( self::get_transport_error_fragments( $error ) as $fragment ) {
+			if ( false !== stripos( $fragment, 'temporarily rate-limited upstream' ) ) {
+				return true;
 			}
-			if ( false !== stripos( $message, '(429)' )
-				|| false !== stripos( $message, '429 ' )
-				|| false !== stripos( $message, 'too many requests' )
-				|| false !== stripos( $message, 'rate limit' )
-				|| false !== stripos( $message, 'model limit reached' )
-				|| false !== stripos( $message, 'try again later' )
+
+			if ( false !== stripos( $fragment, 'too many requests' )
+				|| false !== stripos( $fragment, 'rate limit' )
+				|| false !== stripos( $fragment, 'model limit reached' )
+				|| false !== stripos( $fragment, 'try again later' )
 			) {
 				return true;
 			}
+
+			if ( preg_match( '/(?:^|[^0-9])429(?:[^0-9]|$)/', $fragment ) ) {
+				return true;
+			}
 		}
+
 		return false;
+	}
+
+	/**
+	 * Normalize connector transport errors when an upstream provider hides the
+	 * actual rate-limit details inside nested response payloads.
+	 */
+	private static function normalize_transport_error( \WP_Error $error, string $model_slug ): \WP_Error {
+		if ( ! self::is_rate_limit_error( $error ) ) {
+			return $error;
+		}
+
+		$message = self::extract_rate_limit_error_message( $error, $model_slug );
+		if ( '' === $message || $message === $error->get_error_message() ) {
+			return $error;
+		}
+
+		return new \WP_Error( 'translation_provider_rate_limited', $message );
+	}
+
+	/**
+	 * Flatten codes, messages, and nested error-data payloads into strings that
+	 * can be inspected for provider-specific transport hints.
+	 *
+	 * @return string[]
+	 */
+	private static function get_transport_error_fragments( \WP_Error $error ): array {
+		$fragments = array();
+		$codes     = $error->get_error_codes();
+
+		foreach ( $codes as $code ) {
+			if ( is_string( $code ) && '' !== trim( $code ) ) {
+				$fragments[] = trim( $code );
+			}
+
+			foreach ( $error->get_error_messages( $code ) as $message ) {
+				self::append_transport_error_fragments_from_value( $message, $fragments );
+			}
+
+			if ( method_exists( $error, 'get_error_data' ) ) {
+				self::append_transport_error_fragments_from_value( $error->get_error_data( $code ), $fragments );
+			}
+
+			if ( method_exists( $error, 'get_all_error_data' ) ) {
+				self::append_transport_error_fragments_from_value( $error->get_all_error_data( $code ), $fragments );
+			}
+		}
+
+		if ( empty( $codes ) ) {
+			foreach ( $error->get_error_messages() as $message ) {
+				self::append_transport_error_fragments_from_value( $message, $fragments );
+			}
+
+			if ( method_exists( $error, 'get_error_data' ) ) {
+				self::append_transport_error_fragments_from_value( $error->get_error_data(), $fragments );
+			}
+		}
+
+		$fragments = array_values(
+			array_unique(
+				array_filter(
+					array_map( 'trim', $fragments ),
+					static fn( $fragment ): bool => is_string( $fragment ) && '' !== $fragment
+				)
+			)
+		);
+
+		return $fragments;
+	}
+
+	/**
+	 * @param array<int,string> $fragments
+	 */
+	private static function append_transport_error_fragments_from_value( mixed $value, array &$fragments, int $depth = 0 ): void {
+		if ( $depth > 6 || null === $value ) {
+			return;
+		}
+
+		if ( is_string( $value ) ) {
+			if ( '' !== trim( $value ) ) {
+				$fragments[] = $value;
+			}
+
+			$decoded = json_decode( $value, true );
+			if ( is_array( $decoded ) ) {
+				self::append_transport_error_fragments_from_value( $decoded, $fragments, $depth + 1 );
+			}
+
+			return;
+		}
+
+		if ( is_scalar( $value ) ) {
+			$fragments[] = (string) $value;
+			return;
+		}
+
+		if ( is_array( $value ) ) {
+			foreach ( $value as $inner_value ) {
+				self::append_transport_error_fragments_from_value( $inner_value, $fragments, $depth + 1 );
+			}
+			return;
+		}
+
+		if ( is_object( $value ) ) {
+			foreach ( get_object_vars( $value ) as $inner_value ) {
+				self::append_transport_error_fragments_from_value( $inner_value, $fragments, $depth + 1 );
+			}
+		}
+	}
+
+	private static function extract_rate_limit_error_message( \WP_Error $error, string $model_slug ): string {
+		$fragments = self::get_transport_error_fragments( $error );
+
+		foreach ( $fragments as $fragment ) {
+			if ( false !== stripos( $fragment, 'temporarily rate-limited upstream' ) ) {
+				return $fragment;
+			}
+		}
+
+		foreach ( $fragments as $fragment ) {
+			if ( false !== stripos( $fragment, 'too many requests' )
+				|| false !== stripos( $fragment, 'rate limit' )
+				|| false !== stripos( $fragment, 'model limit reached' )
+				|| false !== stripos( $fragment, 'try again later' )
+			) {
+				return $fragment;
+			}
+		}
+
+		return sprintf(
+			/* translators: %s: model slug. */
+			__( 'The translation provider temporarily rate-limited model "%s". Please retry shortly or switch to another model.', 'slytranslate' ),
+			'' !== $model_slug ? $model_slug : 'unknown'
+		);
 	}
 
 	/**
@@ -1915,10 +2052,7 @@ class TranslationRuntime {
 	 */
 	public static function extract_retry_after_seconds( \WP_Error $error, float $default_seconds = 2.0 ): float {
 		$seconds = 0.0;
-		foreach ( $error->get_error_messages() as $message ) {
-			if ( ! is_string( $message ) ) {
-				continue;
-			}
+		foreach ( self::get_transport_error_fragments( $error ) as $message ) {
 
 			// "try again in 1m30s", "try again in 30s", "try again in 2.5s".
 			if ( preg_match( '/try again in\s+(?:(\d+)m)?(\d+(?:\.\d+)?)s/i', $message, $m ) ) {

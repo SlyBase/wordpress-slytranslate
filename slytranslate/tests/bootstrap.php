@@ -62,6 +62,26 @@ if ( ! class_exists( 'WP_Error' ) ) {
 			$messages = $this->errors[ $code ] ?? [];
 			return $messages[0] ?? '';
 		}
+
+		public function get_error_data( string $code = '' ): mixed {
+			if ( '' === $code ) {
+				$code = $this->get_error_code();
+			}
+
+			return $this->error_data[ $code ] ?? null;
+		}
+
+		public function get_all_error_data( string $code = '' ): array {
+			if ( '' === $code ) {
+				$code = $this->get_error_code();
+			}
+
+			if ( ! array_key_exists( $code, $this->error_data ) ) {
+				return array();
+			}
+
+			return array( $this->error_data[ $code ] );
+		}
 	}
 }
 

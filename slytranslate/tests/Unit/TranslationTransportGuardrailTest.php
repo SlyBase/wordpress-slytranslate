@@ -124,6 +124,67 @@ class TranslationTransportGuardrailTest extends TestCase {
 		$this->assertStringContainsString( 'Could not connect to direct API', $diagnostics['error_message'] );
 	}
 
+	public function test_translate_chunk_normalizes_nested_openrouter_rate_limit_payload_from_connector_error(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'google/gemma-4-31b-it:free',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'de' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'rate_limit_retry_depth', 3 );
+
+		$this->stubWpFunctionReturn( 'get_option', false );
+		$this->stubWpFunction(
+			'wp_ai_client_prompt',
+			static function () {
+				return new class {
+					public function using_temperature( $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text() {
+						return new \WP_Error(
+							'http_bad_gateway',
+							'Bad Gateway (502) - Provider returned error',
+							array(
+								'body' => wp_json_encode(
+									array(
+										'error' => array(
+											'message'  => 'Provider returned error',
+											'code'     => 429,
+											'metadata' => array(
+												'raw' => 'google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations',
+											),
+										),
+									)
+								),
+							)
+						);
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Katze', 'Prompt' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'translation_provider_rate_limited', $result->get_error_code() );
+		$this->assertStringContainsString( 'temporarily rate-limited upstream', $result->get_error_message() );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'translation_provider_rate_limited', $diagnostics['error_code'] );
+		$this->assertStringContainsString( 'temporarily rate-limited upstream', $diagnostics['error_message'] );
+	}
+
 	public function test_translategemma_kwargs_request_omits_system_message(): void {
 		$captured_body = array();
 
