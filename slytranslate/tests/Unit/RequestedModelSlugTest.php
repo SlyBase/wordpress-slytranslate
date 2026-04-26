@@ -102,6 +102,15 @@ class RequestedModelSlugTest extends TestCase {
 		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
 	}
 
+	public function test_openrouter_nemotron_slug_maps_to_system_prompt_profile(): void {
+		$model_slug = 'openrouter nvidia/nemotron-3-super-120b-a12b:free';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'openrouter_nemotron', $profile['id'] );
+		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
+		$this->assertFalse( ! empty( $profile['requires_chat_template_kwargs'] ) );
+	}
+
 	public function test_translategemma_slug_maps_to_strict_direct_api_profile(): void {
 		$this->assertTrue( TranslationRuntime::model_requires_strict_direct_api( 'translategemma-4b-it.Q4_K_M' ) );
 	}

@@ -151,6 +151,25 @@ class PromptBuildingTest extends TestCase {
 		$this->assertStringContainsString( 'DE:', $payload['user_content'] );
 	}
 
+	public function test_openrouter_nemotron_profile_keeps_system_plus_user_payload_shape(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'de' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'en' );
+
+		$profile = TranslationRuntime::get_model_profile( 'openrouter nvidia/nemotron-3-super-120b-a12b:free' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array( 'Katze', 'Prompt', $profile, false, 0 )
+		);
+
+		$this->assertSame( 'openrouter_nemotron', $profile['id'] ?? '' );
+		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( 'openrouter nvidia/nemotron-3-super-120b-a12b:free' ) );
+		$this->assertTrue( $payload['use_system_prompt'] );
+		$this->assertSame( 'Prompt', $payload['system_prompt'] );
+		$this->assertSame( 'Katze', $payload['user_content'] );
+		$this->assertSame( array(), $payload['extra_request_body'] );
+	}
+
 	public function test_bilingual_payload_uses_generic_labels_for_any_language_codes(): void {
 		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'pt_BR' );
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'zh-hans' );

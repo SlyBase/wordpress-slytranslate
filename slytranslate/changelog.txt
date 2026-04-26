@@ -21,6 +21,7 @@ Changes:
 * MCP: get-translation-status now publicly advertises single_entry_mode, and translate-content guidance now documents the safer source-language call order.
 
 Fixes:
+* OpenRouter Nemotron models now use standard system/user chat prompts instead of bilingual-frame user-only prompts, matching the working direct API request shape and reducing prompt-instruction leakage.
 * Transport: connector errors now surface nested upstream rate-limit details from provider payloads instead of collapsing them to a generic 502 message.
 * Transport: normal translations now use the WordPress AI Client by default, and legacy force-direct mode no longer overrides non-TranslateGemma models.
 * Reliability: when the WordPress AI Client returns an empty model output, SlyTranslate now performs one direct-API recovery attempt if a compatible endpoint is configured.
