@@ -220,4 +220,126 @@ class TranslationProgressTest extends TestCase {
 			TranslationProgressTracker::get_progress( 42 )
 		);
 	}
+
+	public function test_translate_post_retries_title_without_title_hint_after_empty_output(): void {
+		$source_post = new \WP_Post(
+			array(
+				'ID'           => 45,
+				'post_type'    => 'post',
+				'post_status'  => 'draft',
+				'post_title'   => 'test Post for translation',
+				'post_content' => '',
+				'post_excerpt' => '',
+			)
+		);
+		$prompt_inputs = array();
+		$call_count    = 0;
+
+		$adapter = new class implements TranslationPluginAdapter {
+			public function is_available(): bool {
+				return true;
+			}
+
+			public function get_languages(): array {
+				return array(
+					'en' => 'English',
+					'de' => 'Deutsch',
+				);
+			}
+
+			public function get_post_language( int $post_id ): ?string {
+				return 45 === $post_id ? 'en' : null;
+			}
+
+			public function get_post_translations( int $post_id ): array {
+				return array();
+			}
+
+			public function create_translation( int $source_post_id, string $target_lang, array $data ) {
+				return 145;
+			}
+
+			public function link_translation( int $source_post_id, int $translated_post_id, string $target_lang ): bool {
+				return true;
+			}
+		};
+
+		$this->stubWpFunctionReturn( 'get_current_user_id', 17 );
+		$this->stubWpFunctionReturn( 'current_user_can', true );
+		$this->stubWpFunctionReturn( 'post_type_exists', true );
+		$this->stubWpFunction( 'get_post',
+			static function ( $post_id ) use ( $source_post ) {
+				return 45 === (int) $post_id ? $source_post : null;
+			}
+		);
+		$this->stubWpFunctionReturn( 'get_post_meta', array() );
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+				return $default;
+			}
+		);
+		$this->stubWpFunctionReturn( 'get_transient', false );
+		$this->stubWpFunctionReturn( 'set_transient', true );
+		$this->stubWpFunctionReturn( 'delete_transient', true );
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $input_text ) use ( &$prompt_inputs, &$call_count ) {
+				return new class( $input_text, $prompt_inputs, $call_count ) {
+					private string $input_text;
+					private array $prompt_inputs;
+					private int $call_count;
+
+					public function __construct( string $input_text, array &$prompt_inputs, int &$call_count ) {
+						$this->input_text    = $input_text;
+						$this->prompt_inputs = &$prompt_inputs;
+						$this->call_count    = &$call_count;
+					}
+
+					public function using_system_instruction( string $prompt ) {
+						return $this;
+					}
+
+					public function using_temperature( float $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						$this->call_count++;
+						$this->prompt_inputs[] = $this->input_text;
+
+						if ( str_contains( $this->input_text, 'This is a post title.' ) ) {
+							return '';
+						}
+
+						return 'Testbeitrag zur Uebersetzung';
+					}
+				};
+			}
+		);
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'gemma-4-E4B-it-UD-Q8_K_XL',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( AI_Translate::class, 'adapter', $adapter );
+
+		$result = AI_Translate::translate_post( 45, 'de', 'draft', false, true, '', 'en' );
+
+		$this->assertSame( 145, $result );
+		$this->assertCount( 3, $prompt_inputs );
+		$this->assertStringContainsString( 'This is a post title.', $prompt_inputs[0] );
+		$this->assertStringContainsString( 'This is a post title.', $prompt_inputs[1] );
+		$this->assertStringNotContainsString( 'This is a post title.', $prompt_inputs[2] );
+	}
 }

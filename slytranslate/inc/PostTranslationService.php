@@ -149,10 +149,7 @@ class PostTranslationService {
 				TranslationProgressTracker::mark_phase( 'title' );
 				TimingLogger::log( 'phase_start', array( 'phase' => 'title', 'chars' => self::char_length( $post->post_title ) ) );
 				$phase_started = TimingLogger::start();
-				$title_prompt = $additional_prompt;
-				$title_hint   = 'This is a post title. Translate it concisely and keep a similar length to the original. Do not expand, elaborate, or add content.';
-				$title_prompt = '' !== trim( $title_prompt ) ? $title_prompt . "\n\n" . $title_hint : $title_hint;
-				$title = TranslationRuntime::translate_text( $post->post_title, $to, $from, $title_prompt );
+				$title = self::translate_title_with_empty_output_retry( $post->post_title, $to, $from, $additional_prompt );
 				if ( is_wp_error( $title ) ) {
 					TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $title->get_error_code() ) );
 					self::log_job_end( $post_id, $job_started_at, false );
@@ -260,6 +257,26 @@ class PostTranslationService {
 			// inherit the last percentage from this completed/failed job.
 			TranslationProgressTracker::clear_progress( $post_id );
 		}
+	}
+
+	private static function translate_title_with_empty_output_retry( string $title, string $target_language, string $source_language, string $additional_prompt ): mixed {
+		$title_hint   = 'This is a post title. Translate it concisely and keep a similar length to the original. Do not expand, elaborate, or add content.';
+		$title_prompt = '' !== trim( $additional_prompt ) ? $additional_prompt . "\n\n" . $title_hint : $title_hint;
+		$translated   = TranslationRuntime::translate_text( $title, $target_language, $source_language, $title_prompt );
+
+		if ( ! is_wp_error( $translated ) || 'invalid_translation_empty' !== $translated->get_error_code() ) {
+			return $translated;
+		}
+
+		TimingLogger::increment( 'retries' );
+		TimingLogger::log( 'ai_validation_retry', array(
+			'model'    => TranslationRuntime::get_requested_model_slug(),
+			'reason'   => 'invalid_translation_empty',
+			'phase'    => 'title',
+			'strategy' => 'retry_without_title_hint',
+		) );
+
+		return TranslationRuntime::translate_text( $title, $target_language, $source_language, $additional_prompt );
 	}
 
 	private static function clear_embed_cache_meta( int $post_id ): void {
