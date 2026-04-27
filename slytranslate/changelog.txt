@@ -22,6 +22,8 @@ Changes:
 * Performance: expanded and corrected KNOWN_MODEL_CONTEXT_WINDOWS with many new model families (GPT-5, GPT-4.1 @ 1 M, o1/o3/o4-mini, Mistral variants, Phi-4, GLM, Moonshot, Yi, Cohere, Falcon, Baichuan, and more).
 * API: content-translation abilities now accept an optional source language for stricter WP Multilang requests.
 * MCP: get-translation-status now publicly advertises single_entry_mode, and translate-content guidance now documents the safer source-language call order.
+* Profiles: model families now inherit from one universal default profile with sparse overrides, reducing maintenance for newly added model slugs.
+* Profiles: Nemotron matching now follows the model family across providers instead of relying on OpenRouter-specific labels.
 
 Fixes:
 * i18n: added the missing German translation for the list-table overwrite confirmation warning.
@@ -57,6 +59,7 @@ Fixes:
 * Gutenberg: recursive list-wrapper reconstruction now preserves valid block comment names to prevent malformed list blocks.
 * Stability: translated posts now clear inherited _oembed_* cache meta so corrupted embed cache values can no longer crash the editor preload.
 * Reliability: connector timeout errors now trigger an automatic smaller-chunk retry instead of failing the whole translation immediately.
+* Reliability: thinking-related chat_template_kwargs are now applied as best effort, with an automatic retry path that drops kwargs when an endpoint rejects them.
 
 = 1.5.6 =
 * MCP: sharpened public ability descriptions so discovery now hints at the intended read-only preparation flow before mutating translation calls.

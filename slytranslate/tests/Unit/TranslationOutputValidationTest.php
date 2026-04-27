@@ -427,8 +427,8 @@ class TranslationOutputValidationTest extends TestCase {
 	}
 
 	public function test_translate_chunk_retries_once_for_standard_models_after_invalid_output(): void {
-		$call_count = 0;
-		$prompts    = array();
+		$call_count    = 0;
+		$user_payloads = array();
 
 		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
 			'service_slug'   => '',
@@ -446,18 +446,19 @@ class TranslationOutputValidationTest extends TestCase {
 			}
 		);
 		$this->stubWpFunction( 'wp_ai_client_prompt',
-			static function ( string $text ) use ( &$call_count, &$prompts ) {
-				return new class( $call_count, $prompts ) {
+			static function ( string $text ) use ( &$call_count, &$user_payloads ) {
+				return new class( $text, $call_count, $user_payloads ) {
+					private string $text;
 					private int $call_count;
-					private array $prompts;
+					private array $user_payloads;
 
-					public function __construct( int &$call_count, array &$prompts ) {
+					public function __construct( string $text, int &$call_count, array &$user_payloads ) {
+						$this->text       = $text;
 						$this->call_count = &$call_count;
-						$this->prompts    = &$prompts;
+						$this->user_payloads = &$user_payloads;
 					}
 
 					public function using_system_instruction( string $prompt ) {
-						$this->prompts[] = $prompt;
 						return $this;
 					}
 
@@ -471,6 +472,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 					public function generate_text(): string {
 						++$this->call_count;
+						$this->user_payloads[] = $this->text;
 
 						if ( 1 === $this->call_count ) {
 							return "Okay, let's break this down.\n\n**Strengths:**\n* Clear structure";
@@ -485,8 +487,8 @@ class TranslationOutputValidationTest extends TestCase {
 		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Clean title', 'Translate this.' ) );
 
 		$this->assertSame( 'Ein sauberer Titel', $result );
-		$this->assertCount( 2, $prompts );
-		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $prompts[1] );
+		$this->assertCount( 2, $user_payloads );
+		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $user_payloads[1] );
 	}
 
 	public function test_translate_chunk_uses_plain_prompt_recovery_after_repeated_empty_output(): void {

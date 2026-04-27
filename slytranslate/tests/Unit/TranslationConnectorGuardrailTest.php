@@ -20,6 +20,7 @@ class TranslationConnectorGuardrailTest extends TestCase {
 		$this->setStaticProperty( TranslationRuntime::class, 'last_diagnostics', null );
 		$this->setStaticProperty( TranslationRuntime::class, 'rate_limit_retry_depth', 3 );
 		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'wp_ai_client_kwargs_support_cache', array() );
 	}
 
 	public function test_madlad_profile_is_blocked_before_chat_transport_is_called(): void {
@@ -136,5 +137,61 @@ class TranslationConnectorGuardrailTest extends TestCase {
 
 		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
 		$this->assertSame( 'translation_provider_rate_limited', $diagnostics['error_code'] );
+	}
+
+	public function test_qwen_retries_without_chat_template_kwargs_when_connector_rejects_them(): void {
+		$call_count = 0;
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug' => '',
+			'model_slug'   => 'Qwen3.5-9B-Q4_K_M',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections(
+			TranslationRuntime::get_model_profile( 'Qwen3.5-9B-Q4_K_M' )
+		);
+		$this->assertArrayHasKey( 'chat_template_kwargs', $injections );
+
+		$this->stubWpFunctionReturn( 'get_option', false );
+		$this->stubWpFunction(
+			'wp_ai_client_prompt',
+			static function () use ( &$call_count ) {
+				return new class( $call_count ) {
+					private int $call_count;
+
+					public function __construct( int &$call_count ) {
+						$this->call_count =& $call_count;
+					}
+
+					public function using_temperature( $temperature ) { return $this; }
+					public function using_model_preference( $model_slug ) { return $this; }
+					public function using_max_tokens( $max_tokens ) { return $this; }
+
+					public function generate_text() {
+						++$this->call_count;
+
+						if ( 1 === $this->call_count ) {
+							return new \WP_Error( 'prompt_bad_request', 'chat_template_kwargs is not allowed by this endpoint' );
+						}
+
+						return 'Hallo Welt';
+					}
+				};
+			}
+		);
+
+		$first_result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Hello world', 'Prompt' ) );
+		$this->assertSame( 'Hallo Welt', $first_result );
+
+		$second_result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( 'Good morning', 'Prompt' ) );
+		$this->assertSame( 'Hallo Welt', $second_result );
+
+		$this->assertSame( 3, $call_count );
+
+		$diagnostics = $this->getStaticProperty( TranslationRuntime::class, 'last_diagnostics' );
+		$this->assertSame( 'wp_ai_client', $diagnostics['transport'] );
+		$this->assertSame( '', $diagnostics['failure_reason'] );
 	}
 }

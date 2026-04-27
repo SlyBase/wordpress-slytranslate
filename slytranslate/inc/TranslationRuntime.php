@@ -180,6 +180,9 @@ class TranslationRuntime {
 	/** Cached normalized model profiles keyed by lower-cased model slug. */
 	private static array $model_profile_cache = array();
 
+	/** Per-request cache for model slugs that reject chat_template_kwargs. */
+	private static array $wp_ai_client_kwargs_support_cache = array();
+
 	/** Source / target language codes set inside translate_text() for use by DirectApiTranslationClient. */
 	private static $source_lang = null;
 	private static $target_lang = null;
@@ -280,6 +283,7 @@ class TranslationRuntime {
 		// Clear the cache so the new model gets the correct limit.
 		self::$chunk_char_limit_cache = null;
 		self::$model_profile_cache    = array();
+		self::$wp_ai_client_kwargs_support_cache = array();
 
 		try {
 			return $callback();
@@ -288,6 +292,7 @@ class TranslationRuntime {
 			self::$context                = $previous_context;
 			self::$chunk_char_limit_cache = null;
 			self::$model_profile_cache    = array();
+			self::$wp_ai_client_kwargs_support_cache = array();
 		}
 	}
 
@@ -406,9 +411,9 @@ class TranslationRuntime {
 		return array(
 			'id'                         => 'default',
 			'matchers'                   => array(),
-			'request_mode'               => self::REQUEST_MODE_SYSTEM_PLUS_USER,
-			'prompt_style'               => self::PROMPT_STYLE_GENERIC_TEMPLATE,
-			'supports_system_role'       => true,
+			'request_mode'               => self::REQUEST_MODE_USER_ONLY,
+			'prompt_style'               => self::PROMPT_STYLE_BILINGUAL_FRAME,
+			'supports_system_role'       => false,
 			'supports_chat_completions'  => true,
 			'requires_strict_direct_api' => false,
 			'requires_chat_template_kwargs' => false,
@@ -418,9 +423,9 @@ class TranslationRuntime {
 			'temperature'                => 0,
 			'retry_profile'              => array(
 				'retry_on_validation_failure' => true,
-				'retry_on_passthrough_de'     => false,
-				'reduce_chunk_on_retry'       => false,
-				'retry_chunk_chars'           => 0,
+				'retry_on_passthrough_de'     => true,
+				'reduce_chunk_on_retry'       => true,
+				'retry_chunk_chars'           => 1800,
 			),
 		);
 	}
@@ -443,11 +448,11 @@ class TranslationRuntime {
 		}
 
 		if ( ! in_array( $normalized['request_mode'], array( self::REQUEST_MODE_SYSTEM_PLUS_USER, self::REQUEST_MODE_USER_ONLY ), true ) ) {
-			$normalized['request_mode'] = self::REQUEST_MODE_SYSTEM_PLUS_USER;
+			$normalized['request_mode'] = (string) $defaults['request_mode'];
 		}
 
 		if ( ! in_array( $normalized['prompt_style'], array( self::PROMPT_STYLE_GENERIC_TEMPLATE, self::PROMPT_STYLE_BILINGUAL_FRAME ), true ) ) {
-			$normalized['prompt_style'] = self::PROMPT_STYLE_GENERIC_TEMPLATE;
+			$normalized['prompt_style'] = (string) $defaults['prompt_style'];
 		}
 
 		if ( ! in_array( $normalized['chunk_strategy'], array( self::CHUNK_STRATEGY_DEFAULT, self::CHUNK_STRATEGY_TOWER ), true ) ) {
@@ -619,7 +624,7 @@ class TranslationRuntime {
 	 * @param array $model_profile Normalized model profile.
 	 * @return array Subset of extra_request_body to inject; empty array when nothing applies.
 	 */
-	public static function extract_wp_ai_client_request_body_injections( array $model_profile ): array {
+	public static function extract_wp_ai_client_request_body_injections( array $model_profile, bool $allow_chat_template_kwargs = true ): array {
 		$extra = $model_profile['extra_request_body'] ?? array();
 		if ( ! is_array( $extra ) || empty( $extra ) ) {
 			return array();
@@ -628,11 +633,143 @@ class TranslationRuntime {
 		$extra = self::replace_profile_placeholders( $extra );
 
 		$inject = array();
-		if ( isset( $extra['chat_template_kwargs'] ) && is_array( $extra['chat_template_kwargs'] ) && ! empty( $extra['chat_template_kwargs'] ) ) {
+		if ( $allow_chat_template_kwargs
+			&& isset( $extra['chat_template_kwargs'] )
+			&& is_array( $extra['chat_template_kwargs'] )
+			&& ! empty( $extra['chat_template_kwargs'] )
+		) {
 			$inject['chat_template_kwargs'] = $extra['chat_template_kwargs'];
 		}
 
 		return $inject;
+	}
+
+	private static function get_model_slug_cache_key( string $model_slug ): string {
+		return strtolower( trim( $model_slug ) );
+	}
+
+	private static function can_send_chat_template_kwargs_for_model( string $model_slug ): bool {
+		$cache_key = self::get_model_slug_cache_key( $model_slug );
+		if ( '' === $cache_key ) {
+			return true;
+		}
+
+		if ( array_key_exists( $cache_key, self::$wp_ai_client_kwargs_support_cache ) ) {
+			return (bool) self::$wp_ai_client_kwargs_support_cache[ $cache_key ];
+		}
+
+		return true;
+	}
+
+	private static function remember_chat_template_kwargs_support_for_model( string $model_slug, bool $is_supported ): void {
+		$cache_key = self::get_model_slug_cache_key( $model_slug );
+		if ( '' === $cache_key ) {
+			return;
+		}
+
+		self::$wp_ai_client_kwargs_support_cache[ $cache_key ] = $is_supported;
+	}
+
+	private static function get_wp_ai_client_request_body_injections_for_model(
+		array $model_profile,
+		string $model_slug,
+		bool $force_disable_chat_template_kwargs = false
+	): array {
+		$allow_kwargs = ! $force_disable_chat_template_kwargs
+			&& self::can_send_chat_template_kwargs_for_model( $model_slug );
+
+		return self::extract_wp_ai_client_request_body_injections( $model_profile, $allow_kwargs );
+	}
+
+	private static function has_chat_template_kwargs_injections( array $injections ): bool {
+		return isset( $injections['chat_template_kwargs'] )
+			&& is_array( $injections['chat_template_kwargs'] )
+			&& ! empty( $injections['chat_template_kwargs'] );
+	}
+
+	private static function is_chat_template_kwargs_unsupported_error( \WP_Error $error ): bool {
+		foreach ( self::get_transport_error_fragments( $error ) as $fragment ) {
+			$normalized = strtolower( (string) $fragment );
+			if ( '' === $normalized ) {
+				continue;
+			}
+
+			if ( false === strpos( $normalized, 'chat_template_kwargs' )
+				&& false === strpos( $normalized, 'chat-template-kwargs' )
+				&& false === strpos( $normalized, 'template kwargs' )
+			) {
+				continue;
+			}
+
+			if ( false !== strpos( $normalized, 'unsupported' )
+				|| false !== strpos( $normalized, 'unknown' )
+				|| false !== strpos( $normalized, 'unexpected' )
+				|| false !== strpos( $normalized, 'not allowed' )
+				|| false !== strpos( $normalized, 'invalid' )
+				|| false !== strpos( $normalized, 'unrecognized' )
+				|| false !== strpos( $normalized, 'additional propert' )
+			) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function should_retry_wp_ai_client_without_kwargs(
+		\WP_Error $error,
+		array $model_profile,
+		array $injections
+	): bool {
+		if ( ! self::has_chat_template_kwargs_injections( $injections ) ) {
+			return false;
+		}
+
+		if ( ! empty( $model_profile['requires_chat_template_kwargs'] ) ) {
+			return false;
+		}
+
+		return self::is_chat_template_kwargs_unsupported_error( $error );
+	}
+
+	private static function execute_wp_ai_client_request(
+		array $transport_payload,
+		string $model_slug,
+		int $max_output_tokens,
+		array $injections
+	): mixed {
+		$builder = wp_ai_client_prompt( (string) $transport_payload['user_content'] );
+
+		if ( ! empty( $transport_payload['use_system_prompt'] )
+			&& is_callable( array( $builder, 'using_system_instruction' ) )
+		) {
+			$builder = $builder->using_system_instruction( (string) $transport_payload['system_prompt'] );
+		}
+
+		if ( is_callable( array( $builder, 'using_temperature' ) ) ) {
+			$temperature = is_numeric( $transport_payload['temperature'] ?? null ) ? (float) $transport_payload['temperature'] : 0.0;
+
+			try {
+				$builder = $builder->using_temperature( $temperature );
+			} catch ( \TypeError $e ) {
+				$builder = $builder->using_temperature( (int) round( $temperature ) );
+			}
+		}
+
+		if ( '' !== $model_slug && is_callable( array( $builder, 'using_model_preference' ) ) ) {
+			$builder = $builder->using_model_preference( $model_slug );
+		}
+
+		if ( is_callable( array( $builder, 'using_max_tokens' ) ) ) {
+			$builder = $builder->using_max_tokens( $max_output_tokens );
+		} elseif ( is_callable( array( $builder, 'using_max_output_tokens' ) ) ) {
+			$builder = $builder->using_max_output_tokens( $max_output_tokens );
+		}
+
+		return self::with_wp_ai_client_request_body_filter(
+			$injections,
+			static fn() => $builder->generate_text()
+		);
 	}
 
 	/**
@@ -819,34 +956,8 @@ class TranslationRuntime {
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
 		$transport_payload = self::build_transport_payload( $text, $prompt, $model_profile, true, $validation_attempt );
 
-		$wp_started = TimingLogger::start();
-		$builder    = wp_ai_client_prompt( (string) $transport_payload['user_content'] );
-
-		if ( ! empty( $transport_payload['use_system_prompt'] )
-			&& is_callable( array( $builder, 'using_system_instruction' ) )
-		) {
-			$builder = $builder->using_system_instruction( (string) $transport_payload['system_prompt'] );
-		}
-
-		if ( is_callable( array( $builder, 'using_temperature' ) ) ) {
-			$temperature = is_numeric( $transport_payload['temperature'] ?? null ) ? (float) $transport_payload['temperature'] : 0.0;
-
-			try {
-				$builder = $builder->using_temperature( $temperature );
-			} catch ( \TypeError $e ) {
-				$builder = $builder->using_temperature( (int) round( $temperature ) );
-			}
-		}
-
-		if ( '' !== $model_slug && is_callable( array( $builder, 'using_model_preference' ) ) ) {
-			$builder = $builder->using_model_preference( $model_slug );
-		}
-
-		if ( is_callable( array( $builder, 'using_max_tokens' ) ) ) {
-			$builder = $builder->using_max_tokens( $max_output_tokens );
-		} elseif ( is_callable( array( $builder, 'using_max_output_tokens' ) ) ) {
-			$builder = $builder->using_max_output_tokens( $max_output_tokens );
-		}
+		$wp_started         = TimingLogger::start();
+		$primary_injections = self::get_wp_ai_client_request_body_injections_for_model( $model_profile, $model_slug );
 
 		self::record_transport_diagnostics( array(
 			'transport'        => 'wp_ai_client',
@@ -855,10 +966,38 @@ class TranslationRuntime {
 			'failure_reason'   => '',
 		) );
 
-		$result = self::with_wp_ai_client_request_body_filter(
-			self::extract_wp_ai_client_request_body_injections( $model_profile ),
-			static fn() => $builder->generate_text()
+		$result = self::execute_wp_ai_client_request(
+			$transport_payload,
+			$model_slug,
+			$max_output_tokens,
+			$primary_injections
 		);
+
+		if ( is_wp_error( $result )
+			&& self::should_retry_wp_ai_client_without_kwargs( $result, $model_profile, $primary_injections )
+		) {
+			self::remember_chat_template_kwargs_support_for_model( $model_slug, false );
+			TimingLogger::increment( 'retries' );
+			TimingLogger::increment( 'fallbacks' );
+			TimingLogger::log( 'ai_call_fallback', array(
+				'from'   => 'wp_ai_client',
+				'to'     => 'wp_ai_client_no_kwargs',
+				'reason' => 'chat_template_kwargs_unsupported',
+				'model'  => $model_slug,
+			) );
+
+			$fallback_injections = self::get_wp_ai_client_request_body_injections_for_model( $model_profile, $model_slug, true );
+			$result              = self::execute_wp_ai_client_request(
+				$transport_payload,
+				$model_slug,
+				$max_output_tokens,
+				$fallback_injections
+			);
+		}
+
+		if ( ! is_wp_error( $result ) && self::has_chat_template_kwargs_injections( $primary_injections ) ) {
+			self::remember_chat_template_kwargs_support_for_model( $model_slug, true );
+		}
 
 		$wp_duration_ms = TimingLogger::stop( $wp_started );
 		TimingLogger::increment( 'ai_calls' );
@@ -1050,7 +1189,7 @@ class TranslationRuntime {
 		}
 
 		$result         = self::with_wp_ai_client_request_body_filter(
-			self::extract_wp_ai_client_request_body_injections( self::get_model_profile( $model_slug ) ),
+			self::get_wp_ai_client_request_body_injections_for_model( self::get_model_profile( $model_slug ), $model_slug ),
 			static fn() => $builder->generate_text()
 		);
 		$wp_duration_ms = TimingLogger::stop( $wp_started );
@@ -1274,6 +1413,7 @@ class TranslationRuntime {
 		self::$context              = null;
 		self::$chunk_char_limit_cache = null;
 		self::$model_profile_cache    = array();
+		self::$wp_ai_client_kwargs_support_cache = array();
 	}
 
 	public static function get_requested_model_slug(): string {

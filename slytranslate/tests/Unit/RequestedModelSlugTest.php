@@ -90,7 +90,8 @@ class RequestedModelSlugTest extends TestCase {
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );
 
 		$this->assertSame( 'qwen_thinking_aware', $profile['id'] );
-		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertFalse( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertArrayHasKey( 'chat_template_kwargs', $profile['extra_request_body'] );
 		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
 	}
 
@@ -99,7 +100,8 @@ class RequestedModelSlugTest extends TestCase {
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );
 
 		$this->assertSame( 'gemma4_thinking_aware', $profile['id'] );
-		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertFalse( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertArrayHasKey( 'chat_template_kwargs', $profile['extra_request_body'] );
 	}
 
 	public function test_phi4_slug_maps_to_thinking_aware_profile(): void {
@@ -107,15 +109,16 @@ class RequestedModelSlugTest extends TestCase {
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );
 
 		$this->assertSame( 'phi4_thinking_aware', $profile['id'] );
-		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertFalse( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertArrayHasKey( 'chat_template_kwargs', $profile['extra_request_body'] );
 		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
 	}
 
-	public function test_openrouter_nemotron_slug_maps_to_system_prompt_profile(): void {
+	public function test_nemotron_slug_maps_to_system_prompt_profile(): void {
 		$model_slug = 'nvidia/nemotron-3-super-120b-a12b:free';
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );
 
-		$this->assertSame( 'openrouter_nemotron', $profile['id'] );
+		$this->assertSame( 'nemotron_system', $profile['id'] );
 		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
 		$this->assertFalse( ! empty( $profile['requires_chat_template_kwargs'] ) );
 	}

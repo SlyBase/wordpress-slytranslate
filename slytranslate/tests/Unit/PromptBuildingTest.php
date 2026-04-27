@@ -151,7 +151,7 @@ class PromptBuildingTest extends TestCase {
 		$this->assertStringContainsString( 'DE:', $payload['user_content'] );
 	}
 
-	public function test_openrouter_nemotron_profile_keeps_system_plus_user_payload_shape(): void {
+	public function test_nemotron_profile_keeps_system_plus_user_payload_shape(): void {
 		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'de' );
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'en' );
 
@@ -162,7 +162,7 @@ class PromptBuildingTest extends TestCase {
 			array( 'Katze', 'Prompt', $profile, false, 0 )
 		);
 
-		$this->assertSame( 'openrouter_nemotron', $profile['id'] ?? '' );
+		$this->assertSame( 'nemotron_system', $profile['id'] ?? '' );
 		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( 'nvidia/nemotron-3-super-120b-a12b:free' ) );
 		$this->assertTrue( $payload['use_system_prompt'] );
 		$this->assertSame( 'Prompt', $payload['system_prompt'] );
@@ -253,7 +253,10 @@ class PromptBuildingTest extends TestCase {
 		);
 	}
 
-	public function test_default_profile_keeps_system_plus_user_payload_shape(): void {
+	public function test_default_profile_builds_bilingual_user_only_payload_shape(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
 		$profile = TranslationRuntime::get_model_profile( 'gpt-4o' );
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
@@ -261,8 +264,10 @@ class PromptBuildingTest extends TestCase {
 			array( 'Hello world', 'Prompt', $profile, false, 0 )
 		);
 
-		$this->assertTrue( $payload['use_system_prompt'] );
-		$this->assertSame( 'Prompt', $payload['system_prompt'] );
-		$this->assertSame( 'Hello world', $payload['user_content'] );
+		$this->assertFalse( $payload['use_system_prompt'] );
+		$this->assertSame( '', $payload['system_prompt'] );
+		$this->assertStringContainsString( 'Translate the following text from EN into DE.', $payload['user_content'] );
+		$this->assertStringContainsString( 'EN:', $payload['user_content'] );
+		$this->assertStringContainsString( 'DE:', $payload['user_content'] );
 	}
 }
