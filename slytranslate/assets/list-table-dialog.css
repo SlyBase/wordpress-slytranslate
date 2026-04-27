@@ -105,25 +105,25 @@
 }
 
 .slytranslate-picker-icon-button {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex: 0 0 40px;
+	position: relative;
+	display: inline-block;
 	width: 40px;
 	min-width: 40px;
 	height: 40px;
 	min-height: 40px;
 	padding: 0;
-	line-height: 1;
+	line-height: 0;
 	overflow: hidden;
 	text-align: center;
 	box-sizing: border-box;
 }
 
 .slytranslate-picker-icon {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	display: block;
+	transform: translate(-50%, -50%);
 	margin: 0;
 	font-size: 20px;
 	width: 20px;
@@ -132,6 +132,7 @@
 }
 
 .slytranslate-picker-icon::before {
+	display: block;
 	width: 20px;
 	height: 20px;
 	line-height: 20px;
@@ -143,19 +144,27 @@
 }
 
 .slytranslate-picker-model-row {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) 40px;
+	display: flex;
 	gap: 6px;
-	align-items: stretch;
+	align-items: center;
 	width: 100%;
 	box-sizing: border-box;
 }
 
 .slytranslate-picker-model-select {
+	flex: 1 1 0;
 	width: 100%;
 	min-width: 0;
 	max-width: none;
 	height: 40px;
+}
+
+#slytranslate-model-picker-select {
+	max-width: none;
+}
+
+.slytranslate-picker-model-row .slytranslate-picker-icon-button {
+	flex: 0 0 40px;
 }
 
 .slytranslate-picker-status {

@@ -234,6 +234,10 @@ msgstr ""
 msgid "Overwrite existing translation"
 msgstr ""
 
+#: slytranslate/inc/ListTableTranslation.php:365
+msgid "This will overwrite already translated posts/pages in the selected language. Continue?"
+msgstr ""
+
 #: slytranslate/inc/AbilityRegistrar.php:412
 msgid ""
 "Persists the per-user additional translation instructions so they are pre-"

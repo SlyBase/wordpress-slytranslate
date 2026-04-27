@@ -23,6 +23,7 @@ Changes:
 * MCP: get-translation-status now publicly advertises single_entry_mode, and translate-content guidance now documents the safer source-language call order.
 
 Fixes:
+* i18n: added the missing German translation for the list-table overwrite confirmation warning.
 * UI: list-table model picker swap/refresh icons are now centered reliably, and the model-select row now uses the full available dialog width.
 * OpenRouter Nemotron requests now normalize pasted label-style model slugs to the real connector id, use standard system/user chat prompts, and retry title translations once without the title-specific hint when the model answers with prompt-leaking assistant text.
 * Transport: generic connector 502/upstream errors now surface nested provider details when the connector includes them in the error payload.

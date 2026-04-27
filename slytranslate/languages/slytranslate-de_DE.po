@@ -243,6 +243,10 @@ msgstr "Übersetzung öffnen"
 msgid "Overwrite existing translation"
 msgstr "Bestehende Übersetzung überschreiben"
 
+#: slytranslate/inc/ListTableTranslation.php:365
+msgid "This will overwrite already translated posts/pages in the selected language. Continue?"
+msgstr "Dadurch werden bereits übersetzte Beiträge/Seiten in der ausgewählten Sprache überschrieben. Fortfahren?"
+
 #: slytranslate/inc/AbilityRegistrar.php:412
 msgid ""
 "Persists the per-user additional translation instructions so they are pre-"
