@@ -10,6 +10,7 @@ Features:
 
 Changes:
 * Transport: unified all chat-capable LLM model families through the WordPress AI Client connector. The in-plugin Direct API transport (DirectApiTranslationClient) has been removed.
+* Refactor: default model profile definitions were extracted into a dedicated registry class while keeping the existing profile filter contract unchanged.
 * Transport: TranslateGemma now routes via the WP AI Client connector with chat_template_kwargs (source_lang_code/target_lang_code) injected through the existing connector-agnostic http_request_args filter.
 * Admin: list-table dialog and background task bar scripts are now loaded through enqueued assets with localized bootstrap data instead of inline admin JavaScript.
 * Admin: list-table dialog markup styles are now loaded from an enqueued stylesheet instead of inline style attributes.
