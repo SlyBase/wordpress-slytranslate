@@ -678,9 +678,33 @@ class TranslationValidator {
 		return false === $count ? 0 : $count;
 	}
 
+	private static function count_source_language_markers( string $text, string $target_language ): int {
+		if ( 0 === strpos( $target_language, 'de' ) ) {
+			return self::count_english_markers( $text );
+		}
+
+		if ( 0 === strpos( $target_language, 'en' ) ) {
+			return self::count_german_markers( $text );
+		}
+
+		return 0;
+	}
+
+	private static function count_target_language_markers( string $text, string $target_language ): int {
+		if ( 0 === strpos( $target_language, 'de' ) ) {
+			return self::count_german_markers( $text );
+		}
+
+		if ( 0 === strpos( $target_language, 'en' ) ) {
+			return self::count_english_markers( $text );
+		}
+
+		return 0;
+	}
+
 	private static function is_obvious_language_passthrough( string $source_plain, string $translated_plain, ?string $target_language ): bool {
 		$target = strtolower( trim( (string) $target_language ) );
-		if ( '' === $target || 0 !== strpos( $target, 'de' ) ) {
+		if ( '' === $target || ! in_array( substr( $target, 0, 2 ), array( 'de', 'en' ), true ) ) {
 			return false;
 		}
 
@@ -694,11 +718,15 @@ class TranslationValidator {
 			return false;
 		}
 
-		$english_markers = self::count_english_markers( $translated_normalized );
-		$german_markers  = self::count_german_markers( $translated_normalized );
+		$source_markers = self::count_source_language_markers( $translated_normalized, $target );
+		$target_markers = self::count_target_language_markers( $translated_normalized, $target );
 
 		if ( $source_normalized === $translated_normalized ) {
-			return $english_markers >= 2 && 0 === $german_markers;
+			return $source_markers >= 2 && 0 === $target_markers;
+		}
+
+		if ( false !== strpos( $translated_normalized, $source_normalized ) ) {
+			return $source_markers >= 2 && $source_markers > $target_markers;
 		}
 
 		$source_tokens     = preg_split( '/\s+/u', $source_normalized, -1, PREG_SPLIT_NO_EMPTY );
@@ -724,6 +752,6 @@ class TranslationValidator {
 
 		$position_ratio = $max_token_count > 0 ? ( $same_position / $max_token_count ) : 0;
 
-		return $position_ratio >= 0.9 && $english_markers >= 2 && 0 === $german_markers;
+		return $position_ratio >= 0.9 && $source_markers >= 2 && 0 === $target_markers;
 	}
 }
