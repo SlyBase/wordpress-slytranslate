@@ -23,6 +23,7 @@
 * Reliability: when a model echoes the system prompt on both the initial attempt and the retry (both fail as invalid_translation_assistant_reply), a third recovery attempt now uses a plain user-only prompt without a system role; this unblocks Nemotron-family models that enter thinking mode on every system-prompted request.
 * Reliability: the plain-prompt recovery now uses a quoted-arrow format ("{text}" →) instead of language-labelled or instruction-style prompts; this eliminates remaining echo failures and prevents Nemotron from producing empty responses (which previously caused a HTTP 500 for the whole translation job).
 * Reliability: transport errors during plain-prompt recovery (e.g. empty model response) are now treated as soft validator failures, keeping the block in the source language instead of aborting the entire translation with HTTP 500.
+* Reliability: repeated source-language passthrough now also triggers the third user-only plain-prompt recovery attempt, helping Nemotron-family models recover English output instead of leaving German blocks unchanged.
 * Validation: passthrough detection now also catches German carry-over in English-target translations, including outputs that wrap unchanged source text in extra headings or summary prose.
 * Polylang: translation creation no longer fails when the new target draft already has the requested language.
 * Security: single and bulk translation admin notices now require a verified notice nonce before result parameters are read.

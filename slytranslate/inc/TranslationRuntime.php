@@ -1231,6 +1231,11 @@ class TranslationRuntime {
 				// attempt=1. A third attempt with a user-only plain prompt (no system
 				// message) has a better chance of producing a clean translation.
 				'invalid_translation_assistant_reply',
+				// Some models keep returning the source language unchanged on both the
+				// first attempt and the retry. Allow the same user-only plain-prompt
+				// recovery path to salvage a real translation before the caller keeps
+				// the block in the source language.
+				'invalid_translation_language_passthrough',
 			);
 
 			if ( in_array( $validation_error_code, $plain_prompt_recovery_codes, true ) && 1 === $validation_attempt ) {
