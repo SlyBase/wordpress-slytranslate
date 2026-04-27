@@ -91,6 +91,55 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
 	}
 
+	public function test_rejects_system_prompt_echo_starting_with_we_need_to_translate(): void {
+		// Nemotron Free on OpenRouter echoes the custom system prompt verbatim.
+		// attempt=0 is caught as assistant_reply; attempt=1 (retry) uses the base
+		// prompt without the CRITICAL extension, so the output doesn't contain
+		// "CRITICAL" and previously slipped through as runaway_output.
+		// The new prompt-opener detection must catch both cases as assistant_reply.
+		$source = 'Ich entwickle Features, schreibe Commits und erstelle Pull Requests. Danach sollte ein Blogpost erstellt werden, aber das passiert meistens nicht.';
+		$translated = 'We need to translate from German to English, preserving HTML, formatting, embedded media, source symbols. The input is plain text, no HTML. Use informal "Du" instead of "Sie". Use young language but professional. So translate accordingly. Original: "' . $source . '" I develop features, write commits and create pull requests.';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_rejects_system_prompt_echo_starting_with_translate_content_from(): void {
+		// Default prompt template echo: starts with "Translate the content from de to en...".
+		$source     = 'Hallo Welt! Dies ist ein Test.';
+		$translated = 'Translate the content from de to en preserving html, formatting, embedded media, and source symbols. Do not rewrite Unicode symbols or math notation as LaTeX or ASCII. Only return the new content. Hello World! This is a test.';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_rejects_output_containing_sly_translate_internal_phrase(): void {
+		// If "additional style instructions (do not translate these lines" appears in
+		// the output but not in the source, it's a prompt echo.
+		$source     = 'Ein einfacher Satz.';
+		$translated = 'Additional style instructions (do not translate these lines, apply them to the user-provided content): use informal du. A simple sentence.';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
+	public function test_allows_translate_verb_mid_sentence_in_legitimate_translation(): void {
+		// A legitimate translation that contains the word "translate" mid-sentence
+		// must not be flagged. The prompt-opener check is anchored to the START.
+		$source     = 'Bitte übersetze diesen Text.';
+		$translated = 'Please translate this text.';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertNull( $result );
+	}
+
 	public function test_rejects_low_information_stopword_only_output_for_multiword_source(): void {
 		$source_text = 'TEST EN Translation';
 		$translated  = 'und';

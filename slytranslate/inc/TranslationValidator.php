@@ -249,6 +249,11 @@ class TranslationValidator {
 			'mandatory translation rules',
 			'critical: apply every translation rule above exactly',
 			'critical: keep obeying the user-provided translation rules above',
+			// SlyTranslate-internal phrase used when embedding additional_prompt:
+			'additional style instructions (do not translate these lines',
+			// Default prompt template phrases that never appear in real translations:
+			'do not rewrite unicode symbols or math notation',
+			'return only the translated text and preserve html',
 		);
 
 		foreach ( $instruction_markers as $marker ) {
@@ -292,6 +297,17 @@ class TranslationValidator {
 
 		$source_has_bilingual_labels = 1 === preg_match( '/(?:^|\b)(?:source|target|en|de|english|german|deutsch)\s*:/iu', $source_plain );
 		if ( ! $source_has_bilingual_labels && 1 === preg_match( '/(?:^|\b)(?:source|target|en|de|english|german|deutsch)\s*:/iu', $translated_plain ) ) {
+			return true;
+		}
+
+		// Prompt-echo detection: output starts with a translation instruction opener.
+		// Models that echo the system prompt back produce responses that begin with
+		// "We need to translate from ... to ..." or "Translate the content from ...",
+		// which is unmistakably instruction text rather than translated content.
+		$prompt_opener_pattern = '/^(?:we\s+(?:need|have)\s+to\s+translate\b|translate\s+(?:the\s+)?(?:content|text|following|input)\s+from\b)/iu';
+		if ( 1 !== preg_match( $prompt_opener_pattern, $source_plain )
+			&& 1 === preg_match( $prompt_opener_pattern, $translated_plain )
+		) {
 			return true;
 		}
 
