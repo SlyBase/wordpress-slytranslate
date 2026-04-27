@@ -102,6 +102,15 @@ class RequestedModelSlugTest extends TestCase {
 		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
 	}
 
+	public function test_phi4_slug_maps_to_thinking_aware_profile(): void {
+		$model_slug = 'Phi-4-mini-instruct-Q4_K_M';
+		$profile    = TranslationRuntime::get_model_profile( $model_slug );
+
+		$this->assertSame( 'phi4_thinking_aware', $profile['id'] );
+		$this->assertTrue( ! empty( $profile['requires_chat_template_kwargs'] ) );
+		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
+	}
+
 	public function test_openrouter_nemotron_slug_maps_to_system_prompt_profile(): void {
 		$model_slug = 'nvidia/nemotron-3-super-120b-a12b:free';
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );

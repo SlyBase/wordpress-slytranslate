@@ -231,6 +231,28 @@ class PromptBuildingTest extends TestCase {
 		);
 	}
 
+	public function test_phi4_profile_adds_enable_thinking_false_kwargs_when_supported(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'en' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$profile = TranslationRuntime::get_model_profile( 'Phi-4-mini-instruct-Q4_K_M' );
+		$payload = $this->invokeStatic(
+			TranslationRuntime::class,
+			'build_transport_payload',
+			array( 'Hello world', 'Prompt', $profile, true, 0 )
+		);
+
+		$this->assertSame( 'phi4_thinking_aware', $profile['id'] ?? '' );
+		$this->assertSame(
+			array(
+				'chat_template_kwargs' => array(
+					'enable_thinking' => false,
+				),
+			),
+			$payload['extra_request_body']
+		);
+	}
+
 	public function test_default_profile_keeps_system_plus_user_payload_shape(): void {
 		$profile = TranslationRuntime::get_model_profile( 'gpt-4o' );
 		$payload = $this->invokeStatic(

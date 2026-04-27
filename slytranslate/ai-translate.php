@@ -190,6 +190,28 @@ class AI_Translate {
 				),
 			),
 			array(
+				'id'                         => 'phi4_thinking_aware',
+				'matchers'                   => array( 'phi-4-mini', 'phi-4', 'phi4' ),
+				'request_mode'               => 'user_only',
+				'prompt_style'               => 'bilingual_frame',
+				'supports_system_role'       => false,
+				'requires_strict_direct_api' => false,
+				'requires_chat_template_kwargs' => true,
+				'extra_request_body'         => array(
+					'chat_template_kwargs' => array(
+						'enable_thinking' => false,
+					),
+				),
+				'chunk_strategy'             => 'default',
+				'temperature'                => 0,
+				'retry_profile'              => array(
+					'retry_on_validation_failure' => true,
+					'retry_on_passthrough_de'     => true,
+					'reduce_chunk_on_retry'       => true,
+					'retry_chunk_chars'           => 1800,
+				),
+			),
+			array(
 				'id'                         => 'openrouter_nemotron',
 				'matchers'                   => array( 'nvidia/nemotron', 'openrouter nvidia/nemotron', 'openrouter nemotron' ),
 				'request_mode'               => 'system_plus_user',
