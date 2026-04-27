@@ -328,6 +328,8 @@
 		tasks.push(task);
 		persistAndRender();
 		setTimeout(function () { pollTask(task); }, 1500);
+		// Kick the poll loop in case it was idle (no previous running task).
+		bgStartPoll();
 		return id;
 	}
 
@@ -370,6 +372,57 @@
 		if (event.key !== STORAGE_KEY) { return; }
 		tasks = pruneTasks(loadTasks());
 		render();
+		// Another tab may have added a task – ensure poll loop is running.
+		bgStartPoll();
+	});
+
+	/* -------------------------------------------------------
+	 * Managed poll loop: only active while tasks are running
+	 * and paused when the browser tab is hidden.
+	 * ------------------------------------------------------- */
+	var bgPollTimer = null;
+	var bgPollPaused = false;
+
+	function hasRunningTasks() {
+		for (var i = 0; i < tasks.length; i++) {
+			if (tasks[i].status === 'running') { return true; }
+		}
+		return false;
+	}
+
+	function bgStopPoll() {
+		if (bgPollTimer !== null) {
+			clearTimeout(bgPollTimer);
+			bgPollTimer = null;
+		}
+	}
+
+	function bgScheduleNextPoll() {
+		bgStopPoll();
+		if (bgPollPaused || !hasRunningTasks()) { return; }
+		bgPollTimer = setTimeout(function () {
+			bgPollTimer = null;
+			pollAll();
+			bgScheduleNextPoll();
+		}, getBgNextPollDelay());
+	}
+
+	function bgStartPoll() {
+		bgPollStartedAt = Date.now();
+		if (!bgPollPaused && hasRunningTasks() && bgPollTimer === null) {
+			pollAll();
+			bgScheduleNextPoll();
+		}
+	}
+
+	document.addEventListener('visibilitychange', function () {
+		if (document.hidden) {
+			bgPollPaused = true;
+			bgStopPoll();
+		} else {
+			bgPollPaused = false;
+			bgStartPoll();
+		}
 	});
 
 	window.SlyTranslateBg = {
@@ -379,12 +432,5 @@
 	};
 
 	render();
-	pollAll();
-	function bgScheduleNextPoll() {
-		setTimeout(function () {
-			pollAll();
-			bgScheduleNextPoll();
-		}, getBgNextPollDelay());
-	}
-	bgScheduleNextPoll();
+	bgStartPoll();
 })();

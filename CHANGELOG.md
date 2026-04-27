@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - UI: list-table translation now includes an explicit overwrite option with a confirmation warning.
 
 ### Changes
+- Performance: background progress polling now stops automatically when no translation is running and pauses when the browser tab is hidden, reducing unnecessary RAM and CPU use in long-lived admin tabs.
 - Transport: chat-capable model families now use the WordPress AI Client connector as the standard translation path.
 - Admin: list-table dialog and background task bar scripts are now loaded through enqueued assets with localized bootstrap data instead of inline admin JavaScript.
 - Admin: list-table dialog markup styles are now loaded from an enqueued stylesheet instead of inline style attributes.
