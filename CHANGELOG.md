@@ -23,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixes
 - i18n: added the missing German translation for the list-table overwrite confirmation warning.
-- Tests: removed deleted `DirectApiTranslationClient` references from the test suite and updated assertions to match the bilingual-frame prompt style.
 - Reliability: reasoning-aware models now inject thinking-related `chat_template_kwargs` more safely, reducing empty connector outputs.
 - Polylang: translation creation no longer fails when the new target draft already has the requested language.
 - Security: single and bulk translation admin notices now require a verified notice nonce before result parameters are read.
