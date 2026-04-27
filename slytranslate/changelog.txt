@@ -17,8 +17,7 @@ Changes:
 * MCP: get-translation-status now publicly advertises single_entry_mode, and translate-content guidance now documents the safer source-language call order.
 
 Fixes:
-* i18n: added the missing German translation for the list-table overwrite confirmation warning.
-* Reliability: reasoning-aware models now inject thinking-related chat_template_kwargs more safely, reducing empty connector outputs.
+* i18n: added the missing German translation for the list-table overwrite confirmation warning.* Removed deleted DirectApiTranslationClient references from the test suite and updated assertions to match the bilingual-frame prompt style.* Reliability: reasoning-aware models now inject thinking-related chat_template_kwargs more safely, reducing empty connector outputs.
 * Polylang: translation creation no longer fails when the new target draft already has the requested language.
 * Security: single and bulk translation admin notices now require a verified notice nonce before result parameters are read.
 * Security: ai_translate_learned_context_windows now sanitizes and bounds learned model context-window values via the Settings API callback.

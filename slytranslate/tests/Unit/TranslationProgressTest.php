@@ -48,6 +48,14 @@ class TranslationProgressTest extends TestCase {
 
 		$this->assertGreaterThan( 1, $chunk_count );
 
+		// Use a generic-template model so wp_ai_client_prompt receives the raw
+		// source text, allowing the echo mock to satisfy assertSame( $text, $result ).
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'nvidia/nemotron-super-49b-v1',
+			'direct_api_url' => '',
+		) );
+
 		$this->stubWpFunctionReturn( 'get_current_user_id', 17 );
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {

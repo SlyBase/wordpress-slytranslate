@@ -76,7 +76,7 @@ class ContentTranslationPassthroughRecoveryTest extends TestCase {
 		$this->assertIsString( $result );
 		$this->assertStringContainsString( 'Hallo Welt', $result );
 		$this->assertStringNotContainsString( 'source english text', $result );
-		$this->assertSame( 'Hello world this is source english text for fallback translation.', $calls[0] );
+		$this->assertStringContainsString( 'Hello world this is source english text for fallback translation.', $calls[0] );
 	}
 
 	public function test_language_passthrough_without_recovery_surface_error(): void {
