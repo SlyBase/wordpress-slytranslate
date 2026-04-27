@@ -25,8 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixes
 - i18n: added the missing German translation for the list-table overwrite confirmation warning.
 - Reliability: reasoning-aware models now inject thinking-related `chat_template_kwargs` more safely, reducing empty connector outputs.
-- Reliability: remote reasoning models (e.g. OpenRouter GLM-5.1) that return output in `reasoning` or `reasoning_content` instead of `content` are now handled transparently — the reasoning text is promoted to the content field before the WP AI Client parses the response, preventing the "No text content found in first candidate" error.
-- Polylang: translation creation no longer fails when the new target draft already has the requested language.
+- Reliability: remote reasoning models (e.g. OpenRouter GLM-5.1) that return output in `reasoning` or `reasoning_content` instead of `content` are now handled transparently — the reasoning text is promoted to the content field before the WP AI Client parses the response, preventing the "No text content found in first candidate" error.- Validation: collapsed output guard now rejects a single-word translation of any multi-sentence source, regardless of target language; previously the check was restricted to German-target only, allowing a 202-char paragraph to be saved as just "The" when Nemotron Free returned a collapsed response.- Polylang: translation creation no longer fails when the new target draft already has the requested language.
 - Security: single and bulk translation admin notices now require a verified notice nonce before result parameters are read.
 - Security: `ai_translate_learned_context_windows` now sanitizes and bounds learned model context-window values via the Settings API callback.
 - Validation: `gemma-4` context window corrected to 131,072 tokens (was 8,192), fixing excessive over-chunking.

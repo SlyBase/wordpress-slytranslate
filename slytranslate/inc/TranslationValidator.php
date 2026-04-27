@@ -45,6 +45,13 @@ class TranslationValidator {
 	 */
 	private const RUNAWAY_GUARD_MIN_SOURCE_CHARS = 221;
 
+	/**
+	 * Non-trivial sources must have at least this many words before the
+	 * collapsed-output guard fires. Below this threshold a single-word
+	 * translation (e.g. a proper noun or brand name) can be correct.
+	 */
+	private const COLLAPSED_OUTPUT_MIN_SOURCE_WORDS = 5;
+
 	public static function validate( string $source_text, string $translated_text, ?string $target_language = null ) {
 		$source_text     = (string) $source_text;
 		$translated_text = self::normalize_bilingual_frame_label_leakage( $source_text, (string) $translated_text, $target_language );
@@ -91,6 +98,13 @@ class TranslationValidator {
 			return new \WP_Error(
 				'invalid_translation_low_information',
 				__( 'The translated output collapsed to a low-information stopword instead of a meaningful translation.', 'slytranslate' )
+			);
+		}
+
+		if ( self::has_collapsed_output( $source_plain, $translated_plain ) ) {
+			return new \WP_Error(
+				'invalid_translation_low_information',
+				__( 'The translated output collapsed to a single word for a non-trivial source, indicating the model failed to translate.', 'slytranslate' )
 			);
 		}
 
@@ -342,8 +356,25 @@ class TranslationValidator {
 		return 1 === preg_match( '/^(?:okay|ok|sure|certainly|absolutely|of course|here(?: is|\'s)|let(?:\'|’)s|this is|this guide|for example|in short|overall|great|hier ist|klar|nat[üu]rlich|gerne|lassen(?:\s+sie)?\s+uns|insgesamt|zum beispiel)\b/iu', $text );
 	}
 
-	private static function has_excessive_short_text_growth( string $source_plain, string $translated_plain, string $translated_raw ): bool {
-		$source_length = self::text_length( $source_plain );
+	/**
+	 * Detect a collapsed output: a non-trivial multi-word source that was
+	 * "translated" to a single word. This catches cases where a model returns
+	 * only a fragment (e.g. "The" for a 200-char paragraph) — a failure mode
+	 * that the over-length guards miss because the output is too short, not
+	 * too long. Language-agnostic: applies to any source/target combination.
+	 */
+	private static function has_collapsed_output( string $source_plain, string $translated_plain ): bool {
+		$source_word_count = preg_match_all( '/\p{L}+/u', $source_plain );
+		if ( $source_word_count < self::COLLAPSED_OUTPUT_MIN_SOURCE_WORDS ) {
+			return false;
+		}
+
+		$translated_word_count = preg_match_all( '/\p{L}+/u', $translated_plain );
+
+		return 1 === $translated_word_count;
+	}
+
+	private static function has_excessive_short_text_growth( string $source_plain, string $translated_plain, string $translated_raw ): bool {		$source_length = self::text_length( $source_plain );
 		if ( $source_length < 1 || $source_length > 220 ) {
 			return false;
 		}

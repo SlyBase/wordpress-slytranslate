@@ -726,4 +726,59 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $input_texts[1] ?? '' );
 		$this->assertStringContainsString( 'CRITICAL: The final output must be in DE.', $input_texts[1] ?? '' );
 	}
+
+	public function test_rejects_single_word_output_for_multi_sentence_source(): void {
+		// Nemotron on OpenRouter Free returned "The" (3 chars) as the entire
+		// translation of a 200-char multi-sentence German paragraph. The
+		// stopword guard only covered German-target, so this slipped through.
+		// has_collapsed_output() must catch this regardless of target language.
+		$source     = 'Die Konfiguration ist abgeschlossen. WordPress 7, SlyTranslate, Polylang, MCP. Übersetzungen funktionieren mit einem Klick – oder über eine Chat-Anfrage. Aber ich wollte noch einen Schritt weiter gehen.';
+		$translated = 'The';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_low_information', $result->get_error_code() );
+	}
+
+	public function test_rejects_single_word_output_for_multi_sentence_source_german_target(): void {
+		$source     = 'This is a complete English paragraph with several sentences and many words worth translating.';
+		$translated = 'Dies';
+
+		$result = TranslationValidator::validate( $source, $translated, 'de' );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_low_information', $result->get_error_code() );
+	}
+
+	public function test_allows_single_word_output_for_single_word_source(): void {
+		// A one-word source legitimately translates to one word.
+		$source     = 'Verantwortlicher';
+		$translated = 'responsible';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertNull( $result );
+	}
+
+	public function test_allows_single_word_output_for_short_two_word_source(): void {
+		// A source with fewer than COLLAPSED_OUTPUT_MIN_SOURCE_WORDS words
+		// must not trigger the collapsed-output guard.
+		$source     = 'Guten Morgen';
+		$translated = 'Hi';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertNull( $result );
+	}
+
+	public function test_allows_normal_short_translation_for_multi_word_source(): void {
+		// Legitimate compact EN translation of a medium-length DE source.
+		$source     = 'Die Konfiguration ist abgeschlossen.';
+		$translated = 'Setup complete.';
+
+		$result = TranslationValidator::validate( $source, $translated, 'en' );
+
+		$this->assertNull( $result );
+	}
 }
