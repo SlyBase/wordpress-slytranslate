@@ -105,23 +105,37 @@
 }
 
 .slytranslate-picker-icon-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 40px;
 	width: 40px;
 	min-width: 40px;
 	height: 40px;
 	min-height: 40px;
 	padding: 0;
-	line-height: 0;
+	line-height: 1;
 	overflow: hidden;
 	text-align: center;
+	box-sizing: border-box;
 }
 
 .slytranslate-picker-icon {
-	display: block;
-	margin: 10px auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
 	font-size: 20px;
 	width: 20px;
 	height: 20px;
 	line-height: 1;
+}
+
+.slytranslate-picker-icon::before {
+	width: 20px;
+	height: 20px;
+	line-height: 20px;
+	margin: 0;
 }
 
 .slytranslate-picker-model-label {
@@ -129,15 +143,16 @@
 }
 
 .slytranslate-picker-model-row {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 40px;
 	gap: 6px;
-	align-items: center;
+	align-items: stretch;
 	width: 100%;
 	box-sizing: border-box;
 }
 
 .slytranslate-picker-model-select {
-	flex: 1;
+	width: 100%;
 	min-width: 0;
 	max-width: none;
 	height: 40px;
