@@ -41,6 +41,16 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
 	}
 
+	public function test_rejects_bare_retry_directive_leakage_when_source_has_no_directive(): void {
+		$source_text = 'TEST DE Uebersetzung';
+		$translated  = 'RETURN ONLY EN. DO NOT COPY SENTENCES IN DE.';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'en' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'invalid_translation_assistant_reply', $result->get_error_code() );
+	}
+
 	public function test_rejects_localized_critical_rule_leakage_when_source_has_no_critical_label(): void {
 		$source_text = 'The heading should be translated naturally.';
 		$translated  = '<h2>CRITICAL: Wenden Sie alle obigen Uebersetzungsregeln genau an.</h2>';

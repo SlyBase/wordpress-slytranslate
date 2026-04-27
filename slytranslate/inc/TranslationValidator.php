@@ -227,6 +227,8 @@ class TranslationValidator {
 	private static function has_prompt_instruction_leakage( string $source_text, string $translated_text ): bool {
 		$source_lower     = strtolower( $source_text );
 		$translated_lower = strtolower( $translated_text );
+		$source_plain     = self::normalize_text_for_validation( $source_text );
+		$translated_plain = self::normalize_text_for_validation( $translated_text );
 
 		$instruction_markers = array(
 			'critical output format',
@@ -267,8 +269,12 @@ class TranslationValidator {
 			return true;
 		}
 
-		$source_plain     = self::normalize_text_for_validation( $source_text );
-		$translated_plain = self::normalize_text_for_validation( $translated_text );
+		$retry_directive_pattern = '/\breturn\s+only\s+(?:[a-z]{2,3}(?:-[a-z]{2,3})?|english|german|deutsch|source|target)(?:\s+language)?\b.{0,80}?\bdo\s+not\s+copy\s+sentences?\s+in\s+(?:[a-z]{2,3}(?:-[a-z]{2,3})?|english|german|deutsch|source|target)(?:\s+language)?\b/iu';
+		if ( 1 !== preg_match( $retry_directive_pattern, $source_plain )
+			&& 1 === preg_match( $retry_directive_pattern, $translated_plain )
+		) {
+			return true;
+		}
 
 		$source_has_bilingual_labels = 1 === preg_match( '/(?:^|\b)(?:source|target|en|de|english|german|deutsch)\s*:/iu', $source_plain );
 		if ( ! $source_has_bilingual_labels && 1 === preg_match( '/(?:^|\b)(?:source|target|en|de|english|german|deutsch)\s*:/iu', $translated_plain ) ) {
