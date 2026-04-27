@@ -622,9 +622,10 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->assertSame( 'Testbeitrag zur Uebersetzung', $result );
 		$this->assertCount( 3, $inputs );
-		// Plain-prompt recovery uses completion-style format: "{lang}: {source}\n{lang}:"
-		$this->assertStringContainsString( 'EN:', $inputs[2] );
-		$this->assertStringContainsString( 'DE:', $inputs[2] );
+		// Plain-prompt recovery uses quoted-arrow format: "{source}" →
+		$this->assertStringContainsString( '"', $inputs[2] );
+		$this->assertStringContainsString( '→', $inputs[2] );
+		$this->assertStringContainsString( 'test Post for translation', $inputs[2] );
 	}
 
 	public function test_translate_chunk_uses_plain_prompt_recovery_after_repeated_assistant_reply(): void {
@@ -697,9 +698,8 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->assertSame( 'The configuration is complete. WordPress, SlyTranslate, Polylang, MCP. Translations work with a single click.', $result );
 		$this->assertCount( 3, $inputs );
-		// Third call must use plain-prompt format (completion-style: "{lang}: {source}\n{lang}:")
-		$this->assertStringContainsString( 'DE:', $inputs[2] );
-		$this->assertStringContainsString( 'EN:', $inputs[2] );
+		// Third call must use plain-prompt format (quoted-arrow: "{source}" →)
+		$this->assertStringContainsString( '→', $inputs[2] );
 		$this->assertStringContainsString( $source_text, $inputs[2] );
 	}
 
@@ -833,7 +833,9 @@ class TranslationOutputValidationTest extends TestCase {
 						$this->input_texts[] = $this->text;
 
 						if ( 1 === $this->call_count ) {
-							if ( preg_match( '/EN:\\s*(.*?)\\s*DE:\\s*$/s', $this->text, $matches ) && is_string( $matches[1] ?? null ) ) {
+							// Plain-prompt recovery uses quoted-arrow format: "{source}" →
+							// Extract and echo back a minimal translation.
+							if ( preg_match( '/^"(.+?)"\s*→$/su', trim( $this->text ), $matches ) && is_string( $matches[1] ?? null ) ) {
 								return trim( $matches[1] );
 							}
 

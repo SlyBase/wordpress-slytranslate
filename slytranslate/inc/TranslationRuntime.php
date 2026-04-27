@@ -1250,7 +1250,14 @@ class TranslationRuntime {
 
 				$plain_result = self::translate_chunk_with_plain_prompt_recovery( $source_text, $model_slug );
 				if ( is_wp_error( $plain_result ) ) {
-					return $plain_result;
+					// Transport-level error (e.g. empty output, model refused request).
+					// Wrap as a validator-style error so ContentTranslator handles this
+					// gracefully (keeps the block in source language) instead of
+					// propagating a hard 500 for the whole translation job.
+					return new \WP_Error(
+						'invalid_translation_assistant_reply',
+						$plain_result->get_error_message()
+					);
 				}
 
 				return self::finalize_translated_chunk( $source_text, $plain_result, $model_slug, $prompt, 2 );
@@ -1265,19 +1272,13 @@ class TranslationRuntime {
 	private static function translate_chunk_with_plain_prompt_recovery( string $source_text, string $model_slug ): mixed {
 		$input_chars       = self::char_length( $source_text );
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
-		$source_label      = self::resolve_language_label( is_string( self::$source_lang ) ? self::$source_lang : null, 'SOURCE' );
-		$target_label      = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'TARGET' );
-
-		// Use a completion-style format with NO instruction verbs ("translate", "return only",
-		// "preserve HTML" …) so that thinking-mode models like Nemotron on OpenRouter have
-		// nothing instructional to echo back.  The bilingual label pattern ({lang}: {text}\n{lang}:)
-		// is universally understood as a completion cue and produces only the target text.
-		$user_content = sprintf(
-			'%1$s: %3$s' . "\n" . '%2$s:',
-			$source_label,
-			$target_label,
-			$source_text
-		);
+		// Use a minimal quoted-arrow completion format:
+		//   "{source_text}" →
+		// No language labels, no instruction verbs, no "translate"/"return only" phrases
+		// that thinking-mode models (Nemotron on OpenRouter) echo back verbatim.
+		// The arrow (→) is a universally-understood translation cue that produces only
+		// the target text without triggering thinking-mode explanations.
+		$user_content = sprintf( '"%1$s" →', $source_text );
 
 		$wp_started = TimingLogger::start();
 		$builder    = wp_ai_client_prompt( $user_content );
