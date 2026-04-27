@@ -144,19 +144,44 @@ class PostTranslationService {
 		TranslationProgressTracker::register_phase_units( 'saving', 1 );
 
 		try {
+			// Build extra candidates so title and excerpt can be folded into the
+			// meta batch when they are short enough — saving up to 2 API calls.
+			$extra_candidates  = array();
+			$batch_title_key   = '_slytranslate_title';
+			$batch_excerpt_key = '_slytranslate_excerpt';
+			$will_batch_title  = $translate_title
+				&& '' !== $post->post_title
+				&& self::char_length( $post->post_title ) <= 1000;
+			$will_batch_excerpt = '' !== trim( $post->post_excerpt )
+				&& self::char_length( $post->post_excerpt ) <= 1000;
+			if ( $will_batch_title ) {
+				$extra_candidates[ $batch_title_key ] = $post->post_title;
+			}
+			if ( $will_batch_excerpt ) {
+				$extra_candidates[ $batch_excerpt_key ] = $post->post_excerpt;
+			}
+
 			// Translate title.
 			if ( $translate_title ) {
 				TranslationProgressTracker::mark_phase( 'title' );
 				TimingLogger::log( 'phase_start', array( 'phase' => 'title', 'chars' => self::char_length( $post->post_title ) ) );
 				$phase_started = TimingLogger::start();
-				$title = self::translate_title_with_empty_output_retry( $post->post_title, $to, $from, $additional_prompt );
-				if ( is_wp_error( $title ) ) {
-					TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $title->get_error_code() ) );
-					self::log_job_end( $post_id, $job_started_at, false );
-					return $title;
+				if ( $will_batch_title ) {
+					// Title will be resolved from the meta batch — defer the
+					// actual translation call and complete_phase() until after
+					// the meta phase finishes.
+					$title = null;
+					TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true, 'batch' => true ) );
+				} else {
+					$title = self::translate_title_with_empty_output_retry( $post->post_title, $to, $from, $additional_prompt );
+					if ( is_wp_error( $title ) ) {
+						TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $title->get_error_code() ) );
+						self::log_job_end( $post_id, $job_started_at, false );
+						return $title;
+					}
+					TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
+					TranslationProgressTracker::complete_phase( 'title' );
 				}
-				TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
-				TranslationProgressTracker::complete_phase( 'title' );
 			} else {
 				$title = $post->post_title;
 			}
@@ -196,21 +221,28 @@ class PostTranslationService {
 			TranslationProgressTracker::mark_phase( 'excerpt' );
 			TimingLogger::log( 'phase_start', array( 'phase' => 'excerpt', 'chars' => self::char_length( $post->post_excerpt ) ) );
 			$phase_started = TimingLogger::start();
-			$excerpt = TranslationRuntime::translate_text( $post->post_excerpt, $to, $from, $additional_prompt );
-			if ( is_wp_error( $excerpt ) ) {
-				TimingLogger::log( 'phase_end', array( 'phase' => 'excerpt', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $excerpt->get_error_code() ) );
-				self::log_job_end( $post_id, $job_started_at, false );
-				return $excerpt;
+			if ( $will_batch_excerpt ) {
+				// Excerpt will be resolved from the meta batch.
+				$excerpt = null;
+				TimingLogger::log( 'phase_end', array( 'phase' => 'excerpt', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true, 'batch' => true ) );
+			} else {
+				$excerpt = TranslationRuntime::translate_text( $post->post_excerpt, $to, $from, $additional_prompt );
+				if ( is_wp_error( $excerpt ) ) {
+					TimingLogger::log( 'phase_end', array( 'phase' => 'excerpt', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $excerpt->get_error_code() ) );
+					self::log_job_end( $post_id, $job_started_at, false );
+					return $excerpt;
+				}
+				TimingLogger::log( 'phase_end', array( 'phase' => 'excerpt', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
+				TranslationProgressTracker::complete_phase( 'excerpt' );
 			}
-			TimingLogger::log( 'phase_end', array( 'phase' => 'excerpt', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
 
-			TranslationProgressTracker::complete_phase( 'excerpt' );
-
-			// Translate / clear meta.
+			// Translate / clear meta (title and excerpt extra candidates are
+			// folded in when eligible — their batch results are returned as
+			// pseudo-keys that we extract and clean up below).
 			TranslationProgressTracker::mark_phase( 'meta' );
 			TimingLogger::log( 'phase_start', array( 'phase' => 'meta' ) );
 			$phase_started = TimingLogger::start();
-			$processed_meta = MetaTranslationService::prepare_translation_meta( $post_id, $to, $from, $additional_prompt, $all_meta );
+			$processed_meta = MetaTranslationService::prepare_translation_meta( $post_id, $to, $from, $additional_prompt, $all_meta, $extra_candidates );
 			if ( is_wp_error( $processed_meta ) ) {
 				TimingLogger::log( 'phase_end', array( 'phase' => 'meta', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $processed_meta->get_error_code() ) );
 				self::log_job_end( $post_id, $job_started_at, false );
@@ -219,6 +251,40 @@ class PostTranslationService {
 			TimingLogger::log( 'phase_end', array( 'phase' => 'meta', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
 
 			TranslationProgressTracker::complete_phase( 'meta' );
+
+			// Resolve batched title — extract from $processed_meta or fall back.
+			if ( $will_batch_title ) {
+				if ( is_string( $processed_meta[ $batch_title_key ] ?? null ) ) {
+					$title = $processed_meta[ $batch_title_key ];
+				} else {
+					// Batch did not deliver a title — individual fallback.
+					TimingLogger::increment( 'fallbacks' );
+					$title = self::translate_title_with_empty_output_retry( $post->post_title, $to, $from, $additional_prompt );
+					if ( is_wp_error( $title ) ) {
+						self::log_job_end( $post_id, $job_started_at, false );
+						return $title;
+					}
+				}
+				unset( $processed_meta[ $batch_title_key ] );
+				TranslationProgressTracker::complete_phase( 'title' );
+			}
+
+			// Resolve batched excerpt — extract from $processed_meta or fall back.
+			if ( $will_batch_excerpt ) {
+				if ( is_string( $processed_meta[ $batch_excerpt_key ] ?? null ) ) {
+					$excerpt = $processed_meta[ $batch_excerpt_key ];
+				} else {
+					// Batch did not deliver an excerpt — individual fallback.
+					TimingLogger::increment( 'fallbacks' );
+					$excerpt = TranslationRuntime::translate_text( $post->post_excerpt, $to, $from, $additional_prompt );
+					if ( is_wp_error( $excerpt ) ) {
+						self::log_job_end( $post_id, $job_started_at, false );
+						return $excerpt;
+					}
+				}
+				unset( $processed_meta[ $batch_excerpt_key ] );
+				TranslationProgressTracker::complete_phase( 'excerpt' );
+			}
 			TranslationProgressTracker::mark_phase( 'saving' );
 
 			TimingLogger::log( 'phase_start', array( 'phase' => 'saving' ) );

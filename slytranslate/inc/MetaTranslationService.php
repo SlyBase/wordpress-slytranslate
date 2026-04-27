@@ -80,6 +80,12 @@ class MetaTranslationService {
 	/**
 	 * Translate or clear all relevant meta fields for a post.
 	 *
+	 * @param array $extra_candidates Pre-validated key→value pairs to include in the
+	 *                                 batch alongside regular meta (e.g. post title and
+	 *                                 excerpt). Keys must be unique pseudo-keys that do
+	 *                                 not exist in real post meta. Successful batch
+	 *                                 translations are returned as part of the result so
+	 *                                 the caller can extract and clean them up.
 	 * @return array|\WP_Error
 	 */
 	public static function prepare_translation_meta(
@@ -87,7 +93,8 @@ class MetaTranslationService {
 		string $to,
 		string $from,
 		string $additional_prompt,
-		array $all_meta = array()
+		array $all_meta = array(),
+		array $extra_candidates = array()
 	): mixed {
 		$meta            = ! empty( $all_meta ) ? $all_meta : get_post_meta( $post_id );
 		$processed_meta  = array();
@@ -109,7 +116,8 @@ class MetaTranslationService {
 			$meta_key_config,
 			$to,
 			$from,
-			$additional_prompt
+			$additional_prompt,
+			$extra_candidates
 		);
 
 		foreach ( $meta as $key => $values ) {
@@ -160,6 +168,18 @@ class MetaTranslationService {
 			}
 		}
 
+		// Write extra_candidates batch results (e.g. _slytranslate_title) into
+		// $processed_meta so the caller can extract and clean them up. Keys
+		// that were not returned by the batch are omitted so the caller knows
+		// to fall back to an individual translation call.
+		if ( is_array( $batch_results ) && ! empty( $extra_candidates ) ) {
+			foreach ( array_keys( $extra_candidates ) as $extra_key ) {
+				if ( array_key_exists( $extra_key, $batch_results ) ) {
+					$processed_meta[ $extra_key ] = $batch_results[ $extra_key ];
+				}
+			}
+		}
+
 		$meta_calls_after = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
 		TimingLogger::log( 'meta_end', array(
 			'post'        => $post_id,
@@ -177,6 +197,10 @@ class MetaTranslationService {
 	 * non-empty string, it is short enough to fit in a single batch JSON payload
 	 * (<= 1 000 chars), and it does not need the special slim_seo array handling.
 	 *
+	 * Extra candidates (pre-validated key→value pairs such as post title or
+	 * excerpt) are merged in before the meta loop. They count toward the
+	 * minimum-two threshold and are validated in the response like any other key.
+	 *
 	 * On any failure (AI error, JSON parse error, missing keys) the method
 	 * returns null and the caller falls back to individual per-key translation.
 	 *
@@ -187,9 +211,17 @@ class MetaTranslationService {
 		array $meta_key_config,
 		string $to,
 		string $from,
-		string $additional_prompt
+		string $additional_prompt,
+		array $extra_candidates = array()
 	): ?array {
 		$candidates = array();
+
+		// Pre-validated extra entries (e.g. title, excerpt) from the caller.
+		foreach ( $extra_candidates as $key => $value ) {
+			if ( is_string( $key ) && '' !== $key && is_string( $value ) ) {
+				$candidates[ $key ] = $value;
+			}
+		}
 
 		foreach ( $meta as $key => $values ) {
 			if ( self::should_skip_meta_key( (string) $key ) ) {

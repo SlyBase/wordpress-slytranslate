@@ -7,12 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.6.0]
 ### Features
 - WP Multilang: major new integration support for the WP Multilang plugin alongside the existing Polylang integration.
+
+### Changes
+- Performance: post title and excerpt are now translated in the same batched AI call as SEO meta fields, saving up to 2 API requests per post.
 - Architecture: introduced a central model-profile registry (`slytranslate_model_profiles`) driving prompt style, chunk strategy, and retry behavior per model family.
 - Profiles: added dedicated profiles for major local model families including Ministral, Tower, Qwen, GLM, Gemma 4, Phi-4, Nemotron, EuroLLM, and Llama 3.1/Sauerkraut.
 - Performance: SEO meta values (Yoast/Slim SEO title & description) are now translated in a single batched AI call instead of one per key.
 - UI: list-table translation now includes an explicit overwrite option with a confirmation warning.
 
-### Changes
 - Performance: background progress polling now stops automatically when no translation is running and pauses when the browser tab is hidden, reducing unnecessary RAM and CPU use in long-lived admin tabs.
 - Transport: chat-capable model families now use the WordPress AI Client connector as the standard translation path.
 - Admin: list-table dialog and background task bar scripts are now loaded through enqueued assets with localized bootstrap data instead of inline admin JavaScript.
