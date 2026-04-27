@@ -473,10 +473,17 @@ class TranslationProgressTest extends TestCase {
 		$result = AI_Translate::translate_post( 45, 'de', 'draft', false, true, '', 'en' );
 
 		$this->assertSame( 145, $result );
+		// With the plain_prompt_recovery extension, the recovery flow is:
+		// Call 1 (attempt=0): system prompt with title hint → assistant_reply (prompt leakage)
+		// Call 2 (attempt=1): retry_prompt (still has title hint) → assistant_reply
+		// Call 3 (attempt=2): plain_prompt_recovery (no system instruction) → valid translation
+		// Because plain_prompt_recovery succeeds, the translate_title_with_empty_output_retry
+		// logic does NOT need to make an additional retry_without_title_hint call.
 		$this->assertCount( 3, $prompt_inputs );
-		$this->assertCount( 3, $system_prompts );
+		// Only calls 1 and 2 used using_system_instruction; the plain recovery does not.
+		$this->assertCount( 2, $system_prompts );
 		$this->assertStringContainsString( 'This is a post title.', $system_prompts[0] );
+		// The retry prompt also includes the title hint (it is an extension of the original prompt).
 		$this->assertStringContainsString( 'This is a post title.', $system_prompts[1] );
-		$this->assertStringNotContainsString( 'This is a post title.', $system_prompts[2] );
 	}
 }

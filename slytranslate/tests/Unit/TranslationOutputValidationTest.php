@@ -625,6 +625,81 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertStringContainsString( 'Translate the following text from EN to DE.', $inputs[2] );
 	}
 
+	public function test_translate_chunk_uses_plain_prompt_recovery_after_repeated_assistant_reply(): void {
+		// Models like Nemotron Free on OpenRouter echo the system prompt verbatim on
+		// every attempt. Both attempt=0 and attempt=1 fail as invalid_translation_assistant_reply.
+		// A third attempt using the plain-prompt (user-only, no system message) format
+		// must be triggered automatically as a last-resort recovery.
+		$call_count = 0;
+		$inputs     = array();
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'nvidia/nemotron-3-nano-30b-a3b',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'de' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'en' );
+
+		$source_text = 'Die Konfiguration ist abgeschlossen. WordPress, SlyTranslate, Polylang, MCP. Übersetzungen funktionieren mit einem Klick.';
+
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+				return $default;
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$call_count, &$inputs, $source_text ) {
+				return new class( $text, $call_count, $inputs, $source_text ) {
+					private string $text;
+					private int $call_count;
+					private array $inputs;
+					private string $source_text;
+
+					public function __construct( string $text, int &$call_count, array &$inputs, string $source_text ) {
+						$this->text       = $text;
+						$this->call_count = &$call_count;
+						$this->inputs     = &$inputs;
+						$this->source_text = $source_text;
+					}
+
+					public function using_system_instruction( string $prompt ) { return $this; }
+					public function using_temperature( float $temperature ) { return $this; }
+					public function using_model_preference( string $model_slug ) { return $this; }
+					public function using_max_tokens( int $max_tokens ) { return $this; }
+
+					public function generate_text(): string {
+						$this->call_count++;
+						$this->inputs[] = $this->text;
+
+						if ( $this->call_count < 3 ) {
+							// Echo the system prompt — Nemotron-style failure
+							return 'We need to translate German to English, preserving HTML tags. Input: "' . $this->source_text . '". Translation: The configuration is complete.';
+						}
+
+						// Third attempt (plain prompt, user-only) returns clean translation
+						return 'The configuration is complete. WordPress, SlyTranslate, Polylang, MCP. Translations work with a single click.';
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'translate_chunk',
+			array( $source_text, 'Translate this.' )
+		);
+
+		$this->assertSame( 'The configuration is complete. WordPress, SlyTranslate, Polylang, MCP. Translations work with a single click.', $result );
+		$this->assertCount( 3, $inputs );
+		// Third call must use plain-prompt format (source text embedded in user message)
+		$this->assertStringContainsString( 'Translate the following text from DE to EN.', $inputs[2] );
+		$this->assertStringContainsString( $source_text, $inputs[2] );
+	}
+
 	public function test_tower_profile_retries_validation_failure_with_smaller_chunks(): void {
 		$call_count  = 0;
 		$input_texts = array();

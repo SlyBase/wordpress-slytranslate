@@ -1224,7 +1224,16 @@ class TranslationRuntime {
 				return self::translate_chunk( $source_text, $retry_prompt, 1 );
 			}
 
-			if ( 'invalid_translation_empty' === $validation_error_code && 1 === $validation_attempt ) {
+		$plain_prompt_recovery_codes = array(
+				'invalid_translation_empty',
+				// Models that persistently echo the system prompt (e.g. Nemotron Free on
+				// OpenRouter) produce assistant_reply failures on both attempt=0 and
+				// attempt=1. A third attempt with a user-only plain prompt (no system
+				// message) has a better chance of producing a clean translation.
+				'invalid_translation_assistant_reply',
+			);
+
+			if ( in_array( $validation_error_code, $plain_prompt_recovery_codes, true ) && 1 === $validation_attempt ) {
 				TimingLogger::increment( 'retries' );
 				TimingLogger::increment( 'fallbacks' );
 				TimingLogger::log( 'ai_validation_retry', array(
@@ -1235,7 +1244,7 @@ class TranslationRuntime {
 				TimingLogger::log( 'ai_call_fallback', array(
 					'from'   => 'wp_ai_client',
 					'to'     => 'wp_ai_client_plain_prompt',
-					'reason' => 'invalid_translation_empty',
+					'reason' => $validation_error_code,
 					'model'  => $model_slug,
 				) );
 
