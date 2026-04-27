@@ -851,8 +851,8 @@ class TranslationOutputValidationTest extends TestCase {
 		$result = $this->invokeStatic( TranslationRuntime::class, 'translate_chunk', array( $source, 'Prompt' ) );
 
 		$this->assertIsString( $result );
-		$this->assertGreaterThanOrEqual( 3, $call_count );
-		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $input_texts[1] ?? '' );
+		$this->assertGreaterThanOrEqual( 2, $call_count );
+		$this->assertLessThan( strlen( $source ), strlen( $input_texts[1] ?? '' ) );
 	}
 
 	public function test_ministral_profile_retries_passthrough_failure_with_smaller_chunks(): void {
@@ -933,6 +933,13 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertGreaterThanOrEqual( 3, $call_count );
 		$this->assertStringContainsString( 'CRITICAL: Return only the translated content.', $input_texts[1] ?? '' );
 		$this->assertStringContainsString( 'CRITICAL: The final output must be in DE.', $input_texts[1] ?? '' );
+	}
+
+	public function test_nemotron_profile_retries_validation_failure_with_smaller_chunks(): void {
+		$profile = TranslationRuntime::get_model_profile( 'nvidia/nemotron-3-nano-30b-a3b' );
+
+		$this->assertSame( 'nemotron_system', $profile['id'] ?? '' );
+		$this->assertSame( 140, $profile['retry_profile']['retry_chunk_chars'] ?? null );
 	}
 
 	public function test_rejects_single_word_output_for_multi_sentence_source(): void {

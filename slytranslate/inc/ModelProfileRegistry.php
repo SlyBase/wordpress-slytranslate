@@ -139,6 +139,9 @@ final class ModelProfileRegistry {
 							'enable_thinking' => false,
 						),
 					),
+					'retry_profile'      => array(
+						'retry_chunk_chars' => 140,
+					),
 				)
 			),
 			self::build_profile(
