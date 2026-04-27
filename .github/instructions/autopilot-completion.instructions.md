@@ -1,6 +1,6 @@
 ---
 applyTo: '**'
-description: 'Completion workflow for Autopilot work: local tests must pass, then create a beta commit based on the plugin version, run Build and Deploy Plugin ZIP, and perform an MCP test translation for post 1109 with Ministral-8B-Instruct-2410-Q4_K_M.'
+description: 'Completion workflow for Autopilot work: local tests must pass, then create a normal commit via the git-commit skill, run Build and Deploy Plugin ZIP, and perform an MCP test translation for post 1109 with Ministral-8B-Instruct-2410-Q4_K_M.'
 ---
 
 # Autopilot Completion Workflow
@@ -13,17 +13,14 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 - If focused PHPUnit tests exist for the change, run those first. Otherwise run the smallest meaningful local check for the affected area.
 - If any test or check fails, the work is not complete.
 
-## 2) Create a beta commit after successful validation
+## 2) Create a normal commit after successful validation
 
 - After successful local validation, exactly one commit must be created for each completed task.
-- The commit title must follow the pattern `vX.Y.Z-beta.N`.
-- `X.Y.Z` is the current plugin version from `slytranslate/ai-translate.php` and `slytranslate/readme.txt`.
-- `N` must be computed as `highest existing beta number for the same X.Y.Z` + 1 (check existing git commit subjects/tags first).
-- Example: if `v1.6.0-beta.20` already exists, the next commit title must be `v1.6.0-beta.21`.
-- Never reset `N` based on local examples or task count; examples in this file are illustrative only.
-- Before creating the beta commit, run `SlyTranslate: Build Plugin ZIP` (or `.github/scripts/build-plugin-zip.sh`) once so generated language files are refreshed.
-- If that refresh updates tracked `.mo` files, stage them and include them in the same beta commit.
-- Do not create the beta commit while any tracked generated language file changes are still unstaged or uncommitted.
+- Use the `git-commit` skill to analyze the diff and create a conventional commit message that matches the actual change.
+- Do not force a beta suffix or version-based commit title.
+- Before creating the commit, run `SlyTranslate: Build Plugin ZIP` (or `.github/scripts/build-plugin-zip.sh`) once so generated language files are refreshed.
+- If that refresh updates tracked `.mo` files, stage them and include them in the same commit.
+- Do not create the commit while any tracked generated language file changes are still unstaged or uncommitted.
 
 ## 3) Build and deploy after the commit
 
