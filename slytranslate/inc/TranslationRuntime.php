@@ -766,9 +766,11 @@ class TranslationRuntime {
 			$builder = $builder->using_max_output_tokens( $max_output_tokens );
 		}
 
-		return self::with_wp_ai_client_request_body_filter(
-			$injections,
-			static fn() => $builder->generate_text()
+		return self::with_reasoning_response_normalization_filter(
+			fn() => self::with_wp_ai_client_request_body_filter(
+				$injections,
+				static fn() => $builder->generate_text()
+			)
 		);
 	}
 
@@ -858,6 +860,102 @@ class TranslationRuntime {
 			return $callback();
 		} finally {
 			remove_filter( 'http_request_args', $filter, 999 );
+		}
+	}
+
+	/**
+	 * Normalise a chat-completions response body so that models which return
+	 * their output exclusively in the `reasoning` field (thinking models that
+	 * ignore `enable_thinking=false` on remote connectors like OpenRouter) are
+	 * still usable: when `choices[0].message.content` is null or empty but
+	 * `choices[0].message.reasoning` (or `reasoning_content`) carries text, the
+	 * reasoning text is promoted to `content`.
+	 *
+	 * This runs before the WordPress AI Client parses the response, so it never
+	 * reaches the "No text content found in first candidate." error.
+	 *
+	 * @param string $body Raw JSON response body from the upstream API.
+	 * @return string Possibly modified JSON body; original on any parse failure.
+	 */
+	public static function normalize_reasoning_only_response_body( string $body ): string {
+		if ( '' === $body ) {
+			return $body;
+		}
+
+		$decoded = json_decode( $body, true );
+		if ( ! is_array( $decoded ) ) {
+			return $body;
+		}
+
+		$choices = $decoded['choices'] ?? null;
+		if ( ! is_array( $choices ) || empty( $choices ) ) {
+			return $body;
+		}
+
+		$message = $choices[0]['message'] ?? null;
+		if ( ! is_array( $message ) ) {
+			return $body;
+		}
+
+		$content = $message['content'] ?? null;
+		if ( is_string( $content ) && '' !== trim( $content ) ) {
+			return $body;
+		}
+
+		$reasoning = null;
+		foreach ( array( 'reasoning', 'reasoning_content' ) as $key ) {
+			if ( isset( $message[ $key ] ) && is_string( $message[ $key ] ) && '' !== trim( $message[ $key ] ) ) {
+				$reasoning = $message[ $key ];
+				break;
+			}
+		}
+
+		if ( null === $reasoning ) {
+			return $body;
+		}
+
+		$decoded['choices'][0]['message']['content'] = $reasoning;
+
+		$encoded = wp_json_encode( $decoded );
+		return is_string( $encoded ) ? $encoded : $body;
+	}
+
+	/**
+	 * Wrap a callable that triggers WP AI Client HTTP requests with a temporary
+	 * `http_response` filter that promotes reasoning-only API responses so the
+	 * WP AI Client can parse them as regular text responses.
+	 *
+	 * @param callable $callback Callable that triggers the HTTP request.
+	 * @return mixed Whatever the callback returns.
+	 */
+	private static function with_reasoning_response_normalization_filter( callable $callback ): mixed {
+		$filter = static function ( $response, $parsed_args, $url ) {
+			if ( ! is_array( $response ) || ! is_string( $url ) ) {
+				return $response;
+			}
+
+			if ( false === strpos( $url, '/chat/completions' ) ) {
+				return $response;
+			}
+
+			$body = $response['body'] ?? '';
+			if ( ! is_string( $body ) || '' === $body ) {
+				return $response;
+			}
+
+			$normalized = self::normalize_reasoning_only_response_body( $body );
+			if ( $normalized !== $body ) {
+				$response['body'] = $normalized;
+			}
+
+			return $response;
+		};
+
+		add_filter( 'http_response', $filter, 1, 3 );
+		try {
+			return $callback();
+		} finally {
+			remove_filter( 'http_response', $filter, 1 );
 		}
 	}
 
