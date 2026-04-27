@@ -622,7 +622,9 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->assertSame( 'Testbeitrag zur Uebersetzung', $result );
 		$this->assertCount( 3, $inputs );
-		$this->assertStringContainsString( 'Translate the following text from EN to DE.', $inputs[2] );
+		// Plain-prompt recovery uses completion-style format: "{lang}: {source}\n{lang}:"
+		$this->assertStringContainsString( 'EN:', $inputs[2] );
+		$this->assertStringContainsString( 'DE:', $inputs[2] );
 	}
 
 	public function test_translate_chunk_uses_plain_prompt_recovery_after_repeated_assistant_reply(): void {
@@ -695,8 +697,9 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->assertSame( 'The configuration is complete. WordPress, SlyTranslate, Polylang, MCP. Translations work with a single click.', $result );
 		$this->assertCount( 3, $inputs );
-		// Third call must use plain-prompt format (source text embedded in user message)
-		$this->assertStringContainsString( 'Translate the following text from DE to EN.', $inputs[2] );
+		// Third call must use plain-prompt format (completion-style: "{lang}: {source}\n{lang}:")
+		$this->assertStringContainsString( 'DE:', $inputs[2] );
+		$this->assertStringContainsString( 'EN:', $inputs[2] );
 		$this->assertStringContainsString( $source_text, $inputs[2] );
 	}
 

@@ -1267,8 +1267,13 @@ class TranslationRuntime {
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
 		$source_label      = self::resolve_language_label( is_string( self::$source_lang ) ? self::$source_lang : null, 'SOURCE' );
 		$target_label      = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'TARGET' );
-		$user_content      = sprintf(
-			'Translate the following text from %1$s to %2$s. Return only the translated text and preserve HTML, formatting, and symbols exactly.' . "\n\n" . '%3$s',
+
+		// Use a completion-style format with NO instruction verbs ("translate", "return only",
+		// "preserve HTML" …) so that thinking-mode models like Nemotron on OpenRouter have
+		// nothing instructional to echo back.  The bilingual label pattern ({lang}: {text}\n{lang}:)
+		// is universally understood as a completion cue and produces only the target text.
+		$user_content = sprintf(
+			'%1$s: %3$s' . "\n" . '%2$s:',
 			$source_label,
 			$target_label,
 			$source_text
