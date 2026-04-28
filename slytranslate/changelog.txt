@@ -2,7 +2,6 @@
 * WP Multilang: major new integration support for the WP Multilang plugin alongside the existing Polylang integration.
 
 * MCP: all ability output schemas now include field-level descriptions and enum values so LLMs can call and interpret every endpoint correctly on the first attempt.
-
 * Performance: post title and excerpt are now translated in the same batched AI call as SEO meta fields, saving up to 2 API requests per post.
 * Architecture: introduced a central model-profile registry (slytranslate_model_profiles) driving prompt style, chunk strategy, and retry behavior per model family.
 * Profiles: added dedicated profiles for major local model families including Ministral, Tower, Qwen, GLM, Gemma 4, Phi-4, Nemotron, EuroLLM, and Llama 3.1/Sauerkraut.
@@ -19,6 +18,7 @@
 
 * Security: admin translation dialog now renders result messages as text and only appends same-origin edit links.
 * Security: direct API capability and model probes no longer follow redirects to other hosts.
+* UI: pressing Escape now closes the list-table translation picker on post and page overview screens.
 * i18n: added the missing German translation for the list-table overwrite confirmation warning.
 * Reliability: reasoning-aware models now inject thinking-related chat_template_kwargs more safely, reducing empty connector outputs.
 * Reliability: remote reasoning models (e.g. OpenRouter GLM-5.1) that return output in reasoning or reasoning_content instead of content are now handled transparently — the reasoning text is promoted to the content field before the WP AI Client parses the response, preventing the "No text content found in first candidate" error.

@@ -445,6 +445,14 @@
 		pickerOnConfirm = null;
 	}
 
+	document.addEventListener('keydown', function (e) {
+		if ('Escape' !== e.key || 'flex' !== pickerOverlay.style.display) {
+			return;
+		}
+		e.preventDefault();
+		hidePicker();
+	});
+
 	pickerCancel.addEventListener('click', hidePicker);
 	pickerRefresh.addEventListener('click', function () { loadPickerModels(true); });
 	pickerSourceSel.addEventListener('change', function () {
