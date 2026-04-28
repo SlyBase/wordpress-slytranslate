@@ -89,9 +89,14 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 ## Supported model profiles
 
-- Standard LLMs: any model provided by active WordPress AI connectors.
+Any LLM available through a WordPress AI connector works out of the box — no special configuration needed. The following model families additionally have dedicated built-in profiles that tune prompt style, chunking, and retry behavior for better results:
+
 - TranslateGemma: dedicated runtime with `chat_template_kwargs` support through `direct_api_url`.
-- TowerInstruct: dedicated profile with bilingual framing, conservative chunking, and stricter retry behavior for German-target passthrough.
+- TowerInstruct / Salamandra: bilingual framing, conservative chunking, stricter retry behavior.
+- Nvidia Nemotron: system-prompt-aware with reasoning-disable and provider-parameter forwarding.
+- Qwen 3.x / GLM-4.6v / Gemma 4 / Phi-4: thinking-aware profiles.
+- EuroLLM / Llama 3.1-8B / SauerkrautLM: conservative chunking tuned for European languages.
+- Ministral-3 / Ministral-8B: optimized for the Ministral model family.
 
 ## Installation
 
@@ -130,6 +135,6 @@ Yes, when the active language plugin supports language mutation (currently Polyl
 
 Use `ai-translate/configure` for persistent defaults and `additional_prompt` on `translate-*` abilities for per-request instructions.
 
-### Can I use TranslateGemma and TowerInstruct?
+### Which model-specific profiles are supported?
 
-Yes. TranslateGemma uses the direct API runtime with `chat_template_kwargs`; TowerInstruct uses a dedicated model profile tuned for bilingual translation framing.
+Any LLM from a WordPress AI connector works without configuration. Built-in dedicated profiles exist for: TranslateGemma, TowerInstruct, Salamandra, Nvidia Nemotron, Qwen 3.x, GLM-4.6v, Gemma 4, Phi-4, EuroLLM, Llama 3.1-8B, SauerkrautLM, Ministral-3, and Ministral-8B. Additional profiles can be registered via the `slytranslate_model_profiles` filter.
