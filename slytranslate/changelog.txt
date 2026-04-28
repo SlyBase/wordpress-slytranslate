@@ -26,6 +26,7 @@
 * Reliability: repeated source-language passthrough now also triggers the third user-only plain-prompt recovery attempt, helping Nemotron-family models recover English output instead of leaving German blocks unchanged.
 * Reliability: Nemotron-family models now retry failed paragraph translations with much smaller chunks, improving stubborn German source blocks that previously stayed untranslated after repeated prompt-echo failures.
 * Validation: passthrough detection now also catches German carry-over in English-target translations, including outputs that wrap unchanged source text in extra headings or summary prose.
+* Validation: English-target translations now also reject obvious German rewrites that paraphrase the source instead of translating it, preventing wrong-language content from being saved as a successful English result.
 * Polylang: translation creation no longer fails when the new target draft already has the requested language.
 * Security: single and bulk translation admin notices now require a verified notice nonce before result parameters are read.
 * Security: ai_translate_learned_context_windows now sanitizes and bounds learned model context-window values via the Settings API callback.

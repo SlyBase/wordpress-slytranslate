@@ -721,6 +721,10 @@ class TranslationValidator {
 		$source_markers = self::count_source_language_markers( $translated_normalized, $target );
 		$target_markers = self::count_target_language_markers( $translated_normalized, $target );
 
+		if ( $source_markers >= 3 && 0 === $target_markers ) {
+			return true;
+		}
+
 		if ( $source_normalized === $translated_normalized ) {
 			return $source_markers >= 2 && 0 === $target_markers;
 		}
