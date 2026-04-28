@@ -2,25 +2,25 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate {
+namespace SlyTranslate {
 
 	function pll_set_post_language( int $post_id, string $lang ): bool {
-		return \AI_Translate\Tests\Unit\PolylangAdapterTestDouble::invokeSetPostLanguage( $post_id, $lang );
+		return \SlyTranslate\Tests\Unit\PolylangAdapterTestDouble::invokeSetPostLanguage( $post_id, $lang );
 	}
 
 	function pll_get_post_language( int $post_id ) {
-		return \AI_Translate\Tests\Unit\PolylangAdapterTestDouble::invokeGetPostLanguage( $post_id );
+		return \SlyTranslate\Tests\Unit\PolylangAdapterTestDouble::invokeGetPostLanguage( $post_id );
 	}
 
 	function pll_save_post_translations( array $translations ): bool {
-		return \AI_Translate\Tests\Unit\PolylangAdapterTestDouble::invokeSavePostTranslations( $translations );
+		return \SlyTranslate\Tests\Unit\PolylangAdapterTestDouble::invokeSavePostTranslations( $translations );
 	}
 }
 
-namespace AI_Translate\Tests\Unit {
+namespace SlyTranslate\Tests\Unit {
 
-	use AI_Translate\PolylangAdapter;
-	use AI_Translate\TranslationMutationAdapter;
+	use SlyTranslate\PolylangAdapter;
+	use SlyTranslate\TranslationMutationAdapter;
 
 	class PolylangAdapterTest extends TestCase {
 

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\ContentTranslator;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\ContentTranslator;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**

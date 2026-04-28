@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\MetaTranslationService;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\MetaTranslationService;
 
 /**
  * Tests for post-aware SEO meta resolution in AI_Translate.
@@ -46,11 +46,11 @@ class SeoMetaRuntimeResolutionTest extends TestCase {
 	public function test_post_aware_meta_resolution_merges_active_runtime_and_user_meta_keys(): void {
 		$this->stubWpFunction( 'get_option',
 			static function ( string $option, $default = false ) {
-				if ( 'ai_translate_meta_translate' === $option ) {
+				if ( 'slytranslate_meta_translate' === $option ) {
 					return '_custom_translate';
 				}
 
-				if ( 'ai_translate_meta_clear' === $option ) {
+				if ( 'slytranslate_meta_clear' === $option ) {
 					return '_custom_clear';
 				}
 

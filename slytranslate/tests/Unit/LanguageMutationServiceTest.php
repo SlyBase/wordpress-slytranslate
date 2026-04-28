@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\TranslationMutationAdapter;
-use AI_Translate\TranslationPluginAdapter;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\TranslationMutationAdapter;
+use SlyTranslate\TranslationPluginAdapter;
 
 class LanguageMutationServiceTest extends TestCase {
 

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\ContentTranslator;
-use AI_Translate\TranslationProgressTracker;
+use SlyTranslate\ContentTranslator;
+use SlyTranslate\TranslationProgressTracker;
 
 class ContentTranslationListFastPathTest extends TestCase {
 

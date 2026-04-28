@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -75,7 +75,7 @@ class NormalizeMetaKeysTest extends TestCase {
 	/** @return array<string, array{string}> */
 	public static function provideClasses(): array {
 		return [
-			'SeoPluginDetector' => [ \AI_Translate\SeoPluginDetector::class ],
+			'SeoPluginDetector' => [ \SlyTranslate\SeoPluginDetector::class ],
 		];
 	}
 }

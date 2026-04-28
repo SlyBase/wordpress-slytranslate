@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -403,8 +403,8 @@ class MetaTranslationService {
 		}
 
 		$meta_key_config = array(
-			'translate' => self::merge_meta_keys( self::meta_keys( 'ai_translate_meta_translate' ), $seo_plugin_config['translate'] ),
-			'clear'     => self::merge_meta_keys( self::meta_keys( 'ai_translate_meta_clear' ), $seo_plugin_config['clear'] ),
+			'translate' => self::merge_meta_keys( self::meta_keys( 'slytranslate_meta_translate' ), $seo_plugin_config['translate'] ),
+			'clear'     => self::merge_meta_keys( self::meta_keys( 'slytranslate_meta_clear' ), $seo_plugin_config['clear'] ),
 			'seo'       => $seo_plugin_config,
 		);
 

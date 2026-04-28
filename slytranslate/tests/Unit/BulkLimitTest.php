@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\TranslationQueryService;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\TranslationQueryService;
 
 /**
  * Tests for AI_Translate::normalize_bulk_limit().

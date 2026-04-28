@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\MetaTranslationService;
-use AI_Translate\TranslationRuntime;
+use SlyTranslate\MetaTranslationService;
+use SlyTranslate\TranslationRuntime;
 
 /**
  * Tests for the extra_candidates parameter in MetaTranslationService.

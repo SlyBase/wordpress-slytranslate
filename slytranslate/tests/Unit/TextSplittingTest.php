@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\TextSplitter;
-use AI_Translate\TranslationRuntime;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\TextSplitter;
+use SlyTranslate\TranslationRuntime;
 
 /**
  * Tests for the text-splitting methods used to break long content into

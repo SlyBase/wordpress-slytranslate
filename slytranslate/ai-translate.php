@@ -13,7 +13,7 @@ Text Domain: slytranslate
 Domain Path: /languages
 */
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
@@ -89,12 +89,48 @@ class AI_Translate {
 	 * ------------------------------------------------------------- */
 
 	public static function add_hooks(): void {
+		self::maybe_migrate_legacy_options();
 		add_action( 'enqueue_block_editor_assets', array( EditorBootstrap::class, 'enqueue_editor_plugin' ) );
 		add_action( 'admin_init',                  array( Settings::class, 'register' ) );
 		add_action( 'rest_api_init', array( self::class, 'register_editor_rest_routes' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
 		ListTableTranslation::add_hooks();
+	}
+
+	/**
+	 * One-time migration from the legacy `ai_translate_*` option prefix to `slytranslate_*`.
+	 * Runs once per site and is idempotent afterwards.
+	 */
+	private static function maybe_migrate_legacy_options(): void {
+		if ( get_option( 'slytranslate_prefix_migrated' ) ) {
+			return;
+		}
+
+		$option_map = array(
+			'ai_translate_prompt'                           => 'slytranslate_prompt',
+			'ai_translate_prompt_addon'                     => 'slytranslate_prompt_addon',
+			'ai_translate_meta_translate'                   => 'slytranslate_meta_translate',
+			'ai_translate_meta_clear'                       => 'slytranslate_meta_clear',
+			'ai_translate_new_post'                         => 'slytranslate_new_post',
+			'ai_translate_context_window_tokens'            => 'slytranslate_context_window_tokens',
+			'ai_translate_model_slug'                       => 'slytranslate_model_slug',
+			'ai_translate_direct_api_url'                   => 'slytranslate_direct_api_url',
+			'ai_translate_force_direct_api'                 => 'slytranslate_force_direct_api',
+			'ai_translate_direct_api_kwargs_detected'       => 'slytranslate_direct_api_kwargs_detected',
+			'ai_translate_direct_api_kwargs_last_probed_at' => 'slytranslate_direct_api_kwargs_last_probed_at',
+			'ai_translate_direct_api_models_last_probed_at' => 'slytranslate_direct_api_models_last_probed_at',
+			'ai_translate_learned_context_windows'          => 'slytranslate_learned_context_windows',
+		);
+
+		foreach ( $option_map as $old_key => $new_key ) {
+			$old_value = get_option( $old_key );
+			if ( false !== $old_value && false === get_option( $new_key ) ) {
+				add_option( $new_key, $old_value, '', false );
+			}
+		}
+
+		update_option( 'slytranslate_prefix_migrated', '1', false );
 	}
 
 	public static function register_editor_rest_routes(): void {
@@ -418,17 +454,17 @@ class AI_Translate {
 		$translategemma_status = TranslationRuntime::get_translategemma_runtime_status();
 
 		return array(
-			'prompt_template'                  => get_option( 'ai_translate_prompt', self::get_default_prompt() ),
-			'prompt_addon'                     => get_option( 'ai_translate_prompt_addon', '' ),
-			'meta_keys_translate'              => get_option( 'ai_translate_meta_translate', '' ),
-			'meta_keys_clear'                  => get_option( 'ai_translate_meta_clear', '' ),
-			'auto_translate_new'               => get_option( 'ai_translate_new_post', '0' ) === '1',
-			'context_window_tokens'            => absint( get_option( 'ai_translate_context_window_tokens', 0 ) ),
-			'model_slug'                       => get_option( 'ai_translate_model_slug', '' ),
-			'direct_api_url'                   => get_option( 'ai_translate_direct_api_url', '' ),
-			'force_direct_api'                 => get_option( 'ai_translate_force_direct_api', '0' ) === '1',
-			'direct_api_kwargs_supported'      => get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1',
-			'direct_api_kwargs_last_probed_at' => absint( get_option( 'ai_translate_direct_api_kwargs_last_probed_at', 0 ) ),
+			'prompt_template'                  => get_option( 'slytranslate_prompt', self::get_default_prompt() ),
+			'prompt_addon'                     => get_option( 'slytranslate_prompt_addon', '' ),
+			'meta_keys_translate'              => get_option( 'slytranslate_meta_translate', '' ),
+			'meta_keys_clear'                  => get_option( 'slytranslate_meta_clear', '' ),
+			'auto_translate_new'               => get_option( 'slytranslate_new_post', '0' ) === '1',
+			'context_window_tokens'            => absint( get_option( 'slytranslate_context_window_tokens', 0 ) ),
+			'model_slug'                       => get_option( 'slytranslate_model_slug', '' ),
+			'direct_api_url'                   => get_option( 'slytranslate_direct_api_url', '' ),
+			'force_direct_api'                 => get_option( 'slytranslate_force_direct_api', '0' ) === '1',
+			'direct_api_kwargs_supported'      => get_option( 'slytranslate_direct_api_kwargs_detected', '0' ) === '1',
+			'direct_api_kwargs_last_probed_at' => absint( get_option( 'slytranslate_direct_api_kwargs_last_probed_at', 0 ) ),
 			'translategemma_runtime_ready'     => $translategemma_status['ready'],
 			'translategemma_runtime_status'    => $translategemma_status['status'],
 			'detected_seo_plugin'              => $seo_plugin_config['key'],
@@ -464,7 +500,7 @@ class AI_Translate {
 		$models  = EditorBootstrap::get_available_models( $refresh );
 		return array(
 			'models'           => $models,
-			'defaultModelSlug' => (string) get_option( 'ai_translate_model_slug', '' ),
+			'defaultModelSlug' => (string) get_option( 'slytranslate_model_slug', '' ),
 			'refreshed'        => $refresh,
 		);
 	}
@@ -480,7 +516,7 @@ class AI_Translate {
 			return new \WP_Error( 'not_logged_in', __( 'You must be logged in to save preferences.', 'slytranslate' ) );
 		}
 
-		update_user_meta( $user_id, '_ai_translate_last_additional_prompt', $additional_prompt );
+		update_user_meta( $user_id, '_slytranslate_last_additional_prompt', $additional_prompt );
 		return array( 'additional_prompt' => $additional_prompt );
 	}
 
@@ -549,19 +585,19 @@ class AI_Translate {
 		// Migrate existing options to autoload=false so they don't bloat every
 		// page load. The Settings API will continue to handle them from this point.
 		$options = array(
-			'ai_translate_prompt',
-			'ai_translate_prompt_addon',
-			'ai_translate_meta_translate',
-			'ai_translate_meta_clear',
-			'ai_translate_new_post',
-			'ai_translate_context_window_tokens',
-			'ai_translate_model_slug',
-			'ai_translate_direct_api_url',
-			'ai_translate_force_direct_api',
-			'ai_translate_direct_api_kwargs_detected',
-			'ai_translate_direct_api_kwargs_last_probed_at',
-			'ai_translate_learned_context_window_tokens',
-			'ai_translate_last_kwarg_probe_result',
+			'slytranslate_prompt',
+			'slytranslate_prompt_addon',
+			'slytranslate_meta_translate',
+			'slytranslate_meta_clear',
+			'slytranslate_new_post',
+			'slytranslate_context_window_tokens',
+			'slytranslate_model_slug',
+			'slytranslate_direct_api_url',
+			'slytranslate_force_direct_api',
+			'slytranslate_direct_api_kwargs_detected',
+			'slytranslate_direct_api_kwargs_last_probed_at',
+			'slytranslate_learned_context_window_tokens',
+			'slytranslate_last_kwarg_probe_result',
 		);
 
 		foreach ( $options as $option ) {

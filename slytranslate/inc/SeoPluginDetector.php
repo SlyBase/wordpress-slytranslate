@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -104,7 +104,7 @@ class SeoPluginDetector {
 	);
 
 	public static function get_plugin_configs(): array {
-		$configs = apply_filters( 'ai_translate_seo_plugin_configs', self::CONFIGS );
+		$configs = apply_filters( 'slytranslate_seo_plugin_configs', self::CONFIGS );
 
 		if ( ! is_array( $configs ) ) {
 			return array();
@@ -140,8 +140,8 @@ class SeoPluginDetector {
 			return $config;
 		}
 
-		$config['translate'] = apply_filters( 'ai_translate_seo_meta_translate', $config['translate'], $plugin_key, $config );
-		$config['clear']     = apply_filters( 'ai_translate_seo_meta_clear', $config['clear'], $plugin_key, $config );
+		$config['translate'] = apply_filters( 'slytranslate_seo_meta_translate', $config['translate'], $plugin_key, $config );
+		$config['clear']     = apply_filters( 'slytranslate_seo_meta_clear', $config['clear'], $plugin_key, $config );
 
 		$config['translate'] = self::normalize_meta_keys( $config['translate'] );
 		$config['clear']     = self::normalize_meta_keys( $config['clear'] );

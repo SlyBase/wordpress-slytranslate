@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\TranslationRuntime;
-use AI_Translate\TranslationValidator;
+use SlyTranslate\TranslationRuntime;
+use SlyTranslate\TranslationValidator;
 
 class RunawayOutputValidationTest extends TestCase {
 

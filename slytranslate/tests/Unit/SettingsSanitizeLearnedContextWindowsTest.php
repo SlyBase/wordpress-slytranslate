@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\Settings;
+use SlyTranslate\Settings;
 
 class SettingsSanitizeLearnedContextWindowsTest extends TestCase {
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -16,59 +16,59 @@ class ConfigurationService {
 		}
 
 		if ( isset( $input['prompt_template'] ) ) {
-			update_option( 'ai_translate_prompt', sanitize_textarea_field( $input['prompt_template'] ), false );
+			update_option( 'slytranslate_prompt', sanitize_textarea_field( $input['prompt_template'] ), false );
 		}
 		if ( array_key_exists( 'prompt_addon', $input ) ) {
 			$addon_value = is_string( $input['prompt_addon'] ) ? sanitize_textarea_field( $input['prompt_addon'] ) : '';
 			if ( '' === $addon_value ) {
-				delete_option( 'ai_translate_prompt_addon' );
+				delete_option( 'slytranslate_prompt_addon' );
 			} else {
-				update_option( 'ai_translate_prompt_addon', $addon_value, false );
+				update_option( 'slytranslate_prompt_addon', $addon_value, false );
 			}
 		}
 		if ( isset( $input['meta_keys_translate'] ) ) {
-			update_option( 'ai_translate_meta_translate', sanitize_textarea_field( $input['meta_keys_translate'] ), false );
+			update_option( 'slytranslate_meta_translate', sanitize_textarea_field( $input['meta_keys_translate'] ), false );
 		}
 		if ( isset( $input['meta_keys_clear'] ) ) {
-			update_option( 'ai_translate_meta_clear', sanitize_textarea_field( $input['meta_keys_clear'] ), false );
+			update_option( 'slytranslate_meta_clear', sanitize_textarea_field( $input['meta_keys_clear'] ), false );
 		}
 		if ( isset( $input['auto_translate_new'] ) ) {
-			update_option( 'ai_translate_new_post', $input['auto_translate_new'] ? '1' : '0', false );
+			update_option( 'slytranslate_new_post', $input['auto_translate_new'] ? '1' : '0', false );
 		}
 		if ( isset( $input['context_window_tokens'] ) ) {
 			$context_window_tokens = min( 4000000, absint( $input['context_window_tokens'] ) );
 			if ( $context_window_tokens > 0 ) {
-				update_option( 'ai_translate_context_window_tokens', (string) $context_window_tokens, false );
+				update_option( 'slytranslate_context_window_tokens', (string) $context_window_tokens, false );
 			} else {
-				delete_option( 'ai_translate_context_window_tokens' );
+				delete_option( 'slytranslate_context_window_tokens' );
 			}
 		}
 		if ( array_key_exists( 'model_slug', $input ) ) {
 			$model_slug_value = TranslationRuntime::normalize_requested_model_slug( $input['model_slug'] ?? '' );
 			if ( '' === $model_slug_value ) {
-				delete_option( 'ai_translate_model_slug' );
+				delete_option( 'slytranslate_model_slug' );
 			} else {
-				update_option( 'ai_translate_model_slug', $model_slug_value, false );
+				update_option( 'slytranslate_model_slug', $model_slug_value, false );
 			}
 		}
 		if ( isset( $input['force_direct_api'] ) ) {
-			update_option( 'ai_translate_force_direct_api', $input['force_direct_api'] ? '1' : '0', false );
+			update_option( 'slytranslate_force_direct_api', $input['force_direct_api'] ? '1' : '0', false );
 		}
 
 		$should_reprobe_kwargs = false;
 		if ( array_key_exists( 'direct_api_url', $input ) ) {
 			if ( '' === $validated_direct_api_url ) {
-				delete_option( 'ai_translate_direct_api_url' );
-				delete_option( 'ai_translate_direct_api_kwargs_detected' );
-				delete_option( 'ai_translate_direct_api_kwargs_last_probed_at' );
+				delete_option( 'slytranslate_direct_api_url' );
+				delete_option( 'slytranslate_direct_api_kwargs_detected' );
+				delete_option( 'slytranslate_direct_api_kwargs_last_probed_at' );
 			} else {
-				update_option( 'ai_translate_direct_api_url', $validated_direct_api_url, false );
+				update_option( 'slytranslate_direct_api_url', $validated_direct_api_url, false );
 				$should_reprobe_kwargs = true;
 			}
 		}
 
 		if ( array_key_exists( 'model_slug', $input ) ) {
-			$direct_url = get_option( 'ai_translate_direct_api_url', '' );
+			$direct_url = get_option( 'slytranslate_direct_api_url', '' );
 			if ( '' !== $direct_url ) {
 				$should_reprobe_kwargs = true;
 			}
@@ -76,11 +76,11 @@ class ConfigurationService {
 
 		if ( $should_reprobe_kwargs ) {
 			$probe_result = self::probe_direct_api_kwargs(
-				get_option( 'ai_translate_direct_api_url', '' ),
-				get_option( 'ai_translate_model_slug', '' )
+				get_option( 'slytranslate_direct_api_url', '' ),
+				get_option( 'slytranslate_model_slug', '' )
 			);
-			update_option( 'ai_translate_direct_api_kwargs_detected', $probe_result ? '1' : '0', false );
-			update_option( 'ai_translate_direct_api_kwargs_last_probed_at', time(), false );
+			update_option( 'slytranslate_direct_api_kwargs_detected', $probe_result ? '1' : '0', false );
+			update_option( 'slytranslate_direct_api_kwargs_last_probed_at', time(), false );
 
 			// Also probe the endpoint's model list for OpenAI-compatible
 			// `context_window` / `meta.n_ctx_train` fields. This lets hosted
@@ -93,7 +93,7 @@ class ConfigurationService {
 			// option and are overridden only by the per-model value the
 			// plugin already learned from a previous request-time error.
 			self::probe_and_remember_direct_api_context_windows(
-				get_option( 'ai_translate_direct_api_url', '' )
+				get_option( 'slytranslate_direct_api_url', '' )
 			);
 		}
 
@@ -249,7 +249,7 @@ class ConfigurationService {
 			return 0;
 		}
 
-		$learned = get_option( 'ai_translate_learned_context_windows', array() );
+		$learned = get_option( 'slytranslate_learned_context_windows', array() );
 		if ( ! is_array( $learned ) ) {
 			$learned = array();
 		}
@@ -270,7 +270,7 @@ class ConfigurationService {
 		}
 
 		if ( $changed ) {
-			update_option( 'ai_translate_learned_context_windows', $learned, false );
+			update_option( 'slytranslate_learned_context_windows', $learned, false );
 		}
 
 		return count( $discovered );

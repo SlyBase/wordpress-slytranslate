@@ -1,5 +1,6 @@
 = 1.6.0 =
 Changes:
+* WordPress.org compliance: renamed PHP namespace from AI_Translate to SlyTranslate and all ai_translate_* option/filter/transient names to slytranslate_*; existing settings are migrated automatically on first load.
 * Security: DNS lookup in the SSRF guard no longer silences PHP warnings via the @ error-suppression operator.
 * Security: learned context-window cap is now consistent at 4,000,000 tokens across all code paths.
 * Code quality: background-bar task rendering now uses the DOM API (createElement/DocumentFragment) instead of innerHTML string concatenation, eliminating a class of potential XSS footguns in future extensions.

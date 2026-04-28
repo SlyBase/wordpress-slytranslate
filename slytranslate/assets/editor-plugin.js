@@ -1572,4 +1572,4 @@
             edit: TranslateSelectionControl,
         });
     }
-})(window.wp, window.aiTranslateEditor);
+})(window.wp, window.slyTranslateEditor);

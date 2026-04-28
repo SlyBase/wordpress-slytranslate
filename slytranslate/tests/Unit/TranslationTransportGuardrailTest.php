@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\TranslationRuntime;
+use SlyTranslate\TranslationRuntime;
 
 class TranslationTransportGuardrailTest extends TestCase {
 
@@ -164,11 +164,11 @@ class TranslationTransportGuardrailTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_force_direct_api' === $option ) {
+				if ( 'slytranslate_force_direct_api' === $option ) {
 					return '1';
 				}
 
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 
@@ -266,7 +266,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 
@@ -365,7 +365,7 @@ class TranslationTransportGuardrailTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 
@@ -405,10 +405,10 @@ class TranslationTransportGuardrailTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
-				if ( 'ai_translate_force_direct_api' === $option ) {
+				if ( 'slytranslate_force_direct_api' === $option ) {
 					return '1';
 				}
 

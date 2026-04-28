@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\TranslationRuntime;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\TranslationRuntime;
 
 class ConfigureDiagnosticsTest extends TestCase {
 
@@ -32,7 +32,7 @@ class ConfigureDiagnosticsTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_prompt' === $option ) {
+				if ( 'slytranslate_prompt' === $option ) {
 					return AI_Translate::get_default_prompt();
 				}
 

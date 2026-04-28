@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
+use SlyTranslate\AI_Translate;
 
 class AbilityInputValidationTest extends TestCase {
 
@@ -55,7 +55,7 @@ class AbilityInputValidationTest extends TestCase {
 	}
 
 	public function test_execute_translate_posts_rejects_missing_post_selection(): void {
-		$adapter = new class() implements \AI_Translate\TranslationPluginAdapter {
+		$adapter = new class() implements \SlyTranslate\TranslationPluginAdapter {
 			public function is_available(): bool {
 				return true;
 			}

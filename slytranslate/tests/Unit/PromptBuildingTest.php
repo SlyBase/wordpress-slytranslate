@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\TranslationRuntime;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\TranslationRuntime;
 
 /**
  * Tests for AI_Translate::prompt().
@@ -37,7 +37,7 @@ class PromptBuildingTest extends TestCase {
 	public function test_uses_custom_template_from_option(): void {
 		$this->stubWpFunction( 'get_option',
 			function ( $option, $default = false ) {
-				if ( 'ai_translate_prompt' === $option ) {
+				if ( 'slytranslate_prompt' === $option ) {
 					return 'Translate from {FROM_CODE} into {TO_CODE}.';
 				}
 				return $default;
@@ -50,7 +50,7 @@ class PromptBuildingTest extends TestCase {
 	public function test_appends_global_addon_when_set(): void {
 		$this->stubWpFunction( 'get_option',
 			function ( $option, $default = false ) {
-				if ( 'ai_translate_prompt_addon' === $option ) {
+				if ( 'slytranslate_prompt_addon' === $option ) {
 					return 'Be formal.';
 				}
 				return $default;
@@ -79,7 +79,7 @@ class PromptBuildingTest extends TestCase {
 	public function test_does_not_append_whitespace_only_addon(): void {
 		$this->stubWpFunction( 'get_option',
 			function ( $option, $default = false ) {
-				if ( 'ai_translate_prompt_addon' === $option ) {
+				if ( 'slytranslate_prompt_addon' === $option ) {
 					return '   ';
 				}
 				return $default;
@@ -93,7 +93,7 @@ class PromptBuildingTest extends TestCase {
 	public function test_combines_addon_and_additional_prompt_with_double_newline(): void {
 		$this->stubWpFunction( 'get_option',
 			function ( $option, $default = false ) {
-				if ( 'ai_translate_prompt_addon' === $option ) {
+				if ( 'slytranslate_prompt_addon' === $option ) {
 					return 'Addon text.';
 				}
 				return $default;

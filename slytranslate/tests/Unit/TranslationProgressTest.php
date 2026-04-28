@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\TextSplitter;
-use AI_Translate\MetaTranslationService;
-use AI_Translate\TranslationProgressTracker;
-use AI_Translate\TranslationPluginAdapter;
-use AI_Translate\TranslationRuntime;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\TextSplitter;
+use SlyTranslate\MetaTranslationService;
+use SlyTranslate\TranslationProgressTracker;
+use SlyTranslate\TranslationPluginAdapter;
+use SlyTranslate\TranslationRuntime;
 
 class TranslationProgressTest extends TestCase {
 
@@ -65,7 +65,7 @@ class TranslationProgressTest extends TestCase {
 		$this->stubWpFunctionReturn( 'get_transient', false );
 		$this->stubWpFunction( 'set_transient',
 			static function ( $key, $value, $ttl ) use ( &$progress_calls ) {
-				if ( is_string( $key ) && str_starts_with( $key, 'ai_translate_progress_' ) ) {
+				if ( is_string( $key ) && str_starts_with( $key, 'slytranslate_progress_' ) ) {
 					$progress_calls[] = $value;
 				}
 
@@ -217,7 +217,7 @@ class TranslationProgressTest extends TestCase {
 		$result = AI_Translate::translate_post( 42, 'de', 'draft', false, false );
 
 		$this->assertSame( 84, $result );
-		$this->assertArrayNotHasKey( 'ai_translate_progress_17_42', $transients );
+		$this->assertArrayNotHasKey( 'slytranslate_progress_17_42', $transients );
 		$this->assertSame(
 			array(
 				'phase'         => '',
@@ -283,7 +283,7 @@ class TranslationProgressTest extends TestCase {
 		$this->stubWpFunctionReturn( 'get_post_meta', array() );
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 				return $default;
@@ -406,7 +406,7 @@ class TranslationProgressTest extends TestCase {
 		$this->stubWpFunctionReturn( 'get_post_meta', array() );
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 				return $default;
@@ -544,7 +544,7 @@ class TranslationProgressTest extends TestCase {
 		$this->stubWpFunction(
 			'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 				return $default;

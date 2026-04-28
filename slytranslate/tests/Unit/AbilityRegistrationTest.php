@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\AbilityRegistrar;
-use AI_Translate\TranslationPluginAdapter;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\AbilityRegistrar;
+use SlyTranslate\TranslationPluginAdapter;
 
 class AbilityRegistrationTest extends TestCase {
 

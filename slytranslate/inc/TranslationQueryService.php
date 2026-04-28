@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -316,7 +316,7 @@ class TranslationQueryService {
 
 	private static function get_queryable_source_post_statuses(): array {
 		$post_statuses = apply_filters(
-			'ai_translate_source_post_statuses',
+			'slytranslate_source_post_statuses',
 			array( 'publish', 'draft', 'future', 'pending', 'private' )
 		);
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
 use PHPUnit\Framework\TestCase as PHPUnitTestCase;
 

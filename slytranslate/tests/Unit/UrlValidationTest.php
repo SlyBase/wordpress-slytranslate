@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\ConfigurationService;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\ConfigurationService;
 
 /**
  * Tests for URL schema and SSRF validation in ConfigurationService::validate_direct_api_url().

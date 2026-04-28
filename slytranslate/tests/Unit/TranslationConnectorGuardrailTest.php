@@ -1,8 +1,8 @@
 <?php
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\TranslationRuntime;
+use SlyTranslate\TranslationRuntime;
 
 /**
  * Guardrails for the unified WordPress AI Client transport path. After

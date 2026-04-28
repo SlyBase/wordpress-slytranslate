@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\AbilityRegistrar;
-use AI_Translate\EditorBootstrap;
-use AI_Translate\ListTableTranslation;
-use AI_Translate\Settings;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\AbilityRegistrar;
+use SlyTranslate\EditorBootstrap;
+use SlyTranslate\ListTableTranslation;
+use SlyTranslate\Settings;
 
 class HookRegistrationTest extends TestCase {
 
@@ -68,7 +68,7 @@ class HookRegistrationTest extends TestCase {
 					'accepted_args' => 1,
 				),
 				array(
-					'hook'          => 'admin_post_ai_translate_single',
+					'hook'          => 'admin_post_slytranslate_single',
 					'callback'      => array( ListTableTranslation::class, 'handle_single_translate' ),
 					'priority'      => 10,
 					'accepted_args' => 1,

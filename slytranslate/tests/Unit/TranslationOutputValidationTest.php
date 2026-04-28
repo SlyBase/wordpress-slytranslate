@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\AI_Translate;
-use AI_Translate\TranslationRuntime;
-use AI_Translate\TranslationValidator;
+use SlyTranslate\AI_Translate;
+use SlyTranslate\TranslationRuntime;
+use SlyTranslate\TranslationValidator;
 
 class TranslationOutputValidationTest extends TestCase {
 
@@ -485,7 +485,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 			$this->stubWpFunction( 'get_option',
 				static function ( $option, $default = false ) {
-					if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 						return '0';
 					}
 					return $default;
@@ -553,7 +553,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 
@@ -620,7 +620,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 
@@ -704,7 +704,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 				return $default;
@@ -775,7 +775,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 
@@ -844,7 +844,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 
@@ -917,7 +917,7 @@ class TranslationOutputValidationTest extends TestCase {
 
 		$this->stubWpFunction( 'get_option',
 			static function ( $option, $default = false ) {
-				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
 					return '0';
 				}
 

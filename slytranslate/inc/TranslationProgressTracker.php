@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -42,20 +42,20 @@ class TranslationProgressTracker {
 		if ( $user_id < 1 ) {
 			return false;
 		}
-		return (bool) get_transient( 'ai_translate_cancel_' . $user_id );
+		return (bool) get_transient( 'slytranslate_cancel_' . $user_id );
 	}
 
 	public static function set_cancelled(): void {
 		$user_id = get_current_user_id();
 		if ( $user_id > 0 ) {
-			set_transient( 'ai_translate_cancel_' . $user_id, 1, 5 * MINUTE_IN_SECONDS );
+			set_transient( 'slytranslate_cancel_' . $user_id, 1, 5 * MINUTE_IN_SECONDS );
 		}
 	}
 
 	public static function clear_cancelled(): void {
 		$user_id = get_current_user_id();
 		if ( $user_id > 0 ) {
-			delete_transient( 'ai_translate_cancel_' . $user_id );
+			delete_transient( 'slytranslate_cancel_' . $user_id );
 		}
 	}
 
@@ -73,7 +73,7 @@ class TranslationProgressTracker {
 		if ( $user_id < 1 ) {
 			return false;
 		}
-		return false !== get_transient( 'ai_translate_bg_user_' . $user_id );
+		return false !== get_transient( 'slytranslate_bg_user_' . $user_id );
 	}
 
 	public static function get_progress( int $post_id = 0 ): array {
@@ -183,7 +183,7 @@ class TranslationProgressTracker {
 		// conditionally rendered on subsequent admin screens.
 		$user_id = get_current_user_id();
 		if ( $user_id > 0 ) {
-			set_transient( 'ai_translate_bg_user_' . $user_id, 1, self::PROGRESS_TTL_SECONDS );
+			set_transient( 'slytranslate_bg_user_' . $user_id, 1, self::PROGRESS_TTL_SECONDS );
 		}
 	}
 
@@ -309,9 +309,9 @@ class TranslationProgressTracker {
 			return null;
 		}
 		if ( $post_id > 0 ) {
-			return 'ai_translate_progress_' . $user_id . '_' . $post_id;
+			return 'slytranslate_progress_' . $user_id . '_' . $post_id;
 		}
-		return 'ai_translate_progress_' . $user_id;
+		return 'slytranslate_progress_' . $user_id;
 	}
 
 	private static function default_progress(): array {

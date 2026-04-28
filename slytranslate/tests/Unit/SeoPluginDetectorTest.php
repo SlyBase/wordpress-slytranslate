@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AI_Translate\Tests\Unit;
+namespace SlyTranslate\Tests\Unit;
 
-use AI_Translate\SeoPluginDetector;
+use SlyTranslate\SeoPluginDetector;
 
 /**
  * Tests for SeoPluginDetector plugin config and runtime resolution helpers.
@@ -44,11 +44,11 @@ class SeoPluginDetectorTest extends TestCase {
 	public function test_filtered_plugin_config_applies_meta_filters(): void {
 		$this->stubWpFunction( 'apply_filters',
 			static function ( string $tag, $value, ...$args ) {
-				if ( 'ai_translate_seo_meta_translate' === $tag && 'genesis' === ( $args[0] ?? '' ) ) {
+				if ( 'slytranslate_seo_meta_translate' === $tag && 'genesis' === ( $args[0] ?? '' ) ) {
 					return array_merge( $value, array( '_genesis_custom_title' ) );
 				}
 
-				if ( 'ai_translate_seo_meta_clear' === $tag && 'genesis' === ( $args[0] ?? '' ) ) {
+				if ( 'slytranslate_seo_meta_clear' === $tag && 'genesis' === ( $args[0] ?? '' ) ) {
 					return array_merge( $value, array( '_genesis_custom_score' ) );
 				}
 

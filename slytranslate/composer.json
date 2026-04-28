@@ -11,12 +11,12 @@
   },
   "autoload": {
     "psr-4": {
-      "AI_Translate\\": "inc/"
+      "SlyTranslate\\": "inc/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "AI_Translate\\Tests\\": "tests/"
+      "SlyTranslate\\Tests\\": "tests/"
     }
   },
   "scripts": {

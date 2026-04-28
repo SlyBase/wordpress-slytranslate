@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -20,7 +20,7 @@ class ListTableTranslation {
 
 	public static function add_hooks(): void {
 		add_action( 'current_screen', array( static::class, 'register_list_table_hooks' ) );
-		add_action( 'admin_post_ai_translate_single', array( static::class, 'handle_single_translate' ) );
+		add_action( 'admin_post_slytranslate_single', array( static::class, 'handle_single_translate' ) );
 		add_action( 'admin_notices', array( static::class, 'show_admin_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( static::class, 'enqueue_list_table_assets' ) );
 		// The background-task bar must render on every wp-admin screen so that a
@@ -109,7 +109,7 @@ class ListTableTranslation {
 			$all_languages[] = array( 'code' => (string) $code, 'name' => (string) $name );
 		}
 
-		$actions['ai_translate'] = sprintf(
+		$actions['slytranslate'] = sprintf(
 			'<a href="#" class="slytranslate-ajax-translate" data-post-id="%d" data-post-title="%s" data-source-lang="%s" data-langs="%s" data-all-langs="%s" data-existing-langs="%s">%s</a>',
 			$post->ID,
 			esc_attr( $post->post_title ),
@@ -140,7 +140,7 @@ class ListTableTranslation {
 			return $actions;
 		}
 
-		$actions['ai_translate_bulk'] = esc_html__( 'Translate', 'slytranslate' );
+		$actions['slytranslate_bulk'] = esc_html__( 'Translate', 'slytranslate' );
 
 		return $actions;
 	}
@@ -161,11 +161,11 @@ class ListTableTranslation {
 		// JS intercepts the new unified "Translate" bulk action and runs the
 		// translations client-side via the picker dialog. Without JS, there is
 		// no target language to operate on — return unchanged.
-		if ( 'ai_translate_bulk' === $action ) {
+		if ( 'slytranslate_bulk' === $action ) {
 			return $redirect_url;
 		}
 
-		if ( ! str_starts_with( $action, 'ai_translate_to_' ) ) {
+		if ( ! str_starts_with( $action, 'slytranslate_to_' ) ) {
 			return $redirect_url;
 		}
 
@@ -176,7 +176,7 @@ class ListTableTranslation {
 			return $redirect_url;
 		}
 
-		$lang = sanitize_key( substr( $action, strlen( 'ai_translate_to_' ) ) );
+		$lang = sanitize_key( substr( $action, strlen( 'slytranslate_to_' ) ) );
 		if ( '' === $lang ) {
 			return $redirect_url;
 		}
@@ -205,10 +205,10 @@ class ListTableTranslation {
 
 		return add_query_arg(
 			array(
-				'ai_translate_bulk_ok'      => $ok,
-				'ai_translate_bulk_skipped' => $skipped,
-				'ai_translate_bulk_errors'  => $errors,
-				'ai_translate_notice_nonce' => wp_create_nonce( 'ai_translate_bulk_notice' ),
+				'slytranslate_bulk_ok'      => $ok,
+				'slytranslate_bulk_skipped' => $skipped,
+				'slytranslate_bulk_errors'  => $errors,
+				'slytranslate_notice_nonce' => wp_create_nonce( 'slytranslate_bulk_notice' ),
 			),
 			$redirect_url
 		);
@@ -231,7 +231,7 @@ class ListTableTranslation {
 			wp_die( esc_html__( 'Invalid request.', 'slytranslate' ) );
 		}
 
-		check_admin_referer( 'ai_translate_single_' . $post_id . '_' . $lang );
+		check_admin_referer( 'slytranslate_single_' . $post_id . '_' . $lang );
 
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			wp_die( esc_html__( 'You are not allowed to translate this content item.', 'slytranslate' ) );
@@ -244,12 +244,12 @@ class ListTableTranslation {
 
 		$result   = PostTranslationService::translate_post( $post_id, $lang );
 		$redirect = admin_url( 'edit.php?post_type=' . rawurlencode( $post->post_type ) );
-		$redirect = add_query_arg( 'ai_translate_notice_nonce', wp_create_nonce( 'ai_translate_notice' ), $redirect );
+		$redirect = add_query_arg( 'slytranslate_notice_nonce', wp_create_nonce( 'slytranslate_notice' ), $redirect );
 
 		if ( is_wp_error( $result ) ) {
-			$redirect = add_query_arg( 'ai_translate_error', rawurlencode( $result->get_error_message() ), $redirect );
+			$redirect = add_query_arg( 'slytranslate_error', rawurlencode( $result->get_error_message() ), $redirect );
 		} else {
-			$redirect = add_query_arg( 'ai_translate_done', '1', $redirect );
+			$redirect = add_query_arg( 'slytranslate_done', '1', $redirect );
 		}
 
 		wp_safe_redirect( $redirect );
@@ -264,18 +264,18 @@ class ListTableTranslation {
 	 * Renders success/error admin notices after a single or bulk translation.
 	 */
 	public static function show_admin_notice(): void {
-		$single_notice_requested = isset( $_GET['ai_translate_done'] ) || isset( $_GET['ai_translate_error'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- verified below
+		$single_notice_requested = isset( $_GET['slytranslate_done'] ) || isset( $_GET['slytranslate_error'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- verified below
 		if ( $single_notice_requested ) {
-			$single_notice_nonce = sanitize_text_field( wp_unslash( $_GET['ai_translate_notice_nonce'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated immediately
-			if ( '' !== $single_notice_nonce && wp_verify_nonce( $single_notice_nonce, 'ai_translate_notice' ) ) {
-				if ( isset( $_GET['ai_translate_done'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
+			$single_notice_nonce = sanitize_text_field( wp_unslash( $_GET['slytranslate_notice_nonce'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated immediately
+			if ( '' !== $single_notice_nonce && wp_verify_nonce( $single_notice_nonce, 'slytranslate_notice' ) ) {
+				if ( isset( $_GET['slytranslate_done'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
 					echo '<div class="notice notice-success is-dismissible"><p>'
 						. esc_html__( 'Translation completed successfully.', 'slytranslate' )
 						. '</p></div>';
 				}
 
-				if ( isset( $_GET['ai_translate_error'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
-					$message = sanitize_text_field( wp_unslash( $_GET['ai_translate_error'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
+				if ( isset( $_GET['slytranslate_error'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
+					$message = sanitize_text_field( wp_unslash( $_GET['slytranslate_error'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
 					echo '<div class="notice notice-error is-dismissible"><p>'
 						. esc_html(
 							/* translators: %s: error message */
@@ -286,18 +286,18 @@ class ListTableTranslation {
 			}
 		}
 
-		$bulk_ok = isset( $_GET['ai_translate_bulk_ok'] ) ? absint( wp_unslash( $_GET['ai_translate_bulk_ok'] ) ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated below
+		$bulk_ok = isset( $_GET['slytranslate_bulk_ok'] ) ? absint( wp_unslash( $_GET['slytranslate_bulk_ok'] ) ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated below
 		if ( null === $bulk_ok ) {
 			return;
 		}
 
-		$notice_nonce = sanitize_text_field( wp_unslash( $_GET['ai_translate_notice_nonce'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated immediately
-		if ( '' === $notice_nonce || ! wp_verify_nonce( $notice_nonce, 'ai_translate_bulk_notice' ) ) {
+		$notice_nonce = sanitize_text_field( wp_unslash( $_GET['slytranslate_notice_nonce'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- validated immediately
+		if ( '' === $notice_nonce || ! wp_verify_nonce( $notice_nonce, 'slytranslate_bulk_notice' ) ) {
 			return;
 		}
 
-		$bulk_skipped = absint( wp_unslash( $_GET['ai_translate_bulk_skipped'] ?? 0 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
-		$bulk_errors  = absint( wp_unslash( $_GET['ai_translate_bulk_errors']  ?? 0 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
+		$bulk_skipped = absint( wp_unslash( $_GET['slytranslate_bulk_skipped'] ?? 0 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
+		$bulk_errors  = absint( wp_unslash( $_GET['slytranslate_bulk_errors']  ?? 0 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- protected by nonce above
 
 		$parts = array();
 
@@ -378,7 +378,7 @@ class ListTableTranslation {
 
 	private static function get_list_table_bootstrap_data(): array {
 		$user_id = get_current_user_id();
-		$last_additional_prompt = $user_id > 0 ? (string) get_user_meta( $user_id, '_ai_translate_last_additional_prompt', true ) : '';
+		$last_additional_prompt = $user_id > 0 ? (string) get_user_meta( $user_id, '_slytranslate_last_additional_prompt', true ) : '';
 
 		return array(
 			'restUrl'               => esc_url_raw( rest_url( Plugin::REST_NAMESPACE . '/' ) ),

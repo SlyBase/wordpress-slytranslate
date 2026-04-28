@@ -1,12 +1,12 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
 class EditorBootstrap {
 
-	private const AVAILABLE_MODELS_TRANSIENT = 'ai_translate_available_models';
+	private const AVAILABLE_MODELS_TRANSIENT = 'slytranslate_available_models';
 
 	public static function enqueue_editor_plugin(): void {
 		wp_enqueue_script(
@@ -17,7 +17,7 @@ class EditorBootstrap {
 			true
 		);
 
-		wp_localize_script( Plugin::EDITOR_SCRIPT, 'aiTranslateEditor', self::get_bootstrap_data() );
+		wp_localize_script( Plugin::EDITOR_SCRIPT, 'slyTranslateEditor', self::get_bootstrap_data() );
 
 		if ( function_exists( 'wp_set_script_translations' ) ) {
 			wp_set_script_translations(
@@ -30,7 +30,7 @@ class EditorBootstrap {
 
 	public static function get_bootstrap_data(): array {
 		$user_id               = get_current_user_id();
-		$last_additional_prompt = $user_id > 0 ? (string) get_user_meta( $user_id, '_ai_translate_last_additional_prompt', true ) : '';
+		$last_additional_prompt = $user_id > 0 ? (string) get_user_meta( $user_id, '_slytranslate_last_additional_prompt', true ) : '';
 
 		return array(
 			'abilitiesRunBasePath'      => self::get_editor_rest_base_path(),
@@ -41,7 +41,7 @@ class EditorBootstrap {
 			'defaultSourceLanguage'     => self::get_editor_default_source_language(),
 			'lastAdditionalPrompt'      => $last_additional_prompt,
 			'models'                    => self::get_available_models(),
-			'defaultModelSlug'          => get_option( 'ai_translate_model_slug', '' ),
+			'defaultModelSlug'          => get_option( 'slytranslate_model_slug', '' ),
 			'strings'                   => array(
 				'modelLabel'                => __( 'AI model', 'slytranslate' ),
 				'refreshModelsButton'       => __( 'Refresh model list', 'slytranslate' ),

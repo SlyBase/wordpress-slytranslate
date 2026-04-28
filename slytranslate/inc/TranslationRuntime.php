@@ -1,6 +1,6 @@
 <?php
 
-namespace AI_Translate;
+namespace SlyTranslate;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -216,7 +216,7 @@ class TranslationRuntime {
 	 * ------------------------------------------------------------- */
 
 	public static function build_prompt( string $to, string $from = 'en', string $additional_prompt = '' ): string {
-		$template    = get_option( 'ai_translate_prompt', AI_Translate::get_default_prompt() );
+		$template    = get_option( 'slytranslate_prompt', AI_Translate::get_default_prompt() );
 		$base_prompt = str_replace(
 			array( '{FROM_CODE}', '{TO_CODE}' ),
 			array( $from, $to ),
@@ -225,7 +225,7 @@ class TranslationRuntime {
 
 		$parts = array( $base_prompt );
 
-		$global_addon = get_option( 'ai_translate_prompt_addon', '' );
+		$global_addon = get_option( 'slytranslate_prompt_addon', '' );
 		if ( is_string( $global_addon ) && '' !== trim( $global_addon ) ) {
 			$parts[] = trim( $global_addon );
 		}
@@ -1429,7 +1429,7 @@ class TranslationRuntime {
 		$chunk_char_limit     = self::get_chunk_char_limit_from_context_window( $context_window_size );
 		$model_profile        = self::get_model_profile( (string) ( $runtime_context['model_slug'] ?? '' ) );
 
-		$filtered_limit = apply_filters( 'ai_translate_chunk_char_limit', $chunk_char_limit, $context_window_size, $runtime_context );
+		$filtered_limit = apply_filters( 'slytranslate_chunk_char_limit', $chunk_char_limit, $context_window_size, $runtime_context );
 		$filtered_limit = absint( $filtered_limit );
 		if ( $filtered_limit > 0 ) {
 			$chunk_char_limit = $filtered_limit;
@@ -1449,7 +1449,7 @@ class TranslationRuntime {
 	}
 
 	public static function get_effective_context_window_tokens(): int {
-		$configured = absint( get_option( 'ai_translate_context_window_tokens', 0 ) );
+		$configured = absint( get_option( 'slytranslate_context_window_tokens', 0 ) );
 		if ( $configured > 0 ) {
 			return max( self::MIN_CONTEXT_WINDOW_TOKENS, $configured );
 		}
@@ -1465,7 +1465,7 @@ class TranslationRuntime {
 			$context_window_size = self::DEFAULT_CONTEXT_WINDOW_TOKENS;
 		}
 
-		$filtered = apply_filters( 'ai_translate_context_window_tokens', $context_window_size, $runtime_context );
+		$filtered = apply_filters( 'slytranslate_context_window_tokens', $context_window_size, $runtime_context );
 		$filtered = absint( $filtered );
 		if ( $filtered > 0 ) {
 			$context_window_size = $filtered;
@@ -1480,14 +1480,14 @@ class TranslationRuntime {
 	 * actually ran (so the caller knows to re-read the learned window).
 	 */
 	private static function maybe_autoprobe_direct_api_context_windows( string $api_url ): bool {
-		$last_probed_at = (int) get_option( 'ai_translate_direct_api_models_last_probed_at', 0 );
+		$last_probed_at = (int) get_option( 'slytranslate_direct_api_models_last_probed_at', 0 );
 		if ( $last_probed_at > 0 && ( time() - $last_probed_at ) < DAY_IN_SECONDS ) {
 			return false;
 		}
 
 		// Record the attempt before probing so a failing endpoint does not
 		// get re-hit on every translation request.
-		update_option( 'ai_translate_direct_api_models_last_probed_at', time(), false );
+		update_option( 'slytranslate_direct_api_models_last_probed_at', time(), false );
 		ConfigurationService::probe_and_remember_direct_api_context_windows( $api_url );
 
 		return true;
@@ -1499,7 +1499,7 @@ class TranslationRuntime {
 		}
 
 		$direct_api_url = '';
-		$model_slug     = self::normalize_requested_model_slug( get_option( 'ai_translate_model_slug', '' ) );
+		$model_slug     = self::normalize_requested_model_slug( get_option( 'slytranslate_model_slug', '' ) );
 
 		// Final fallback in the model-selection hierarchy:
 		//   1. per-call override (with_model_slug_override())
@@ -1600,7 +1600,7 @@ class TranslationRuntime {
 			return 0;
 		}
 
-		$learned = get_option( 'ai_translate_learned_context_windows', array() );
+		$learned = get_option( 'slytranslate_learned_context_windows', array() );
 		if ( ! is_array( $learned ) ) {
 			return 0;
 		}
@@ -1632,12 +1632,12 @@ class TranslationRuntime {
 			return;
 		}
 
-		$learned = get_option( 'ai_translate_learned_context_windows', array() );
+		$learned = get_option( 'slytranslate_learned_context_windows', array() );
 		if ( ! is_array( $learned ) ) {
 			$learned = array();
 		}
 		$learned[ $cache_key ] = $context_window_tokens;
-		update_option( 'ai_translate_learned_context_windows', $learned, false );
+		update_option( 'slytranslate_learned_context_windows', $learned, false );
 	}
 
 	public static function get_known_context_window_for_model( string $model_slug ): int {
@@ -1740,13 +1740,13 @@ class TranslationRuntime {
 	}
 
 	public static function direct_api_kwargs_supported(): bool {
-		return get_option( 'ai_translate_direct_api_kwargs_detected', '0' ) === '1';
+		return get_option( 'slytranslate_direct_api_kwargs_detected', '0' ) === '1';
 	}
 
 	public static function refresh_direct_api_kwargs_detection( string $api_url, string $model_slug ): bool {
 		$probe_result = ConfigurationService::probe_direct_api_kwargs( $api_url, $model_slug );
-		update_option( 'ai_translate_direct_api_kwargs_detected', $probe_result ? '1' : '0' );
-		update_option( 'ai_translate_direct_api_kwargs_last_probed_at', time(), false );
+		update_option( 'slytranslate_direct_api_kwargs_detected', $probe_result ? '1' : '0' );
+		update_option( 'slytranslate_direct_api_kwargs_last_probed_at', time(), false );
 		return $probe_result;
 	}
 
@@ -1913,14 +1913,14 @@ class TranslationRuntime {
 		// 4 chars/token average × 2x growth headroom = input_chars * 0.5 tokens.
 		$tokens = (int) ceil( max( 1, $input_chars ) * 0.5 );
 
-		$ceiling = (int) apply_filters( 'ai_translate_max_output_tokens_ceiling', self::MAX_OUTPUT_TOKENS_CEILING, $input_chars );
+		$ceiling = (int) apply_filters( 'slytranslate_max_output_tokens_ceiling', self::MAX_OUTPUT_TOKENS_CEILING, $input_chars );
 		if ( $ceiling < self::MIN_OUTPUT_TOKENS ) {
 			$ceiling = self::MAX_OUTPUT_TOKENS_CEILING;
 		}
 
 		$computed = (int) min( $ceiling, max( self::MIN_OUTPUT_TOKENS, $tokens ) );
 
-		$filtered = (int) apply_filters( 'ai_translate_max_output_tokens', $computed, $input_chars, $ceiling );
+		$filtered = (int) apply_filters( 'slytranslate_max_output_tokens', $computed, $input_chars, $ceiling );
 		if ( $filtered < self::MIN_OUTPUT_TOKENS ) {
 			return $computed;
 		}
