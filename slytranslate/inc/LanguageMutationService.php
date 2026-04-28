@@ -105,6 +105,23 @@ class LanguageMutationService {
 			return new \WP_Error( 'unsupported_language_mutation', __( 'The active translation plugin does not support translation relinking.', 'slytranslate' ) );
 		}
 
+		// When relinking, every post in the translation group is affected.
+		// Verify edit permission on each linked post before performing any mutation.
+		if ( $should_relink ) {
+			foreach ( $translations as $linked_post_id ) {
+				if ( $linked_post_id !== $post_id && ! current_user_can( 'edit_post', $linked_post_id ) ) {
+					return new \WP_Error(
+						'forbidden_linked_post',
+						sprintf(
+							/* translators: %d: linked post ID the user cannot edit. */
+							__( 'You are not allowed to relink translation group: insufficient permissions on post %d.', 'slytranslate' ),
+							$linked_post_id
+						)
+					);
+				}
+			}
+		}
+
 		$set_result = $mutation_adapter->set_post_language( $post_id, $target_language );
 		if ( is_wp_error( $set_result ) ) {
 			return $set_result;

@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.1]
+### Fixes
+- Security: `set-post-language` ability now verifies `edit_post` permission on every linked post in the translation group before executing a relink operation.
+
+### Changes
+- WordPress.org compliance: text domain corrected from `slytranslate` to `slytranslate-ai-translation-abilities` to match the plugin slug; language files renamed accordingly.
+
 ## [1.6.0]
 ### Changes
 - WordPress.org compliance: renamed PHP namespace from `AI_Translate` to `SlyTranslate` and all `ai_translate_*` option/filter/transient names to `slytranslate_*`; a one-time automatic migration copies existing settings to the new names.
