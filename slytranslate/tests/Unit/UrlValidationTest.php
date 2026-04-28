@@ -72,4 +72,50 @@ class UrlValidationTest extends TestCase {
 		$result = $this->invokeStatic( ConfigurationService::class, 'validate_direct_api_url', [ 'http://127.0.0.1:11434' ] );
 		$this->assertNotInstanceOf( \WP_Error::class, $result );
 	}
+
+	public function test_probe_direct_api_kwargs_disables_redirects_and_rejects_unsafe_urls(): void {
+		$captured_args = null;
+
+		$this->stubWpFunction(
+			'wp_remote_post',
+			static function ( string $url, array $args ) use ( &$captured_args ): array {
+				$captured_args = $args;
+
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => '{"choices":[{"message":{"content":"cat"}}]}',
+				);
+			}
+		);
+
+		$result = ConfigurationService::probe_direct_api_kwargs( 'https://api.example.test', 'model/test' );
+
+		$this->assertTrue( $result );
+		$this->assertIsArray( $captured_args );
+		$this->assertSame( 0, $captured_args['redirection'] ?? null );
+		$this->assertTrue( $captured_args['reject_unsafe_urls'] ?? false );
+	}
+
+	public function test_probe_direct_api_context_windows_disables_redirects_and_rejects_unsafe_urls(): void {
+		$captured_args = null;
+
+		$this->stubWpFunction(
+			'wp_remote_get',
+			static function ( string $url, array $args ) use ( &$captured_args ): array {
+				$captured_args = $args;
+
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => '{"data":[{"id":"model/test","context_window":8192}]}',
+				);
+			}
+		);
+
+		$result = ConfigurationService::probe_direct_api_context_windows( 'https://api.example.test' );
+
+		$this->assertSame( array( 'model/test' => 8192 ), $result );
+		$this->assertIsArray( $captured_args );
+		$this->assertSame( 0, $captured_args['redirection'] ?? null );
+		$this->assertTrue( $captured_args['reject_unsafe_urls'] ?? false );
+	}
 }

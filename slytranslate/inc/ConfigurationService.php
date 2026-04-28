@@ -149,6 +149,17 @@ class ConfigurationService {
 		return false;
 	}
 
+	private static function build_safe_remote_request_args( array $args ): array {
+		return array_merge(
+			array(
+				'timeout'            => 15,
+				'redirection'        => 0,
+				'reject_unsafe_urls' => true,
+			),
+			$args
+		);
+	}
+
 	public static function probe_direct_api_kwargs( string $api_url, string $model_slug ): bool {
 		if ( '' === $api_url ) {
 			return false;
@@ -172,11 +183,15 @@ class ConfigurationService {
 			$body['model'] = $model_slug;
 		}
 
-		$response = wp_remote_post( $endpoint, array(
-			'headers' => array( 'Content-Type' => 'application/json' ),
-			'body'    => wp_json_encode( $body ),
-			'timeout' => 15,
-		) );
+		$response = wp_remote_post(
+			$endpoint,
+			self::build_safe_remote_request_args(
+				array(
+					'headers' => array( 'Content-Type' => 'application/json' ),
+					'body'    => wp_json_encode( $body ),
+				)
+			)
+		);
 
 		if ( is_wp_error( $response ) ) {
 			return false;
@@ -274,10 +289,14 @@ class ConfigurationService {
 		}
 
 		$endpoint = trailingslashit( $api_url ) . 'v1/models';
-		$response = wp_remote_get( $endpoint, array(
-			'timeout' => 15,
-			'headers' => array( 'Accept' => 'application/json' ),
-		) );
+		$response = wp_remote_get(
+			$endpoint,
+			self::build_safe_remote_request_args(
+				array(
+					'headers' => array( 'Accept' => 'application/json' ),
+				)
+			)
+		);
 
 		if ( is_wp_error( $response ) ) {
 			return array();

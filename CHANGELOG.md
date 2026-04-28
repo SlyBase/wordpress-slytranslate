@@ -25,6 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MCP: `get-translation-status` now publicly advertises `single_entry_mode`, and `translate-content` guidance now documents the safer source-language call order.
 
 ### Fixes
+- Security: admin translation dialog now renders result messages as text and only appends same-origin edit links.
+- Security: direct API capability and model probes no longer follow redirects to other hosts.
 - i18n: added the missing German translation for the list-table overwrite confirmation warning.
 - Reliability: reasoning-aware models now inject thinking-related `chat_template_kwargs` more safely, reducing empty connector outputs.
 - Reliability: remote reasoning models (e.g. OpenRouter GLM-5.1) that return output in `reasoning` or `reasoning_content` instead of `content` are now handled transparently — the reasoning text is promoted to the content field before the WP AI Client parses the response, preventing the "No text content found in first candidate" error.

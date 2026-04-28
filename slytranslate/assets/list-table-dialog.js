@@ -89,6 +89,25 @@
 		}
 	}
 
+	function getSafeEditLink(editLink) {
+		if (!editLink || 'string' !== typeof editLink) {
+			return '';
+		}
+
+		try {
+			var parsed = new URL(editLink, window.location.href);
+			if (parsed.origin !== window.location.origin) {
+				return '';
+			}
+			if ('http:' !== parsed.protocol && 'https:' !== parsed.protocol) {
+				return '';
+			}
+			return parsed.href;
+		} catch (e) {
+			return '';
+		}
+	}
+
 	/* --- Overlay dialog (foreground) --- */
 
 	function pollProgress() {
@@ -147,11 +166,17 @@
 		resultEl.style.display = '';
 		resultEl.style.background = type === 'success' ? '#edfaef' : (type === 'warning' ? '#fef8ee' : '#fcecec');
 		resultEl.style.color = type === 'success' ? '#1e4620' : (type === 'warning' ? '#614a19' : '#8a1f1f');
-		var html = message;
-		if (editLink) {
-			html += ' <a href="' + editLink + '" style="font-weight:600;">' + S.openTranslation + '</a>';
+		var safeEditLink = getSafeEditLink(editLink);
+		resultEl.textContent = '';
+		resultEl.appendChild(document.createTextNode(String(message || '')));
+		if (safeEditLink) {
+			var link = document.createElement('a');
+			link.href = safeEditLink;
+			link.style.fontWeight = '600';
+			link.textContent = S.openTranslation;
+			resultEl.appendChild(document.createTextNode(' '));
+			resultEl.appendChild(link);
 		}
-		resultEl.innerHTML = html;
 	}
 
 	function hideOverlay(options) {
