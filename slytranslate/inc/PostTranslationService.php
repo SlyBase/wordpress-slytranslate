@@ -335,7 +335,7 @@ class PostTranslationService {
 		}
 
 		$error_code = $translated->get_error_code();
-		if ( ! in_array( $error_code, array( 'invalid_translation_empty', 'invalid_translation_assistant_reply' ), true ) ) {
+		if ( ! in_array( $error_code, array( 'invalid_translation_empty', 'invalid_translation_assistant_reply', 'invalid_translation_language_passthrough' ), true ) ) {
 			return $translated;
 		}
 

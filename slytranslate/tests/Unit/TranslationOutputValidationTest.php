@@ -209,6 +209,22 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'invalid_translation_language_passthrough', $result->get_error_code() );
 	}
 
+	public function test_language_passthrough_error_message_uses_target_language_direction(): void {
+		$result = $this->invokeStatic(
+			TranslationValidator::class,
+			'validate',
+			array(
+				'WordPress 7 + LLM = kostenlose Übersetzung',
+				'WordPress 7 + LLM = kostenlose Übersetzung',
+				'en'
+			)
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertStringContainsString( 'instead of English', $result->get_error_message() );
+		$this->assertStringNotContainsString( 'instead of German', $result->get_error_message() );
+	}
+
 	public function test_retry_prompt_keeps_user_additional_instruction_text(): void {
 		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
 		$user_prompt = 'Anreden mit "du" statt "Sie". junger aber professioneller ton.';

@@ -486,4 +486,140 @@ class TranslationProgressTest extends TestCase {
 		// The retry prompt also includes the title hint (it is an extension of the original prompt).
 		$this->assertStringContainsString( 'This is a post title.', $system_prompts[1] );
 	}
+
+	public function test_translate_post_retries_title_without_title_hint_after_language_passthrough(): void {
+		$source_post = new \WP_Post(
+			array(
+				'ID'           => 45,
+				'post_type'    => 'post',
+				'post_status'  => 'draft',
+				'post_title'   => 'WordPress 7 + LLM = kostenlose Übersetzung',
+				'post_content' => '',
+				'post_excerpt' => '',
+			)
+		);
+		$prompt_inputs  = array();
+		$system_prompts = array();
+		$call_count     = 0;
+
+		$adapter = new class implements TranslationPluginAdapter {
+			public function is_available(): bool {
+				return true;
+			}
+
+			public function get_languages(): array {
+				return array(
+					'en' => 'English',
+					'de' => 'Deutsch',
+				);
+			}
+
+			public function get_post_language( int $post_id ): ?string {
+				return 45 === $post_id ? 'de' : null;
+			}
+
+			public function get_post_translations( int $post_id ): array {
+				return array();
+			}
+
+			public function create_translation( int $source_post_id, string $target_lang, array $data ) {
+				return 145;
+			}
+
+			public function link_translation( int $source_post_id, int $translated_post_id, string $target_lang ): bool {
+				return true;
+			}
+		};
+
+		$this->stubWpFunctionReturn( 'get_current_user_id', 17 );
+		$this->stubWpFunctionReturn( 'current_user_can', true );
+		$this->stubWpFunctionReturn( 'post_type_exists', true );
+		$this->stubWpFunction(
+			'get_post',
+			static function ( $post_id ) use ( $source_post ) {
+				return 45 === (int) $post_id ? $source_post : null;
+			}
+		);
+		$this->stubWpFunctionReturn( 'get_post_meta', array() );
+		$this->stubWpFunction(
+			'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'ai_translate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+				return $default;
+			}
+		);
+		$this->stubWpFunctionReturn( 'get_transient', false );
+		$this->stubWpFunctionReturn( 'set_transient', true );
+		$this->stubWpFunctionReturn( 'delete_transient', true );
+		$this->stubWpFunction(
+			'wp_ai_client_prompt',
+			static function ( string $input_text ) use ( &$prompt_inputs, &$system_prompts, &$call_count ) {
+				return new class( $input_text, $prompt_inputs, $system_prompts, $call_count ) {
+					private string $input_text;
+					private array $prompt_inputs;
+					private array $system_prompts;
+					private int $call_count;
+					private string $system_prompt = '';
+
+					public function __construct( string $input_text, array &$prompt_inputs, array &$system_prompts, int &$call_count ) {
+						$this->input_text     = $input_text;
+						$this->prompt_inputs  = &$prompt_inputs;
+						$this->system_prompts = &$system_prompts;
+						$this->call_count     = &$call_count;
+					}
+
+					public function using_system_instruction( string $prompt ) {
+						$this->system_prompt     = $prompt;
+						$this->system_prompts[] = $prompt;
+						return $this;
+					}
+
+					public function using_temperature( float $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						$this->call_count++;
+						$this->prompt_inputs[] = $this->input_text;
+
+						if ( $this->call_count <= 2 ) {
+							return 'WordPress 7 + LLM = kostenlose Übersetzung';
+						}
+
+						if ( 3 === $this->call_count ) {
+							return 'WordPress 7 plus LLM bedeutet kostenlose Übersetzung. Das ist heute schon möglich und bleibt in dieser Antwort vollständig auf Deutsch, obwohl eigentlich ein englischer Titel zurückgegeben werden sollte.';
+						}
+
+						return 'WordPress 7 + LLM = free translation';
+					}
+				};
+			}
+		);
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'nvidia/nemotron-3-nano-30b-a3b',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( AI_Translate::class, 'adapter', $adapter );
+
+		$result = AI_Translate::translate_post( 45, 'en', 'draft', false, true, '', 'de' );
+
+		$this->assertSame( 145, $result );
+		$this->assertCount( 4, $prompt_inputs );
+		$this->assertCount( 3, $system_prompts );
+		$this->assertStringContainsString( 'This is a post title.', $system_prompts[0] );
+		$this->assertStringContainsString( 'This is a post title.', $system_prompts[1] );
+		$this->assertStringNotContainsString( 'This is a post title.', $system_prompts[2] );
+	}
 }

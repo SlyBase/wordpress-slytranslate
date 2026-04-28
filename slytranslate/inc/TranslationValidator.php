@@ -52,6 +52,20 @@ class TranslationValidator {
 	 */
 	private const COLLAPSED_OUTPUT_MIN_SOURCE_WORDS = 5;
 
+	public static function get_language_passthrough_error_message( ?string $target_language = null ): string {
+		$target = strtolower( trim( (string) $target_language ) );
+
+		if ( 0 === strpos( $target, 'en' ) ) {
+			return __( 'A translated segment still appears to be in the source language instead of English.', 'slytranslate' );
+		}
+
+		if ( 0 === strpos( $target, 'de' ) ) {
+			return __( 'A translated segment still appears to be in the source language instead of German.', 'slytranslate' );
+		}
+
+		return __( 'A translated segment still appears to be in the source language instead of the requested target language.', 'slytranslate' );
+	}
+
 	public static function validate( string $source_text, string $translated_text, ?string $target_language = null ) {
 		$source_text     = (string) $source_text;
 		$translated_text = self::normalize_bilingual_frame_label_leakage( $source_text, (string) $translated_text, $target_language );
@@ -111,7 +125,7 @@ class TranslationValidator {
 		if ( self::is_obvious_language_passthrough( $source_plain, $translated_plain, $target_language ) ) {
 			return new \WP_Error(
 				'invalid_translation_language_passthrough',
-				__( 'The translated output still appears to be in the source language instead of German.', 'slytranslate' )
+				self::get_language_passthrough_error_message( $target_language )
 			);
 		}
 

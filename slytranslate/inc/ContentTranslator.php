@@ -351,13 +351,13 @@ class ContentTranslator {
 		$matches = array();
 		$count   = preg_match_all( '/<!--\s*\/?wp:[^>]+-->/iu', $single_serialized, $matches );
 		if ( false === $count || empty( $matches[0] ) || ! is_array( $matches[0] ) ) {
-			return new \WP_Error( 'invalid_translation_language_passthrough', __( 'The translated output still appears to be in the source language instead of German.', 'slytranslate' ) );
+			return new \WP_Error( 'invalid_translation_language_passthrough', TranslationValidator::get_language_passthrough_error_message( $to ) );
 		}
 
 		$block_comments = $matches[0];
 		$inner_html     = self::extract_simple_wrapper_inner_html( $single_serialized, $block_comments );
 		if ( null === $inner_html ) {
-			return new \WP_Error( 'invalid_translation_language_passthrough', __( 'The translated output still appears to be in the source language instead of German.', 'slytranslate' ) );
+			return new \WP_Error( 'invalid_translation_language_passthrough', TranslationValidator::get_language_passthrough_error_message( $to ) );
 		}
 
 		$pass_through_hint = 'CRITICAL: The previous attempt returned source-language text unchanged. Translate every sentence into the target language and keep source-language carry-over to an absolute minimum.';
