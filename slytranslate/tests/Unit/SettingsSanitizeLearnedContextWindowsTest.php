@@ -21,7 +21,7 @@ class SettingsSanitizeLearnedContextWindowsTest extends TestCase {
 		$this->assertSame(
 			array(
 				'model-one'   => 2048,
-				'third-model' => 131072,
+				'third-model' => 200000,
 				'invalid'     => 44,
 			),
 			$result

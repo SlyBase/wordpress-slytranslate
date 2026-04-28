@@ -53,7 +53,7 @@ class Settings {
 				continue;
 			}
 
-			$sanitized[ $model_slug ] = min( $tokens, 131072 );
+			$sanitized[ $model_slug ] = min( $tokens, 4000000 );
 		}
 
 		return $sanitized;

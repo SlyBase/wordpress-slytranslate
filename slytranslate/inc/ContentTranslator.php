@@ -22,7 +22,7 @@ class ContentTranslator {
 		string $to,
 		string $from = 'en',
 		string $additional_prompt = ''
-	): mixed {
+	): string|\WP_Error {
 		if ( '' === trim( $content ) ) {
 			return '';
 		}
@@ -56,7 +56,7 @@ class ContentTranslator {
 		string $to,
 		string $from = 'en',
 		string $additional_prompt = ''
-	): mixed {
+	): string|\WP_Error {
 		if ( is_array( $blocks ) && ! empty( $blocks ) ) {
 			if ( '' === trim( $raw ) ) {
 				return '';

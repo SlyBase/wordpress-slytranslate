@@ -106,7 +106,9 @@
 		if (task.status === 'done') { fg = '#1e4620'; }
 		if (task.status === 'error') { fg = '#8a1f1f'; }
 		if (task.status === 'cancelled') { fg = '#614a19'; }
-		return '<span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:' + fg + ';margin-right:8px;flex:none;"></span>';
+		var dot = document.createElement('span');
+		dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:999px;background:' + fg + ';margin-right:8px;flex:none;';
+		return dot;
 	}
 
 	function isCollapsed() {
@@ -139,64 +141,130 @@
 		notice.style.padding = '8px 12px';
 
 		var collapsed = isCollapsed();
-		var html = '';
+		var frag = document.createDocumentFragment();
 
-		html += '<div style="display:flex;align-items:center;gap:8px;">';
-		html += '<button type="button" class="button-link slytranslate-bg-toggle" aria-expanded="' + (collapsed ? 'false' : 'true') + '" style="padding:0;color:#1d2327;text-decoration:none;font-weight:600;display:flex;align-items:center;gap:6px;">';
-		html += '<span class="dashicons dashicons-arrow-' + (collapsed ? 'right' : 'down') + '" style="margin:0;"></span>';
-		html += escHtml(S.header);
-		html += '</button>';
-		html += '<span style="flex:1;color:#50575e;font-size:12px;">' + escHtml(summaryText()) + '</span>';
-		html += '<button type="button" class="button-link slytranslate-bg-dismiss-all" style="color:#50575e;font-size:12px;">' + escHtml(S.dismissAll) + '</button>';
-		html += '</div>';
+		// Header row: toggle button | summary | dismiss-all
+		var headerRow = document.createElement('div');
+		headerRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
 
-		if (collapsed) {
-			notice.innerHTML = html;
-			return;
+		var toggleBtn = document.createElement('button');
+		toggleBtn.type = 'button';
+		toggleBtn.className = 'button-link slytranslate-bg-toggle';
+		toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+		toggleBtn.style.cssText = 'padding:0;color:#1d2327;text-decoration:none;font-weight:600;display:flex;align-items:center;gap:6px;';
+
+		var arrow = document.createElement('span');
+		arrow.className = 'dashicons dashicons-arrow-' + (collapsed ? 'right' : 'down');
+		arrow.style.margin = '0';
+		toggleBtn.appendChild(arrow);
+		toggleBtn.appendChild(document.createTextNode(S.header));
+		headerRow.appendChild(toggleBtn);
+
+		var summarySpan = document.createElement('span');
+		summarySpan.style.cssText = 'flex:1;color:#50575e;font-size:12px;';
+		summarySpan.textContent = summaryText();
+		headerRow.appendChild(summarySpan);
+
+		var dismissAllBtn = document.createElement('button');
+		dismissAllBtn.type = 'button';
+		dismissAllBtn.className = 'button-link slytranslate-bg-dismiss-all';
+		dismissAllBtn.style.cssText = 'color:#50575e;font-size:12px;';
+		dismissAllBtn.textContent = S.dismissAll;
+		headerRow.appendChild(dismissAllBtn);
+
+		frag.appendChild(headerRow);
+
+		if (!collapsed) {
+			var ul = document.createElement('ul');
+			ul.style.cssText = 'list-style:none;margin:6px 0 0;padding:0;';
+
+			tasks.forEach(function (t) {
+				var labelColor = '#1d2327';
+				if (t.status === 'done') { labelColor = '#1e4620'; }
+				if (t.status === 'error') { labelColor = '#8a1f1f'; }
+				if (t.status === 'cancelled') { labelColor = '#614a19'; }
+
+				var li = document.createElement('li');
+				li.style.cssText = 'padding:4px 0;border-top:1px solid #f0f0f1;';
+
+				var row = document.createElement('div');
+				row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+				row.appendChild(statusBadge(t));
+
+				var labelSpan = document.createElement('span');
+				labelSpan.style.cssText = 'flex:1;min-width:0;color:' + labelColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+				labelSpan.setAttribute('title', statusLabel(t));
+				labelSpan.textContent = statusLabel(t);
+				if (t.status === 'done' && t.editLink) {
+					var editA = document.createElement('a');
+					editA.href = t.editLink;
+					editA.style.marginLeft = '6px';
+					editA.textContent = S.openTranslation;
+					labelSpan.appendChild(editA);
+				}
+				row.appendChild(labelSpan);
+
+				if (t.status === 'running') {
+					if (typeof t.percent === 'number' && t.percent >= 0) {
+						var pctSpan = document.createElement('span');
+						pctSpan.style.cssText = 'color:#50575e;font-size:12px;font-variant-numeric:tabular-nums;flex:none;';
+						pctSpan.textContent = Math.min(100, t.percent) + '%';
+						row.appendChild(pctSpan);
+					}
+					var cancelBtn = document.createElement('button');
+					cancelBtn.type = 'button';
+					cancelBtn.className = 'button button-small slytranslate-bg-cancel';
+					cancelBtn.setAttribute('data-task-id', t.id);
+					cancelBtn.textContent = S.cancel;
+					row.appendChild(cancelBtn);
+				} else {
+					var dismissBtn = document.createElement('button');
+					dismissBtn.type = 'button';
+					dismissBtn.className = 'button-link slytranslate-bg-dismiss';
+					dismissBtn.setAttribute('aria-label', S.dismiss);
+					dismissBtn.setAttribute('data-task-id', t.id);
+					dismissBtn.style.cssText = 'color:#50575e;font-size:18px;line-height:1;flex:none;';
+					dismissBtn.textContent = '\u00D7';
+					row.appendChild(dismissBtn);
+				}
+
+				li.appendChild(row);
+
+				if (t.status === 'running') {
+					var pct = (typeof t.percent === 'number' && t.percent >= 0) ? Math.min(100, t.percent) : 0;
+					var phaseLabel = t.phaseLabel ? t.phaseLabel : '';
+
+					var progressRow = document.createElement('div');
+					progressRow.style.cssText = 'margin-top:4px;display:flex;align-items:center;gap:8px;';
+
+					var trackDiv = document.createElement('div');
+					trackDiv.style.cssText = 'flex:1;height:4px;border-radius:999px;overflow:hidden;background:#dcdcde;';
+					var fillDiv = document.createElement('div');
+					fillDiv.style.cssText = 'width:' + pct + '%;height:100%;background:linear-gradient(90deg,#3858e9 0%,#1d4ed8 100%);transition:width .3s ease;';
+					trackDiv.appendChild(fillDiv);
+					progressRow.appendChild(trackDiv);
+
+					if (phaseLabel) {
+						var phaseSpan = document.createElement('span');
+						phaseSpan.style.cssText = 'font-size:11px;color:#50575e;flex:none;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+						phaseSpan.setAttribute('title', phaseLabel);
+						phaseSpan.textContent = phaseLabel;
+						progressRow.appendChild(phaseSpan);
+					}
+
+					li.appendChild(progressRow);
+				}
+
+				ul.appendChild(li);
+			});
+
+			frag.appendChild(ul);
 		}
 
-		html += '<ul style="list-style:none;margin:6px 0 0;padding:0;">';
-		tasks.forEach(function (t) {
-			var labelColor = '#1d2327';
-			if (t.status === 'done') { labelColor = '#1e4620'; }
-			if (t.status === 'error') { labelColor = '#8a1f1f'; }
-			if (t.status === 'cancelled') { labelColor = '#614a19'; }
-
-			html += '<li style="padding:4px 0;border-top:1px solid #f0f0f1;">';
-			html += '<div style="display:flex;align-items:center;gap:8px;">';
-			html += statusBadge(t);
-			html += '<span style="flex:1;min-width:0;color:' + labelColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escAttr(statusLabel(t)) + '">' + escHtml(statusLabel(t));
-			if (t.status === 'done' && t.editLink) {
-				html += ' <a href="' + escAttr(t.editLink) + '" style="margin-left:6px;">' + escHtml(S.openTranslation) + '</a>';
-			}
-			html += '</span>';
-			if (t.status === 'running') {
-				if (typeof t.percent === 'number' && t.percent >= 0) {
-					html += '<span style="color:#50575e;font-size:12px;font-variant-numeric:tabular-nums;flex:none;">' + Math.min(100, t.percent) + '%</span>';
-				}
-				html += '<button type="button" class="button button-small slytranslate-bg-cancel" data-task-id="' + escAttr(t.id) + '">' + escHtml(S.cancel) + '</button>';
-			} else {
-				html += '<button type="button" class="button-link slytranslate-bg-dismiss" aria-label="' + escAttr(S.dismiss) + '" data-task-id="' + escAttr(t.id) + '" style="color:#50575e;font-size:18px;line-height:1;flex:none;">&times;</button>';
-			}
-			html += '</div>';
-
-			if (t.status === 'running') {
-				var pct = (typeof t.percent === 'number' && t.percent >= 0) ? Math.min(100, t.percent) : 0;
-				var phaseLabel = t.phaseLabel ? t.phaseLabel : '';
-				html += '<div style="margin-top:4px;display:flex;align-items:center;gap:8px;">';
-				html += '<div style="flex:1;height:4px;border-radius:999px;overflow:hidden;background:#dcdcde;">';
-				html += '<div style="width:' + pct + '%;height:100%;background:linear-gradient(90deg,#3858e9 0%,#1d4ed8 100%);transition:width .3s ease;"></div>';
-				html += '</div>';
-				if (phaseLabel) {
-					html += '<span style="font-size:11px;color:#50575e;flex:none;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escAttr(phaseLabel) + '">' + escHtml(phaseLabel) + '</span>';
-				}
-				html += '</div>';
-			}
-
-			html += '</li>';
-		});
-		html += '</ul>';
-		notice.innerHTML = html;
+		// Replace container content atomically
+		while (notice.firstChild) { notice.removeChild(notice.firstChild); }
+		notice.appendChild(frag);
 	}
 
 	function persistAndRender() {

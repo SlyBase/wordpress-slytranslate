@@ -95,7 +95,7 @@ class MetaTranslationService {
 		string $additional_prompt,
 		array $all_meta = array(),
 		array $extra_candidates = array()
-	): mixed {
+	): array|\WP_Error {
 		$meta            = ! empty( $all_meta ) ? $all_meta : get_post_meta( $post_id );
 		$processed_meta  = array();
 		$meta_key_config = self::get_effective_meta_key_config( $post_id, is_array( $meta ) ? $meta : array() );

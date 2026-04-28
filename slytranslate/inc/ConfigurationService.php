@@ -2,7 +2,7 @@
 
 namespace AI_Translate;
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+defined( 'ABSPATH' ) || exit;
 
 class ConfigurationService {
 
@@ -129,7 +129,7 @@ class ConfigurationService {
 	}
 
 	private static function host_is_internal( string $host ): bool {
-		$ips = filter_var( $host, FILTER_VALIDATE_IP ) ? array( $host ) : (array) @gethostbynamel( $host );
+		$ips = filter_var( $host, FILTER_VALIDATE_IP ) ? array( $host ) : (array) gethostbynamel( $host );
 		if ( empty( $ips ) ) {
 			return true;
 		}

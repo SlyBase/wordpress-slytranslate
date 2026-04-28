@@ -2,7 +2,7 @@
 
 namespace AI_Translate;
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+defined( 'ABSPATH' ) || exit;
 
 class TextSplitter {
 

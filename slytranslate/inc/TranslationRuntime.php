@@ -305,7 +305,7 @@ class TranslationRuntime {
 	 *
 	 * @return string|\WP_Error
 	 */
-	public static function translate_text( $text, string $to, string $from = 'en', string $additional_prompt = '' ): mixed {
+	public static function translate_text( $text, string $to, string $from = 'en', string $additional_prompt = '' ): string|\WP_Error {
 		if ( ! $text || trim( $text ) === '' ) {
 			return '';
 		}
@@ -333,17 +333,15 @@ class TranslationRuntime {
 		string $prompt,
 		int $chunk_char_limit,
 		int $attempt = 0,
-		?int $previous_chunk_count = null,
 		bool $track_progress = true
-	): mixed {
+	): string|\WP_Error {
 		$chunks = TextSplitter::split_text_for_translation( $text, $chunk_char_limit );
 
 		if ( empty( $chunks ) ) {
 			return '';
 		}
 
-		$translated_chunks    = array();
-		$completed_unit_count = 0;
+		$translated_chunks = array();
 
 		foreach ( $chunks as $chunk ) {
 			if ( TranslationProgressTracker::is_cancelled() ) {
@@ -360,7 +358,7 @@ class TranslationRuntime {
 					// will re-translate the same source text and credit it
 					// again \u2014 capping at the phase budget keeps the bar
 					// monotonic regardless.
-					return self::translate_with_chunk_limit( $text, $prompt, $adjusted, $attempt + 1, count( $chunks ), $track_progress );
+					return self::translate_with_chunk_limit( $text, $prompt, $adjusted, $attempt + 1, $track_progress );
 				}
 				return $translated_chunk;
 			}
@@ -373,7 +371,6 @@ class TranslationRuntime {
 					$active_phase = TranslationProgressTracker::current_phase();
 					if ( '' !== $active_phase && 'saving' !== $active_phase && 'done' !== $active_phase ) {
 						TranslationProgressTracker::advance_units( $active_phase, $chunk_units );
-						$completed_unit_count += $chunk_units;
 					}
 				}
 			}
@@ -1267,7 +1264,7 @@ class TranslationRuntime {
 				if ( $retry_chunk_limit >= self::MIN_TRANSLATION_CHARS
 					&& self::char_length( $source_text ) > $retry_chunk_limit
 				) {
-					return self::translate_with_chunk_limit( $source_text, $retry_prompt, $retry_chunk_limit, 0, null, false );
+					return self::translate_with_chunk_limit( $source_text, $retry_prompt, $retry_chunk_limit, 0, false );
 				}
 
 				return self::translate_chunk( $source_text, $retry_prompt, 1 );

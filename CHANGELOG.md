@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.0]
+### Changes
+- Security: DNS lookup in the SSRF guard no longer silences PHP warnings via the `@` error-suppression operator.
+- Security: learned context-window cap is now consistent at 4,000,000 tokens across all code paths.
+- Code quality: background-bar task rendering now uses the DOM API (`createElement`/`DocumentFragment`) instead of `innerHTML` string concatenation, eliminating a class of potential XSS footguns in future extensions.
+- Code quality: return types narrowed from `mixed` to precise union types (`string|\WP_Error`, `array|\WP_Error`) on the core translation entry points.
+- Code quality: unified ABSPATH direct-access guards across all plugin files to the idiomatic `defined( 'ABSPATH' ) || exit;` form.
+- Code quality: removed unused `$previous_chunk_count` parameter and unused `$completed_unit_count` variable from the chunk-translation path.
 ### Features
 - WP Multilang: major new integration support for the WP Multilang plugin alongside the existing Polylang integration.
 
