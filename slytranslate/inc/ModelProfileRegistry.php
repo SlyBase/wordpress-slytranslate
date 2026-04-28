@@ -144,27 +144,6 @@ final class ModelProfileRegistry {
 				)
 			),
 			self::build_profile(
-				'openrouter_nemotron',
-				array( 'nvidia/nemotron-3-nano', 'nvidia/nemotron-3-super' ),
-				array_merge(
-					self::get_nemotron_system_overrides(),
-					array(
-						'extra_request_body' => array(
-							'chat_template_kwargs' => array(
-								'enable_thinking' => false,
-							),
-							'reasoning'            => array(
-								'effort'  => 'none',
-								'exclude' => true,
-							),
-							'provider'             => array(
-								'require_parameters' => true,
-							),
-						),
-					)
-				)
-			),
-			self::build_profile(
 				'nemotron_system',
 				array( 'nvidia/nemotron', 'nvidia-nemotron', 'nemotron' ),
 				self::get_nemotron_system_overrides()

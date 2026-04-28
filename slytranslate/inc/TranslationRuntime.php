@@ -611,6 +611,43 @@ class TranslationRuntime {
 		);
 	}
 
+	private static function is_openrouter_nemotron_model_slug( string $model_slug ): bool {
+		$normalized = strtolower( trim( $model_slug ) );
+
+		return '' !== $normalized
+			&& (
+				false !== strpos( $normalized, 'nvidia/nemotron-3-nano' )
+				|| false !== strpos( $normalized, 'nvidia/nemotron-3-super' )
+			);
+	}
+
+	private static function apply_model_specific_extra_request_body_overrides( array $extra, string $model_slug ): array {
+		if ( ! self::is_openrouter_nemotron_model_slug( $model_slug ) ) {
+			return $extra;
+		}
+
+		foreach (
+			array(
+				'reasoning' => array(
+					'effort'  => 'none',
+					'exclude' => true,
+				),
+				'provider'  => array(
+					'require_parameters' => true,
+				),
+			) as $key => $value
+		) {
+			if ( isset( $extra[ $key ] ) && is_array( $extra[ $key ] ) ) {
+				$extra[ $key ] = array_merge( $extra[ $key ], $value );
+				continue;
+			}
+
+			$extra[ $key ] = $value;
+		}
+
+		return $extra;
+	}
+
 	/**
 	 * Extract chat_template_kwargs (and other safe-to-inject keys) from the
 	 * model profile that should be merged into outgoing WordPress AI Client
@@ -624,13 +661,14 @@ class TranslationRuntime {
 	 * @param array $model_profile Normalized model profile.
 	 * @return array Subset of extra_request_body to inject; empty array when nothing applies.
 	 */
-	public static function extract_wp_ai_client_request_body_injections( array $model_profile, bool $allow_chat_template_kwargs = true ): array {
+	public static function extract_wp_ai_client_request_body_injections( array $model_profile, bool $allow_chat_template_kwargs = true, string $model_slug = '' ): array {
 		$extra = $model_profile['extra_request_body'] ?? array();
 		if ( ! is_array( $extra ) || empty( $extra ) ) {
 			return array();
 		}
 
 		$extra = self::replace_profile_placeholders( $extra );
+		$extra = self::apply_model_specific_extra_request_body_overrides( $extra, $model_slug );
 
 		$inject = array();
 		if ( $allow_chat_template_kwargs
@@ -687,7 +725,7 @@ class TranslationRuntime {
 		$allow_kwargs = ! $force_disable_chat_template_kwargs
 			&& self::can_send_chat_template_kwargs_for_model( $model_slug );
 
-		return self::extract_wp_ai_client_request_body_injections( $model_profile, $allow_kwargs );
+		return self::extract_wp_ai_client_request_body_injections( $model_profile, $allow_kwargs, $model_slug );
 	}
 
 	private static function has_chat_template_kwargs_injections( array $injections ): bool {
@@ -968,13 +1006,14 @@ class TranslationRuntime {
 		}
 	}
 
-	private static function build_profile_extra_request_body( array $model_profile, bool $kwargs_supported ): array {
+	private static function build_profile_extra_request_body( array $model_profile, string $model_slug, bool $kwargs_supported ): array {
 		$extra = $model_profile['extra_request_body'] ?? array();
 		if ( ! is_array( $extra ) || empty( $extra ) ) {
 			return array();
 		}
 
 		$extra = self::replace_profile_placeholders( $extra );
+		$extra = self::apply_model_specific_extra_request_body_overrides( $extra, $model_slug );
 
 		if ( isset( $extra['chat_template_kwargs'] ) ) {
 			$has_languages = is_string( self::$source_lang ) && '' !== self::$source_lang
@@ -992,6 +1031,7 @@ class TranslationRuntime {
 		string $source_text,
 		string $prompt,
 		array $model_profile,
+		string $model_slug,
 		bool $kwargs_supported,
 		int $validation_attempt
 	): array {
@@ -1016,7 +1056,7 @@ class TranslationRuntime {
 			'system_prompt'      => $system_prompt,
 			'use_system_prompt'  => $use_system,
 			'temperature'        => $temperature,
-			'extra_request_body' => self::build_profile_extra_request_body( $model_profile, $kwargs_supported ),
+			'extra_request_body' => self::build_profile_extra_request_body( $model_profile, $model_slug, $kwargs_supported ),
 		);
 	}
 
@@ -1061,7 +1101,7 @@ class TranslationRuntime {
 
 		$input_chars       = self::char_length( $text );
 		$max_output_tokens = self::compute_max_output_tokens( $input_chars );
-		$transport_payload = self::build_transport_payload( $text, $prompt, $model_profile, true, $validation_attempt );
+		$transport_payload = self::build_transport_payload( $text, $prompt, $model_profile, $model_slug, true, $validation_attempt );
 
 		$wp_started         = TimingLogger::start();
 		$primary_injections = self::get_wp_ai_client_request_body_injections_for_model( $model_profile, $model_slug );

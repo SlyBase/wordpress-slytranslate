@@ -948,7 +948,7 @@ class TranslationOutputValidationTest extends TestCase {
 	public function test_nemotron_profile_retries_validation_failure_with_smaller_chunks(): void {
 		$profile = TranslationRuntime::get_model_profile( 'nvidia/nemotron-3-nano-30b-a3b' );
 
-		$this->assertSame( 'openrouter_nemotron', $profile['id'] ?? '' );
+		$this->assertSame( 'nemotron_system', $profile['id'] ?? '' );
 		$this->assertSame( 140, $profile['retry_profile']['retry_chunk_chars'] ?? null );
 	}
 

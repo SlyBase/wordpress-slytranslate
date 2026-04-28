@@ -118,11 +118,9 @@ class RequestedModelSlugTest extends TestCase {
 		$model_slug = 'nvidia/nemotron-3-super-120b-a12b:free';
 		$profile    = TranslationRuntime::get_model_profile( $model_slug );
 
-		$this->assertSame( 'openrouter_nemotron', $profile['id'] );
+		$this->assertSame( 'nemotron_system', $profile['id'] );
 		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
 		$this->assertFalse( ! empty( $profile['requires_chat_template_kwargs'] ) );
-		$this->assertArrayHasKey( 'reasoning', $profile['extra_request_body'] );
-		$this->assertArrayHasKey( 'provider', $profile['extra_request_body'] );
 	}
 
 	public function test_with_model_slug_override_normalizes_openrouter_label_prefix(): void {

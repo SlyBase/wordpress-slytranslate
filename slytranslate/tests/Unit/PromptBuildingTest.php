@@ -114,7 +114,7 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Hello world', 'Prompt', $profile, false, 0 )
+			array( 'Hello world', 'Prompt', $profile, 'TowerInstruct-7B-v0.2.Q4_K_M', false, 0 )
 		);
 
 		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( 'towerinstruct-7b' ) );
@@ -137,7 +137,7 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Hello world', 'Prompt', $profile, false, 0 )
+			array( 'Hello world', 'Prompt', $profile, 'Ministral-8B-Instruct-2410-Q4_K_M', false, 0 )
 		);
 
 		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( 'ministral-8b-instruct' ) );
@@ -159,10 +159,10 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Katze', 'Prompt', $profile, true, 0 )
+			array( 'Katze', 'Prompt', $profile, 'nvidia/nemotron-3-super-120b-a12b:free', true, 0 )
 		);
 
-		$this->assertSame( 'openrouter_nemotron', $profile['id'] ?? '' );
+		$this->assertSame( 'nemotron_system', $profile['id'] ?? '' );
 		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( 'nvidia/nemotron-3-super-120b-a12b:free' ) );
 		$this->assertTrue( $payload['use_system_prompt'] );
 		$this->assertSame( 'Prompt', $payload['system_prompt'] );
@@ -192,7 +192,7 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Hello world', 'Prompt', $profile, false, 0 )
+			array( 'Hello world', 'Prompt', $profile, 'Ministral-8B-Instruct-2410-Q4_K_M', false, 0 )
 		);
 
 		$this->assertStringContainsString( 'Translate the following text from PT-BR into ZH-HANS.', $payload['user_content'] );
@@ -213,6 +213,7 @@ class PromptBuildingTest extends TestCase {
 				'Please open your dashboard.',
 				$user_prompt,
 				$profile,
+				'Ministral-3-3B-Instruct-2512-Q4_K_M',
 				false,
 				0
 			)
@@ -231,7 +232,7 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Hello world', 'Prompt', $profile, true, 0 )
+			array( 'Hello world', 'Prompt', $profile, 'Qwen3.5-4B-Q4_K_M', true, 0 )
 		);
 
 		$this->assertSame( 'qwen_thinking_aware', $profile['id'] ?? '' );
@@ -253,7 +254,7 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Hello world', 'Prompt', $profile, true, 0 )
+			array( 'Hello world', 'Prompt', $profile, 'Phi-4-mini-instruct-Q4_K_M', true, 0 )
 		);
 
 		$this->assertSame( 'phi4_thinking_aware', $profile['id'] ?? '' );
@@ -275,7 +276,7 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Hello world', 'Prompt', $profile, false, 0 )
+			array( 'Hello world', 'Prompt', $profile, 'gpt-4o', false, 0 )
 		);
 
 		$this->assertFalse( $payload['use_system_prompt'] );

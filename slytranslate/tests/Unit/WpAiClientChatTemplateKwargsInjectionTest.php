@@ -142,22 +142,36 @@ class WpAiClientChatTemplateKwargsInjectionTest extends TestCase {
 	}
 
 	public function test_extracts_safe_openrouter_keys_from_profile(): void {
-		$profile = array(
-			'extra_request_body' => array(
-				'chat_template_kwargs' => array( 'enable_thinking' => false ),
-				'reasoning'            => array( 'effort' => 'none', 'exclude' => true ),
-				'provider'             => array( 'require_parameters' => true ),
-				'messages'             => array( array( 'role' => 'system', 'content' => 'ignored' ) ),
-			),
-		);
+		$profile = TranslationRuntime::get_model_profile( 'nvidia/nemotron-3-super-120b-a12b:free' );
 
-		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections( $profile );
+		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections(
+			$profile,
+			true,
+			'nvidia/nemotron-3-super-120b-a12b:free'
+		);
 
 		$this->assertSame(
 			array(
 				'chat_template_kwargs' => array( 'enable_thinking' => false ),
 				'reasoning'            => array( 'effort' => 'none', 'exclude' => true ),
 				'provider'             => array( 'require_parameters' => true ),
+			),
+			$injections
+		);
+	}
+
+	public function test_does_not_add_openrouter_keys_for_generic_nemotron_profile_without_matching_slug(): void {
+		$profile = TranslationRuntime::get_model_profile( 'nvidia/nemotron-super-49b-v1' );
+
+		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections(
+			$profile,
+			true,
+			'nvidia/nemotron-super-49b-v1'
+		);
+
+		$this->assertSame(
+			array(
+				'chat_template_kwargs' => array( 'enable_thinking' => false ),
 			),
 			$injections
 		);
