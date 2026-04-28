@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: SlyTranslate - AI Translation Abilities
+Plugin Name: SlyTranslate
 Plugin URI: https://wordpress.org/plugins/slytranslate/
 Description: AI translation abilities for WordPress using native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
 Version: 1.6.1
@@ -153,7 +153,9 @@ class AI_Translate {
 			),
 			'/ai-translate/set-post-language/run'     => array(
 				'callback'            => array( self::class, 'execute_set_post_language' ),
-				'permission_callback' => $translation_permission,
+				'permission_callback' => static function ( $request ): bool {
+					return LanguageMutationService::set_post_language_permission_callback( self::get_rest_route_input( $request ) );
+				},
 			),
 			'/ai-translate/get-untranslated/run'      => array(
 				'callback'            => array( self::class, 'execute_get_untranslated' ),

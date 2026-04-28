@@ -6,10 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.1]
 ### Fixes
-- Security: `set-post-language` ability now verifies `edit_post` permission on every linked post in the translation group before executing a relink operation.
+- Security: `set-post-language` now enforces linked-post `edit_post` permissions in its `permission_callback` before a relink request reaches execution.
 
 ### Changes
-- WordPress.org compliance: text domain corrected from `slytranslate` to `slytranslate-ai-translation-abilities` to match the plugin slug; language files renamed accordingly.
+- WordPress.org compliance: plugin metadata and documentation now consistently use `slytranslate` as the plugin slug and text domain.
 
 ## [1.6.0]
 ### Changes

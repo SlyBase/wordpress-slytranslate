@@ -162,7 +162,7 @@ class AbilityRegistrar {
 				'required' => array( 'post_id', 'source_language', 'target_language', 'translations', 'changed' ),
 			),
 			'execute_callback'    => array( AI_Translate::class, 'execute_set_post_language' ),
-			'permission_callback' => array( static::class, 'permission_callback' ),
+			'permission_callback' => array( LanguageMutationService::class, 'set_post_language_permission_callback' ),
 			'meta'                => self::public_mcp_meta(),
 		) );
 	}

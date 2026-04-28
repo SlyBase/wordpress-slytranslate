@@ -1,4 +1,4 @@
-=== SlyTranslate - AI Translation Abilities ===
+=== SlyTranslate ===
 Contributors: timonf
 Tags: ai, translation, abilities-api, polylang, wp-multilang
 Requires at least: 6.9
@@ -85,7 +85,7 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 5. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
 6. Optional for MCP discovery: install and activate WordPress MCP Adapter.
 7. Upload the `slytranslate` folder to `/wp-content/plugins/`.
-8. Activate SlyTranslate - AI Translation Abilities.
+8. Activate SlyTranslate.
 
 == Screenshots ==
 

@@ -1,4 +1,4 @@
-# SlyTranslate - AI Translation Abilities
+# SlyTranslate
 
 SlyTranslate brings practical AI translation to WordPress. It is built for teams that need translation directly in editing workflows and also want the same workflows available through REST and MCP automation.
 
@@ -107,7 +107,7 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 5. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
 6. Optional for MCP discovery: install and activate WordPress MCP Adapter.
 7. Copy the `slytranslate` directory to `/wp-content/plugins/`.
-8. Activate SlyTranslate - AI Translation Abilities.
+8. Activate SlyTranslate.
 
 ## FAQ
 

@@ -6,6 +6,7 @@ namespace SlyTranslate\Tests\Unit;
 
 use SlyTranslate\AI_Translate;
 use SlyTranslate\AbilityRegistrar;
+use SlyTranslate\TranslationMutationAdapter;
 use SlyTranslate\TranslationPluginAdapter;
 
 class AbilityRegistrationTest extends TestCase {
@@ -140,6 +141,94 @@ class AbilityRegistrationTest extends TestCase {
 		foreach ( $registered_abilities as $ability_definition ) {
 			$this->assertTrue( $ability_definition['permission_callback']( null ) );
 		}
+	}
+
+	public function test_set_post_language_ability_permission_callback_requires_access_to_linked_posts_when_relinking(): void {
+		$this->setStaticProperty(
+			AI_Translate::class,
+			'adapter',
+			new class() implements TranslationPluginAdapter, TranslationMutationAdapter {
+				public function is_available(): bool {
+					return true;
+				}
+
+				public function get_languages(): array {
+					return array( 'en' => 'English', 'de' => 'Deutsch' );
+				}
+
+				public function get_post_language( int $post_id ): ?string {
+					return 'en';
+				}
+
+				public function get_post_translations( int $post_id ): array {
+					return array( 'en' => $post_id, 'de' => 200 );
+				}
+
+				public function create_translation( int $source_post_id, string $target_lang, array $data ) {
+					return 0;
+				}
+
+				public function link_translation( int $source_post_id, int $translated_post_id, string $target_lang ): bool {
+					return true;
+				}
+
+				public function supports_mutation_capability( string $capability ): bool {
+					return true;
+				}
+
+				public function set_post_language( int $post_id, string $target_language ) {
+					return true;
+				}
+
+				public function relink_post_translations( array $translations ) {
+					return true;
+				}
+			}
+		);
+
+		$this->stubWpFunction(
+			'get_post',
+			static function ( int $post_id ): ?\WP_Post {
+				if ( 100 !== $post_id ) {
+					return null;
+				}
+
+				return new \WP_Post(
+					array(
+						'ID'        => 100,
+						'post_type' => 'post',
+					)
+				);
+			}
+		);
+
+		$this->stubWpFunction(
+			'get_post_status',
+			static function ( $post = null ) {
+				return 0 === $post ? false : 'publish';
+			}
+		);
+
+		$this->stubWpFunction(
+			'current_user_can',
+			static function ( string $capability, ...$args ): bool {
+				if ( 'publish_pages' === $capability ) {
+					return true;
+				}
+
+				if ( 'edit_post' === $capability ) {
+					return isset( $args[0] ) && 100 === $args[0];
+				}
+
+				return false;
+			}
+		);
+
+		$registered_abilities = $this->capture_registered_abilities();
+		$callback             = $registered_abilities['ai-translate/set-post-language']['permission_callback'];
+
+		$this->assertFalse( $callback( array( 'post_id' => 100, 'relink' => true ) ) );
+		$this->assertTrue( $callback( array( 'post_id' => 100, 'relink' => false ) ) );
 	}
 
 	/**

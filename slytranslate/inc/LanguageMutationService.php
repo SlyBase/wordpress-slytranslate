@@ -28,6 +28,44 @@ class LanguageMutationService {
 		return $adapter->supports_mutation_capability( TranslationMutationAdapter::CAPABILITY_SET_POST_LANGUAGE );
 	}
 
+	public static function set_post_language_permission_callback( $input = null ): bool {
+		$input = is_array( $input ) ? $input : array();
+
+		if ( empty( $input ) ) {
+			return AI_Translate::current_user_can_access_translation_abilities();
+		}
+
+		$post_id = self::extract_permission_post_id( $input );
+		if ( $post_id < 1 ) {
+			return AI_Translate::current_user_can_access_translation_abilities();
+		}
+
+		if ( ! get_post( $post_id ) ) {
+			return AI_Translate::current_user_can_access_translation_abilities();
+		}
+
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return false;
+		}
+
+		if ( empty( $input['relink'] ) ) {
+			return true;
+		}
+
+		$adapter = AI_Translate::get_adapter();
+		if ( ! $adapter ) {
+			return true;
+		}
+
+		foreach ( self::normalize_translation_map( $adapter->get_post_translations( $post_id ) ) as $linked_post_id ) {
+			if ( $linked_post_id !== $post_id && ! current_user_can( 'edit_post', $linked_post_id ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	public static function execute_set_post_language( $input ): mixed {
 		$input = is_array( $input ) ? $input : array();
 
@@ -166,6 +204,14 @@ class LanguageMutationService {
 		}
 
 		return $adapter;
+	}
+
+	private static function extract_permission_post_id( array $input ): int {
+		if ( ! array_key_exists( 'post_id', $input ) || ! is_scalar( $input['post_id'] ) ) {
+			return 0;
+		}
+
+		return absint( $input['post_id'] );
 	}
 
 	private static function require_positive_int_input( array $input, string $key, string $error_code, string $message ) {
