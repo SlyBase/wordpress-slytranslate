@@ -198,7 +198,15 @@ final class ModelProfileRegistry {
 					),
 				)
 			),
-			self::build_profile( 'ministral', array( 'ministral', 'ministral-8b', 'ministral-8b-instruct' ) ),
+			self::build_profile(
+				'ministral',
+				array( 'ministral', 'ministral-8b', 'ministral-8b-instruct' ),
+				array(
+					'retry_profile' => array(
+						'retry_chunk_chars' => 1400,
+					),
+				)
+			),
 		);
 	}
 }

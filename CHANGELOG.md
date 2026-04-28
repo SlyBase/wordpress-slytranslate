@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.6.1]
 ### Fixes
 - Security: `set-post-language` now enforces linked-post `edit_post` permissions in its `permission_callback` before a relink request reaches execution.
+- Translation quality: Ministral 8B now retries EN→DE passthrough failures with smaller chunks so the post-1109 smoke test can recover instead of leaving English segments behind.
 
 ### Changes
 - WordPress.org compliance: plugin metadata and documentation now consistently use `slytranslate` as the plugin slug and text domain.

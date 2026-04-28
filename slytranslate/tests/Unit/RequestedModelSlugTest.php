@@ -72,7 +72,7 @@ class RequestedModelSlugTest extends TestCase {
 		$this->assertSame( 'bilingual_frame', TranslationRuntime::get_prompt_style_for_model( $model_slug ) );
 		$this->assertSame( 'default', TranslationRuntime::get_chunk_strategy_for_model( $model_slug ) );
 		$this->assertFalse( TranslationRuntime::model_requires_strict_direct_api( $model_slug ) );
-		$this->assertSame( 1800, (int) ( $profile['retry_profile']['retry_chunk_chars'] ?? 0 ) );
+		$this->assertSame( 1400, (int) ( $profile['retry_profile']['retry_chunk_chars'] ?? 0 ) );
 	}
 
 	public function test_ministral3_slug_maps_to_conservative_profile_rules(): void {

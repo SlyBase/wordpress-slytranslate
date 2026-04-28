@@ -176,6 +176,6 @@ class TextSplittingTest extends TestCase {
 			array( 'Ministral-8B-Instruct-2410-Q4_K_M', 'invalid_translation_language_passthrough' )
 		);
 
-		$this->assertSame( 1800, $limit );
+		$this->assertSame( 1400, $limit );
 	}
 }
