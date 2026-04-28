@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - WP Multilang: major new integration support for the WP Multilang plugin alongside the existing Polylang integration.
 
 ### Changes
+- MCP: all ability output schemas now include field-level descriptions and enum values so LLMs can call and interpret every endpoint correctly on the first attempt.
 - Performance: post title and excerpt are now translated in the same batched AI call as SEO meta fields, saving up to 2 API requests per post.
 - Architecture: introduced a central model-profile registry (`slytranslate_model_profiles`) driving prompt style, chunk strategy, and retry behavior per model family.
 - Profiles: added dedicated profiles for major local model families including Ministral, Tower, Qwen, GLM, Gemma 4, Phi-4, Nemotron, EuroLLM, and Llama 3.1/Sauerkraut.
