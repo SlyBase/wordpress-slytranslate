@@ -201,6 +201,30 @@ class MetaExtraCandidatesTest extends TestCase {
 		$this->assertNull( $result );
 	}
 
+	public function test_batch_returns_null_when_title_candidate_is_still_source_language(): void {
+		$calls = array();
+		$this->stubAiResponse(
+			'{"_slytranslate_title":"WordPress 7 + LLM = kostenlose Übersetzung","_yoast_wpseo_metadesc":"A translated meta description"}',
+			$calls
+		);
+
+		$result = $this->invokeStatic(
+			MetaTranslationService::class,
+			'try_batch_translate_eligible_meta',
+			array(
+				array( '_yoast_wpseo_metadesc' => array( 'Eine Meta Beschreibung' ) ),
+				array( 'translate' => array( '_yoast_wpseo_metadesc' ), 'clear' => array() ),
+				'en',
+				'de',
+				'',
+				array( '_slytranslate_title' => 'WordPress 7 + LLM = kostenlose Übersetzung' ),
+			)
+		);
+
+		$this->assertNull( $result );
+		$this->assertCount( 1, $calls );
+	}
+
 	/* ---------------------------------------------------------------
 	 * prepare_translation_meta integration
 	 * ------------------------------------------------------------- */

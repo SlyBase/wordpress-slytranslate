@@ -295,6 +295,11 @@ class MetaTranslationService {
 			if ( ! array_key_exists( $key, $decoded ) || ! is_string( $decoded[ $key ] ) ) {
 				return null;
 			}
+
+			$validation = TranslationValidator::validate( $candidates[ $key ], $decoded[ $key ], $to );
+			if ( is_wp_error( $validation ) ) {
+				return null;
+			}
 		}
 
 		return $decoded;

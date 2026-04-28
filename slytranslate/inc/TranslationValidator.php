@@ -708,10 +708,6 @@ class TranslationValidator {
 			return false;
 		}
 
-		if ( self::text_length( $source_plain ) < 30 || self::text_length( $translated_plain ) < 30 ) {
-			return false;
-		}
-
 		$source_normalized     = self::normalize_for_passthrough_compare( $source_plain );
 		$translated_normalized = self::normalize_for_passthrough_compare( $translated_plain );
 		if ( '' === $source_normalized || '' === $translated_normalized ) {
@@ -720,13 +716,37 @@ class TranslationValidator {
 
 		$source_markers = self::count_source_language_markers( $translated_normalized, $target );
 		$target_markers = self::count_target_language_markers( $translated_normalized, $target );
+		$token_count    = preg_match_all( '/\b[\p{L}][\p{L}\p{M}\p{N}-]*\b/u', $translated_normalized );
+		$has_non_ascii  = 1 === preg_match( '/[^\x00-\x7F]/u', $translated_plain );
 
 		if ( $source_markers >= 3 && 0 === $target_markers ) {
 			return true;
 		}
 
 		if ( $source_normalized === $translated_normalized ) {
+			if ( 0 === $target_markers ) {
+				if ( $source_markers >= 2 ) {
+					return true;
+				}
+
+				if ( false !== $token_count && $token_count >= 3 && $source_markers >= 1 ) {
+					return true;
+				}
+
+				if ( false !== $token_count && $token_count >= 4 && $has_non_ascii ) {
+					return true;
+				}
+			}
+
+			if ( self::text_length( $source_plain ) < 30 || self::text_length( $translated_plain ) < 30 ) {
+				return false;
+			}
+
 			return $source_markers >= 2 && 0 === $target_markers;
+		}
+
+		if ( self::text_length( $source_plain ) < 30 || self::text_length( $translated_plain ) < 30 ) {
+			return false;
 		}
 
 		if ( false !== strpos( $translated_normalized, $source_normalized ) ) {
