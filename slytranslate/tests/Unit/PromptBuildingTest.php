@@ -159,15 +159,29 @@ class PromptBuildingTest extends TestCase {
 		$payload = $this->invokeStatic(
 			TranslationRuntime::class,
 			'build_transport_payload',
-			array( 'Katze', 'Prompt', $profile, false, 0 )
+			array( 'Katze', 'Prompt', $profile, true, 0 )
 		);
 
-		$this->assertSame( 'nemotron_system', $profile['id'] ?? '' );
+		$this->assertSame( 'openrouter_nemotron', $profile['id'] ?? '' );
 		$this->assertSame( 'generic_template', TranslationRuntime::get_prompt_style_for_model( 'nvidia/nemotron-3-super-120b-a12b:free' ) );
 		$this->assertTrue( $payload['use_system_prompt'] );
 		$this->assertSame( 'Prompt', $payload['system_prompt'] );
 		$this->assertSame( 'Katze', $payload['user_content'] );
-		$this->assertSame( array(), $payload['extra_request_body'] );
+		$this->assertSame(
+			array(
+				'chat_template_kwargs' => array(
+					'enable_thinking' => false,
+				),
+				'reasoning'            => array(
+					'effort'  => 'none',
+					'exclude' => true,
+				),
+				'provider'             => array(
+					'require_parameters' => true,
+				),
+			),
+			$payload['extra_request_body']
+		);
 	}
 
 	public function test_bilingual_payload_uses_generic_labels_for_any_language_codes(): void {

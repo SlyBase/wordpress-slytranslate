@@ -110,6 +110,59 @@ class WpAiClientChatTemplateKwargsInjectionTest extends TestCase {
 		$this->assertSame( array( 'chat_template_kwargs' => array( 'enable_thinking' => false ) ), $injections );
 	}
 
+	public function test_injects_openrouter_reasoning_and_provider_overrides(): void {
+		$args = array(
+			'method' => 'POST',
+			'body'   => wp_json_encode( array(
+				'model'    => 'nvidia/nemotron-3-super-120b-a12b:free',
+				'messages' => array(
+					array( 'role' => 'user', 'content' => 'Hello' ),
+				),
+			) ),
+		);
+
+		$result = TranslationRuntime::inject_extra_request_body_into_http_args(
+			$args,
+			'https://openrouter.ai/api/v1/chat/completions',
+			array(
+				'reasoning' => array(
+					'effort'  => 'none',
+					'exclude' => true,
+				),
+				'provider'  => array(
+					'require_parameters' => true,
+				),
+			)
+		);
+
+		$decoded = json_decode( (string) $result['body'], true );
+		$this->assertSame( 'none', $decoded['reasoning']['effort'] );
+		$this->assertSame( true, $decoded['reasoning']['exclude'] );
+		$this->assertSame( true, $decoded['provider']['require_parameters'] );
+	}
+
+	public function test_extracts_safe_openrouter_keys_from_profile(): void {
+		$profile = array(
+			'extra_request_body' => array(
+				'chat_template_kwargs' => array( 'enable_thinking' => false ),
+				'reasoning'            => array( 'effort' => 'none', 'exclude' => true ),
+				'provider'             => array( 'require_parameters' => true ),
+				'messages'             => array( array( 'role' => 'system', 'content' => 'ignored' ) ),
+			),
+		);
+
+		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections( $profile );
+
+		$this->assertSame(
+			array(
+				'chat_template_kwargs' => array( 'enable_thinking' => false ),
+				'reasoning'            => array( 'effort' => 'none', 'exclude' => true ),
+				'provider'             => array( 'require_parameters' => true ),
+			),
+			$injections
+		);
+	}
+
 	public function test_extract_returns_empty_when_profile_has_no_kwargs(): void {
 		$profile = array( 'extra_request_body' => array() );
 		$this->assertSame( array(), TranslationRuntime::extract_wp_ai_client_request_body_injections( $profile ) );

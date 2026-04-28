@@ -618,8 +618,8 @@ class TranslationRuntime {
 	 * gated on the direct-API kwargs probe because the WP AI Client connector
 	 * targets its own configured endpoint and does not need direct probing.
 	 *
-	 * Currently only `chat_template_kwargs` is forwarded so the change is
-	 * intentionally narrow (Qwen3 family enable_thinking=false, GLM, etc.).
+	 * Only a small allowlist is forwarded so profile-level request shaping
+	 * cannot overwrite core transport keys like `messages` or `model`.
 	 *
 	 * @param array $model_profile Normalized model profile.
 	 * @return array Subset of extra_request_body to inject; empty array when nothing applies.
@@ -639,6 +639,15 @@ class TranslationRuntime {
 			&& ! empty( $extra['chat_template_kwargs'] )
 		) {
 			$inject['chat_template_kwargs'] = $extra['chat_template_kwargs'];
+		}
+
+		foreach ( array( 'reasoning', 'provider' ) as $safe_key ) {
+			if ( isset( $extra[ $safe_key ] )
+				&& is_array( $extra[ $safe_key ] )
+				&& ! empty( $extra[ $safe_key ] )
+			) {
+				$inject[ $safe_key ] = $extra[ $safe_key ];
+			}
 		}
 
 		return $inject;
@@ -781,7 +790,7 @@ class TranslationRuntime {
 	 *
 	 * @param array  $args HTTP request args from the http_request_args filter.
 	 * @param string $url  Outgoing request URL.
-	 * @param array  $injections Body keys to merge (e.g. chat_template_kwargs).
+	 * @param array  $injections Body keys to merge (e.g. chat_template_kwargs, provider, reasoning).
 	 * @return array Possibly mutated args.
 	 */
 	public static function inject_extra_request_body_into_http_args( array $args, string $url, array $injections ): array {

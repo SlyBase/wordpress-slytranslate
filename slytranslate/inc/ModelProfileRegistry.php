@@ -85,6 +85,22 @@ final class ModelProfileRegistry {
 		);
 	}
 
+	private static function get_nemotron_system_overrides(): array {
+		return array(
+			'request_mode'         => self::REQUEST_MODE_SYSTEM_PLUS_USER,
+			'prompt_style'         => self::PROMPT_STYLE_GENERIC_TEMPLATE,
+			'supports_system_role' => true,
+			'extra_request_body'   => array(
+				'chat_template_kwargs' => array(
+					'enable_thinking' => false,
+				),
+			),
+			'retry_profile'        => array(
+				'retry_chunk_chars' => 140,
+			),
+		);
+	}
+
 	/**
 	 * Return the built-in model profiles before external filters are applied.
 	 */
@@ -128,21 +144,30 @@ final class ModelProfileRegistry {
 				)
 			),
 			self::build_profile(
+				'openrouter_nemotron',
+				array( 'nvidia/nemotron-3-nano', 'nvidia/nemotron-3-super' ),
+				array_merge(
+					self::get_nemotron_system_overrides(),
+					array(
+						'extra_request_body' => array(
+							'chat_template_kwargs' => array(
+								'enable_thinking' => false,
+							),
+							'reasoning'            => array(
+								'effort'  => 'none',
+								'exclude' => true,
+							),
+							'provider'             => array(
+								'require_parameters' => true,
+							),
+						),
+					)
+				)
+			),
+			self::build_profile(
 				'nemotron_system',
 				array( 'nvidia/nemotron', 'nvidia-nemotron', 'nemotron' ),
-				array(
-					'request_mode'       => self::REQUEST_MODE_SYSTEM_PLUS_USER,
-					'prompt_style'       => self::PROMPT_STYLE_GENERIC_TEMPLATE,
-					'supports_system_role' => true,
-					'extra_request_body' => array(
-						'chat_template_kwargs' => array(
-							'enable_thinking' => false,
-						),
-					),
-					'retry_profile'      => array(
-						'retry_chunk_chars' => 140,
-					),
-				)
+				self::get_nemotron_system_overrides()
 			),
 			self::build_profile(
 				'qwen_thinking_aware',
