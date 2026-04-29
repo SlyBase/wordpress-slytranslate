@@ -1,4 +1,4 @@
-# SlyTranslate
+# SlyTranslate - AI Translation Abilities
 
 SlyTranslate brings practical AI translation to WordPress. It is built for teams that need translation directly in editing workflows and also want the same workflows available through REST and MCP automation.
 
@@ -100,14 +100,27 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 
 ## Installation
 
+**Via WordPress Plugin Directory (recommended):**
+
 1. Ensure WordPress 6.9+ and PHP 8.1+ are running.
-2. Install and configure an AI connector in Settings > Connectors.
-3. Optional for content translation: install and activate Polylang or WP Multilang.
-4. Optional for local llama.cpp models: install AI Provider for llama.cpp.
-5. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
-6. Optional for MCP discovery: install and activate WordPress MCP Adapter.
-7. Copy the `slytranslate` directory to `/wp-content/plugins/`.
-8. Activate SlyTranslate.
+2. In wp-admin, go to Plugins > Add New and search for "SlyTranslate".
+3. Install and activate SlyTranslate.
+4. Install and configure an AI connector in Settings > Connectors.
+5. Optional for content translation: install and activate Polylang or WP Multilang.
+6. Optional for local llama.cpp models: install AI Provider for llama.cpp.
+7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
+8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
+
+**Manual installation:**
+
+1. Ensure WordPress 6.9+ and PHP 8.1+ are running.
+2. Copy the `slytranslate` directory to `/wp-content/plugins/`.
+3. Activate SlyTranslate in wp-admin.
+4. Install and configure an AI connector in Settings > Connectors.
+5. Optional for content translation: install and activate Polylang or WP Multilang.
+6. Optional for local llama.cpp models: install AI Provider for llama.cpp.
+7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
+8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
 
 ## FAQ
 

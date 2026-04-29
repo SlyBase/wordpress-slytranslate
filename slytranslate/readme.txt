@@ -1,10 +1,10 @@
-=== SlyTranslate ===
+=== SlyTranslate - AI Translation Abilities ===
 Contributors: timonf
 Tags: ai, translation, abilities-api, polylang, wp-multilang
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -36,21 +36,19 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 **Abilities:**
 
-| Ability | Purpose |
-| --- | --- |
-| `ai-translate/get-languages` | List languages exposed by the active language plugin |
-| `ai-translate/get-translation-status` | Show translation status for a content item, including `source_language` and `single_entry_mode` |
-| `ai-translate/set-post-language` | Change the language assignment of an existing content item (only exposed when supported, e.g. Polylang) |
-| `ai-translate/get-untranslated` | Find content still missing a target translation |
-| `ai-translate/translate-text` | Translate arbitrary text |
-| `ai-translate/translate-blocks` | Translate serialized Gutenberg blocks |
-| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry (call `get-translation-status` first; optional `source_language` + `overwrite`) |
-| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries (supports optional `source_language` and `overwrite`) |
-| `ai-translate/get-progress` | Return live progress for a running translation |
-| `ai-translate/cancel-translation` | Cancel a running translation |
-| `ai-translate/get-available-models` | List models from configured connectors |
-| `ai-translate/save-additional-prompt` | Save per-user additional instructions |
-| `ai-translate/configure` | Read or update persistent plugin settings |
+`ai-translate/get-languages`:  List languages exposed by the active language plugin |
+`ai-translate/get-translation-status`: Show translation status for a content item, including `source_language` and `single_entry_mode` |
+`ai-translate/set-post-language`: Change the language assignment of an existing content item (only exposed when supported, e.g. Polylang) |
+`ai-translate/get-untranslated`: Find content still missing a target translation |
+`ai-translate/translate-text`: Translate arbitrary text |
+`ai-translate/translate-blocks`: Translate serialized Gutenberg blocks |
+`ai-translate/translate-content`: Create or update one translated post/page/CPT entry (call `get-translation-status` first; optional `source_language` + `overwrite`) |
+`ai-translate/translate-content-bulk`: Bulk-translate multiple entries (supports optional `source_language` and `overwrite`) |
+`ai-translate/get-progress`: Return live progress for a running translation |
+`ai-translate/cancel-translation`: Cancel a running translation |
+`ai-translate/get-available-models`: List models from configured connectors |
+`ai-translate/save-additional-prompt`: Save per-user additional instructions |
+`ai-translate/configure`: Read or update persistent plugin settings |
 
 **Requirements:**
 
@@ -78,14 +76,27 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 
 == Installation ==
 
+**Via WordPress Plugin Directory (recommended):**
+
 1. Ensure WordPress 6.9+ and PHP 8.1+ are running.
-2. Install and configure an AI connector in Settings > Connectors.
-3. Optional for content translation: install and activate Polylang or WP Multilang.
-4. Optional for local llama.cpp models: install AI Provider for llama.cpp.
-5. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
-6. Optional for MCP discovery: install and activate WordPress MCP Adapter.
-7. Upload the `slytranslate` folder to `/wp-content/plugins/`.
-8. Activate SlyTranslate.
+2. In wp-admin, go to Plugins > Add New and search for "SlyTranslate".
+3. Install and activate SlyTranslate.
+4. Install and configure an AI connector in Settings > Connectors.
+5. Optional for content translation: install and activate Polylang or WP Multilang.
+6. Optional for local llama.cpp models: install AI Provider for llama.cpp.
+7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
+8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
+
+**Manual installation:**
+
+1. Ensure WordPress 6.9+ and PHP 8.1+ are running.
+2. Copy the `slytranslate` directory to `/wp-content/plugins/`.
+3. Activate SlyTranslate in wp-admin.
+4. Install and configure an AI connector in Settings > Connectors.
+5. Optional for content translation: install and activate Polylang or WP Multilang.
+6. Optional for local llama.cpp models: install AI Provider for llama.cpp.
+7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
+8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
 
 == Screenshots ==
 

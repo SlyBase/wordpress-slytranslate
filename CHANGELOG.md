@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.2]
+### Changes
+- Installation: WordPress Plugin Directory installation is now the recommended primary method, with manual installation documented as an alternative.
+- Documentation: added `Plugin URI` pointing to the WordPress.org plugin page.
+
 ## [1.6.1]
 ### Fixes
 - Security: `set-post-language` now enforces linked-post `edit_post` permissions in its `permission_callback` before a relink request reaches execution.

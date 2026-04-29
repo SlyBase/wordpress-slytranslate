@@ -1,23 +1,33 @@
+= 1.6.2 =
+
+Changes:
+* Installation: WordPress Plugin Directory installation is now the recommended primary method, with manual installation documented as an alternative.
+* Documentation: added Plugin URI pointing to the WordPress.org plugin page.
+
 = 1.6.1 =
+
 Fixes:
 * Security: set-post-language now enforces linked-post edit_post permissions in its permission_callback before a relink request reaches execution.
-* Translation quality: Ministral 8B now retries EN->DE passthrough failures with smaller chunks so the post-1109 smoke test can recover instead of leaving English segments behind.
+* Translation quality: Ministral 8B now retries EN→DE passthrough failures with smaller chunks so the post-1109 smoke test can recover instead of leaving English segments behind.
 
 Changes:
 * WordPress.org compliance: plugin metadata and documentation now consistently use slytranslate as the plugin slug and text domain.
 
 = 1.6.0 =
+
 Changes:
-* WordPress.org compliance: renamed PHP namespace from AI_Translate to SlyTranslate and all ai_translate_* option/filter/transient names to slytranslate_*; existing settings are migrated automatically on first load.
+* WordPress.org compliance: renamed PHP namespace from AI_Translate to SlyTranslate and all ai_translate_* option/filter/transient names to slytranslate_*; a one-time automatic migration copies existing settings to the new names.
 * Security: DNS lookup in the SSRF guard no longer silences PHP warnings via the @ error-suppression operator.
 * Security: learned context-window cap is now consistent at 4,000,000 tokens across all code paths.
 * Code quality: background-bar task rendering now uses the DOM API (createElement/DocumentFragment) instead of innerHTML string concatenation, eliminating a class of potential XSS footguns in future extensions.
-* Code quality: return types narrowed from mixed to precise union types (string|WP_Error, array|WP_Error) on the core translation entry points.
-* Code quality: unified ABSPATH direct-access guards across all plugin files to the idiomatic form.
+* Code quality: return types narrowed from mixed to precise union types (string|\WP_Error, array|\WP_Error) on the core translation entry points.
+* Code quality: unified ABSPATH direct-access guards across all plugin files to the idiomatic defined( 'ABSPATH' ) || exit; form.
 * Code quality: removed unused $previous_chunk_count parameter and unused $completed_unit_count variable from the chunk-translation path.
 
+Features:
 * WP Multilang: major new integration support for the WP Multilang plugin alongside the existing Polylang integration.
 
+Changes:
 * MCP: all ability output schemas now include field-level descriptions and enum values so LLMs can call and interpret every endpoint correctly on the first attempt.
 * Performance: post title and excerpt are now translated in the same batched AI call as SEO meta fields, saving up to 2 API requests per post.
 * Architecture: introduced a central model-profile registry (slytranslate_model_profiles) driving prompt style, chunk strategy, and retry behavior per model family.
@@ -33,6 +43,7 @@ Changes:
 * API: content-translation abilities now accept an optional source language for stricter WP Multilang requests.
 * MCP: get-translation-status now publicly advertises single_entry_mode, and translate-content guidance now documents the safer source-language call order.
 
+Fixes:
 * Security: admin translation dialog now renders result messages as text and only appends same-origin edit links.
 * Security: direct API capability and model probes no longer follow redirects to other hosts.
 * UI: pressing Escape now closes the list-table translation picker on post and page overview screens.
