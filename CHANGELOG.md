@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.2]
 ### Changes
+- CI: GitHub releases now use the built-in Actions token instead of a personal access token for same-repository release creation.
 - Installation: WordPress Plugin Directory installation is now the recommended primary method, with manual installation documented as an alternative.
 - Documentation: added `Plugin URI` pointing to the WordPress.org plugin page.
 

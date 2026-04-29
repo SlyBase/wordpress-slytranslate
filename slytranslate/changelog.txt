@@ -1,11 +1,10 @@
 = 1.6.2 =
-
 Changes:
+* CI: GitHub releases now use the built-in Actions token instead of a personal access token for same-repository release creation.
 * Installation: WordPress Plugin Directory installation is now the recommended primary method, with manual installation documented as an alternative.
 * Documentation: added Plugin URI pointing to the WordPress.org plugin page.
 
 = 1.6.1 =
-
 Fixes:
 * Security: set-post-language now enforces linked-post edit_post permissions in its permission_callback before a relink request reaches execution.
 * Translation quality: Ministral 8B now retries EN→DE passthrough failures with smaller chunks so the post-1109 smoke test can recover instead of leaving English segments behind.
@@ -14,7 +13,6 @@ Changes:
 * WordPress.org compliance: plugin metadata and documentation now consistently use slytranslate as the plugin slug and text domain.
 
 = 1.6.0 =
-
 Changes:
 * WordPress.org compliance: renamed PHP namespace from AI_Translate to SlyTranslate and all ai_translate_* option/filter/transient names to slytranslate_*; a one-time automatic migration copies existing settings to the new names.
 * Security: DNS lookup in the SSRF guard no longer silences PHP warnings via the @ error-suppression operator.
@@ -23,7 +21,6 @@ Changes:
 * Code quality: return types narrowed from mixed to precise union types (string|\WP_Error, array|\WP_Error) on the core translation entry points.
 * Code quality: unified ABSPATH direct-access guards across all plugin files to the idiomatic defined( 'ABSPATH' ) || exit; form.
 * Code quality: removed unused $previous_chunk_count parameter and unused $completed_unit_count variable from the chunk-translation path.
-
 Features:
 * WP Multilang: major new integration support for the WP Multilang plugin alongside the existing Polylang integration.
 

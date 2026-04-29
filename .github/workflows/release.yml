@@ -1,5 +1,8 @@
 name: Create WordPress Plugin Release
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -41,7 +44,7 @@ jobs:
         id: check-release
         run: |
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.SLYBASE_ACTIONS }}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.version.outputs.version }}")
 
           if [ "$RESPONSE" = "200" ]; then
@@ -106,7 +109,6 @@ jobs:
           draft: false
           prerelease: ${{ steps.version.outputs.prerelease }}
           files: slytranslate-${{ steps.version.outputs.version }}.zip
-          token: ${{ secrets.SLYBASE_ACTIONS }}
 
       - name: Release Summary
         if: steps.check-release.outputs.exists == 'false'
