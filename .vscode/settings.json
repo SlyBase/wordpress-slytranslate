@@ -2,46 +2,58 @@
     "VsCodeTaskButtons.showCounter": false,
     "VsCodeTaskButtons.tasks": [
         {
-            "label": "$(tools) SlyTranslate",
+            "label": "$(tools) WP Plugin",
             "alignment": "left",
-            "tooltip": "Run SlyTranslate workspace tasks",
+            "tooltip": "Run WP Plugin workspace tasks",
             "tasks": [
                 {
                     "label": "$(package) Build plugin ZIP",
-                    "task": "SlyTranslate: Build Plugin ZIP",
-                    "description": "Create slytranslate.zip in the workspace root"
+                    "task": "WP Plugin: Build Plugin ZIP",
+                    "description": "Create Plugin.zip in the workspace root"
                 },
                 {
                     "label": "$(verified) Verify plugin ZIP",
-                    "task": "SlyTranslate: Verify Plugin ZIP",
-                    "description": "Run the archive checks against slytranslate.zip"
+                    "task": "WP Plugin: Verify Plugin ZIP",
+                    "description": "Run the archive checks against Plugin.zip"
                 },
                 {
                     "label": "$(combine) Build and verify plugin ZIP",
-                    "task": "SlyTranslate: Build and Verify Plugin ZIP",
-                    "description": "Build slytranslate.zip and verify the archive contents"
+                    "task": "WP Plugin: Build and Verify Plugin ZIP",
+                    "description": "Build Plugin.zip and verify the archive contents"
                 },
                 {
-                    "label": "$(cloud-upload) Deploy plugin ZIP to Test WordPress (wp-loco)",
-                    "task": "SlyTranslate: Deploy Plugin ZIP to WordPress Pod",
-                    "description": "Upload slytranslate.zip into the wp-loco WordPress pod in namespace default"
+                    "label": "$(file-symlink-file) Prepare release files",
+                    "task": "WP Plugin: Prepare Release Files",
+                    "description": "Generate language files and sync changelog.txt from CHANGELOG.md"
                 },
                 {
-                    "label": "$(rocket) Build and deploy plugin ZIP to Test WordPress (wp-loco)",
-                    "task": "SlyTranslate: Build and Deploy Plugin ZIP",
-                    "description": "Build, verify, and deploy slytranslate.zip to the wp-loco WordPress pod"
+                    "label": "$(cloud-upload) Deploy plugin ZIP (test pod)",
+                    "task": "WP Plugin: Deploy Plugin ZIP to WordPress Pod",
+                    "description": "Upload Plugin.zip into the test pod WordPress pod in namespace default"
                 },
                 {
-                    "label": "$(cloud-upload) Deploy plugin ZIP to SlyBase WordPress pod",
-                    "task": "SlyTranslate: Deploy Plugin ZIP to SlyBase WordPress Pod",
-                    "description": "Upload slytranslate.zip into the SlyBase WordPress pod in namespace websites"
+                    "label": "$(rocket) Build and deploy plugin ZIP (test pod)",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP",
+                    "description": "Build, verify, and deploy Plugin.zip to the test pod WordPress pod"
                 },
                 {
-                    "label": "$(rocket) Build and deploy plugin ZIP to SlyBase WordPress pod",
-                    "task": "SlyTranslate: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
-                    "description": "Build, verify, and deploy slytranslate.zip to the SlyBase WordPress pod"
+                    "label": "$(cloud-upload) Deploy plugin ZIP (SlyBase pod)",
+                    "task": "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod",
+                    "description": "Upload Plugin.zip into the SlyBase WordPress pod in namespace websites"
+                },
+                {
+                    "label": "$(rocket) Build and deploy plugin ZIP (SlyBase pod)",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
+                    "description": "Build, verify, and deploy Plugin.zip to the SlyBase WordPress pod"
                 }
             ]
+        },
+        {
+            "label": "$(tools) Sync Task",
+            "alignment": "left",
+            "tooltip": "Run Sync Task workspace tasks",
+            "task": "WP Plugin: Prepare Release Files",
+            "description": "Create Plugin.zip in the workspace root"
         }
     ]
 }

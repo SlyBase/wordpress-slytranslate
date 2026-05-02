@@ -118,6 +118,13 @@ class TranslationRuntime {
 		// ── DeepSeek ──────────────────────────────────────────────────────
 		'deepseek'        => 131072,
 
+		// ── IBM Granite ──────────────────────────────────────────────────
+		// Granite 4.1 (reasoning/thinking model): 128 K context.
+		'granite-4.1'     => 131072,
+		'granite-4'       => 131072,
+		'granite-3'       => 131072,
+		'granite'         => 131072,
+
 		// ── Microsoft Phi ─────────────────────────────────────────────────
 		// More specific variants must precede the generic `phi` entry.
 		'phi-4-mini'      => 131072,
@@ -414,7 +421,11 @@ class TranslationRuntime {
 			'supports_chat_completions'  => true,
 			'requires_strict_direct_api' => false,
 			'requires_chat_template_kwargs' => false,
-			'extra_request_body'         => array(),
+			'extra_request_body'         => array(
+				'chat_template_kwargs' => array(
+					'enable_thinking' => false,
+				),
+			),
 			'chunk_strategy'             => self::CHUNK_STRATEGY_DEFAULT,
 			'max_chunk_chars'            => 0,
 			'temperature'                => 0,

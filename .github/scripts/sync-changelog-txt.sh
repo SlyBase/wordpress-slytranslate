@@ -2,8 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=plugin-config.sh
+source "$(dirname "${BASH_SOURCE[0]}")/plugin-config.sh"
 SRC_FILE="${1:-$ROOT_DIR/CHANGELOG.md}"
-DST_FILE="${2:-$ROOT_DIR/slytranslate/changelog.txt}"
+DST_FILE="${2:-$ROOT_DIR/${plugin_slug}/changelog.txt}"
 
 if [[ ! -f "$SRC_FILE" ]]; then
     echo "Source file not found: $SRC_FILE" >&2

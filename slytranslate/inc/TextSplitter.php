@@ -164,6 +164,7 @@ class TextSplitter {
 			'core/preformatted',
 			'core/html',
 			'core/shortcode',
+			'core/embed',
 			'kevinbatdorf/code-block-pro',
 		);
 

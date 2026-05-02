@@ -207,6 +207,23 @@ final class ModelProfileRegistry {
 					),
 				)
 			),
+			// IBM Granite 4.x / 3.x: slow inference on homelab hardware (~16 tok/s)
+			// means chunks larger than ~650 chars exceed the 30-second HTTP timeout.
+			// Tower strategy caps chunks at 650 chars so every call stays safe.
+			self::build_profile(
+				'granite',
+				array( 'granite-4.1', 'granite-4', 'granite-3', 'granite' ),
+				array_merge(
+					self::get_default_thinking_overrides(),
+					array(
+						'chunk_strategy'  => self::CHUNK_STRATEGY_TOWER,
+						'max_chunk_chars' => 650,
+						'retry_profile'   => array(
+							'retry_chunk_chars' => 400,
+						),
+					)
+				)
+			),
 		);
 	}
 }

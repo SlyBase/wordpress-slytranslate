@@ -2,7 +2,7 @@
 Contributors: timonf
 Tags: ai, translation, abilities-api, polylang, wp-multilang
 Requires at least: 6.9
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 8.1
 Stable tag: 1.6.2
 License: MIT

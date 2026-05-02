@@ -5,7 +5,7 @@ Plugin URI: https://github.com/SlyBase/wordpress-slytranslate/
 Description: AI translation abilities for WordPress using native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
 Version: 1.6.2
 Author: Timon Först
-Author URI: https://github.com/SlyBase/wordpress-slytranslate
+Author URI: https://slybase.com
 Update URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 6.9
 Requires PHP: 8.1

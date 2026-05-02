@@ -31,6 +31,7 @@ return [
 'core/preformatted'           => [ 'core/preformatted' ],
 'core/html'                   => [ 'core/html' ],
 'core/shortcode'              => [ 'core/shortcode' ],
+'core/embed'                  => [ 'core/embed' ],
 'kevinbatdorf/code-block-pro' => [ 'kevinbatdorf/code-block-pro' ],
 ];
 }

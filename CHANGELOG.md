@@ -6,9 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.2]
 ### Changes
-- CI: GitHub releases now use the built-in Actions token instead of a personal access token for same-repository release creation.
 - Installation: WordPress Plugin Directory installation is now the recommended primary method, with manual installation documented as an alternative.
 - Documentation: added `Plugin URI` pointing to the WordPress.org plugin page.
+- Translation reliability: all models without an explicit profile now send `enable_thinking=false` by default, preventing 30-second timeouts on unknown reasoning/thinking models (e.g. Granite 4.1); servers that reject the field automatically retry without it.
+- Model recognition: added IBM Granite 4.x and 3.x to the known context-window table (131072 tokens) for correct chunk-size calculation.
+- Translation accuracy: `core/embed` blocks (embedded media/URLs) are now skipped instead of translated, preventing false passthrough-validation failures on embed-only content.
+- Model profiles: added a dedicated Granite 4.x/3.x profile with 650-char chunk cap (`tower_conservative` strategy) to prevent HTTP timeouts on homelab hardware with slow inference speeds.
 
 ## [1.6.1]
 ### Fixes

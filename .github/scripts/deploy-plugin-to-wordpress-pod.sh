@@ -2,12 +2,13 @@
 
 set -euo pipefail
 
+# shellcheck source=plugin-config.sh
+source "$(dirname "${BASH_SOURCE[0]}")/plugin-config.sh"
 zip_file="${1:?Usage: deploy-plugin-to-wordpress-pod.sh <plugin-zip>}"
-namespace="${SLYTRANSLATE_DEPLOY_NAMESPACE:-websites}"
-pod_selector="${SLYTRANSLATE_DEPLOY_POD_SELECTOR:-app.kubernetes.io/instance=slybase-com,app.kubernetes.io/name=wordpress}"
-preferred_container="${SLYTRANSLATE_DEPLOY_CONTAINER:-wordpress}"
-kubectl_bin="${SLYTRANSLATE_KUBECTL_BIN:-}"
-plugin_slug='slytranslate'
+namespace="${DEPLOY_NAMESPACE:-websites}"
+pod_selector="${DEPLOY_POD_SELECTOR:-app.kubernetes.io/instance=slybase-com,app.kubernetes.io/name=wordpress}"
+preferred_container="${DEPLOY_CONTAINER:-wordpress}"
+kubectl_bin="${KUBECTL_BIN:-}"
 target_dir="/var/www/html/wp-content/plugins/${plugin_slug}"
 staging_root="$(mktemp -d)"
 tar_create_args=(-C "$staging_root/$plugin_slug" -cf - .)
@@ -106,7 +107,7 @@ done
 
 kubectl_cmd="$(resolve_kubectl_bin)"
 if [[ -z "$kubectl_cmd" ]]; then
-	echo "Unable to find a usable kubectl binary. Set SLYTRANSLATE_KUBECTL_BIN to a working executable path." >&2
+	echo "Unable to find a usable kubectl binary. Set KUBECTL_BIN to a working executable path." >&2
 	exit 1
 fi
 

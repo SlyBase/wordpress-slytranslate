@@ -181,4 +181,28 @@ class WpAiClientChatTemplateKwargsInjectionTest extends TestCase {
 		$profile = array( 'extra_request_body' => array() );
 		$this->assertSame( array(), TranslationRuntime::extract_wp_ai_client_request_body_injections( $profile ) );
 	}
+
+	public function test_unknown_model_profile_includes_enable_thinking_false_by_default(): void {
+		$profile = TranslationRuntime::get_model_profile( 'totally-unknown-model-xyz' );
+
+		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections( $profile );
+
+		$this->assertSame(
+			array( 'chat_template_kwargs' => array( 'enable_thinking' => false ) ),
+			$injections,
+			'Unknown models should disable thinking by default to prevent timeout on reasoning models.'
+		);
+	}
+
+	public function test_granite_model_profile_includes_enable_thinking_false(): void {
+		$profile = TranslationRuntime::get_model_profile( 'granite-4.1-8b.Q4_K_M' );
+
+		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections( $profile );
+
+		$this->assertSame(
+			array( 'chat_template_kwargs' => array( 'enable_thinking' => false ) ),
+			$injections,
+			'Granite models fall through to the default profile and must have thinking disabled.'
+		);
+	}
 }
