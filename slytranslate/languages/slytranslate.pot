@@ -36,7 +36,7 @@ msgid_plural "%d translations created."
 msgstr[0] ""
 msgstr[1] ""
 
-#: slytranslate/ai-translate.php:396
+#: slytranslate/slytranslate.php:396
 msgid "A translation already exists for the requested language."
 msgstr ""
 
@@ -52,7 +52,7 @@ msgstr ""
 msgid "A translation for language \"%1$s\" already exists (post %2$d)."
 msgstr ""
 
-#: slytranslate/ai-translate.php:325
+#: slytranslate/slytranslate.php:325
 msgid "A valid source post ID is required."
 msgstr ""
 
@@ -82,7 +82,7 @@ msgstr ""
 msgid "Available"
 msgstr ""
 
-#: slytranslate/ai-translate.php:287
+#: slytranslate/slytranslate.php:287
 msgid "Block content to translate is required."
 msgstr ""
 
@@ -204,7 +204,7 @@ msgstr ""
 #: slytranslate/inc/TranslationQueryService.php:20
 #: slytranslate/inc/TranslationQueryService.php:33
 #: slytranslate/inc/TranslationQueryService.php:77
-#: slytranslate/ai-translate.php:363
+#: slytranslate/slytranslate.php:363
 msgid "No supported translation plugin is active."
 msgstr ""
 
@@ -353,7 +353,7 @@ msgstr ""
 msgid "Source language"
 msgstr ""
 
-#: slytranslate/ai-translate.php:264 slytranslate/ai-translate.php:290
+#: slytranslate/slytranslate.php:264 slytranslate/slytranslate.php:290
 msgid "Source language is required."
 msgstr ""
 
@@ -384,12 +384,12 @@ msgid "Target language"
 msgstr ""
 
 #: slytranslate/inc/TranslationQueryService.php:82
-#: slytranslate/ai-translate.php:267 slytranslate/ai-translate.php:293
-#: slytranslate/ai-translate.php:328 slytranslate/ai-translate.php:358
+#: slytranslate/slytranslate.php:267 slytranslate/slytranslate.php:293
+#: slytranslate/slytranslate.php:328 slytranslate/slytranslate.php:358
 msgid "Target language is required."
 msgstr ""
 
-#: slytranslate/ai-translate.php:261
+#: slytranslate/slytranslate.php:261
 msgid "Text to translate is required."
 msgstr ""
 
@@ -422,7 +422,7 @@ msgstr ""
 msgid "The requested post type does not exist."
 msgstr ""
 
-#: slytranslate/ai-translate.php:389
+#: slytranslate/slytranslate.php:389
 msgid "The source content is already in the requested target language."
 msgstr ""
 
@@ -648,7 +648,7 @@ msgstr ""
 
 #: slytranslate/inc/PostTranslationService.php:55
 #: slytranslate/inc/ListTableTranslation.php:223
-#: slytranslate/ai-translate.php:382
+#: slytranslate/slytranslate.php:382
 msgid "You are not allowed to translate this content item."
 msgstr ""
 
@@ -656,6 +656,6 @@ msgstr ""
 msgid "You are not allowed to update the existing translation."
 msgstr ""
 
-#: slytranslate/ai-translate.php:489
+#: slytranslate/slytranslate.php:489
 msgid "You must be logged in to save preferences."
 msgstr ""

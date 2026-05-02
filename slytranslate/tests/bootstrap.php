@@ -143,4 +143,4 @@ require_once __DIR__ . '/stubs/wp-stubs.php';
 require_once __DIR__ . '/../inc/TranslationPluginAdapter.php';
 require_once __DIR__ . '/../inc/SeoPluginDetector.php';
 require_once __DIR__ . '/../inc/EditorBootstrap.php';
-require_once __DIR__ . '/../ai-translate.php';
+require_once __DIR__ . '/../slytranslate.php';

@@ -469,7 +469,7 @@ class ListTableTranslation {
 	}
 
 	private static function plugin_base_file(): string {
-		return dirname( __DIR__ ) . '/ai-translate.php';
+		return dirname( __DIR__ ) . '/slytranslate.php';
 	}
 
 	private static function asset_version( string $asset_relative_path ): string {

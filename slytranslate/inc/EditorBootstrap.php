@@ -11,7 +11,7 @@ class EditorBootstrap {
 	public static function enqueue_editor_plugin(): void {
 		wp_enqueue_script(
 			Plugin::EDITOR_SCRIPT,
-			plugins_url( 'assets/editor-plugin.js', dirname( __DIR__ ) . '/ai-translate.php' ),
+			plugins_url( 'assets/editor-plugin.js', dirname( __DIR__ ) . '/slytranslate.php' ),
 			array( 'wp-api-fetch', 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-editor', 'wp-element', 'wp-plugins', 'wp-rich-text' ),
 			self::get_editor_script_version(),
 			true
@@ -23,7 +23,7 @@ class EditorBootstrap {
 			wp_set_script_translations(
 				Plugin::EDITOR_SCRIPT,
 				'slytranslate',
-				plugin_dir_path( dirname( __DIR__ ) . '/ai-translate.php' ) . 'languages'
+				plugin_dir_path( dirname( __DIR__ ) . '/slytranslate.php' ) . 'languages'
 			);
 		}
 	}

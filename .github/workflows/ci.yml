@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          plugin_file="slytranslate/ai-translate.php"
+          plugin_file="slytranslate/slytranslate.php"
           readme_file="slytranslate/readme.txt"
 
           plugin_version="$(grep -m1 '^Version:' "$plugin_file" | sed 's/^Version:[[:space:]]*//')"

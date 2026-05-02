@@ -110,7 +110,7 @@ When an LLM generates content for `slytranslate/readme.txt`, it must follow thes
 	- The Plugin Directory first reads `Stable tag` from `/trunk/readme.txt`
 	- It then uses `readme.txt` from `/tags/<Stable tag>/` for display
 	- Avoid `Stable tag: trunk` (not recommended)
-	- The displayed download version comes from the plugin header in `ai-translate.php`, not from `readme.txt`
+	- The displayed download version comes from the plugin header in `slytranslate.php`, not from `readme.txt`
 - **WordPress 5.8+ detail:**
 	- `Requires at least` and `Requires PHP` are read from the main PHP file, not from `readme.txt`
 - **Keep the file concise:**
@@ -170,5 +170,5 @@ For beta versions (`X.Y.Z-beta.N`), use the base version `X.Y.Z` for this synchr
 | File | Field |
 |---|---|
 | `slytranslate/readme.txt` | `Stable tag: X.Y.Z` |
-| `slytranslate/ai-translate.php` | Plugin header `Version: X.Y.Z` |
-| `slytranslate/ai-translate.php` | Class constant `private const VERSION = 'X.Y.Z';` |
+| `slytranslate/slytranslate.php` | Plugin header `Version: X.Y.Z` |
+| `slytranslate/slytranslate.php` | Class constant `private const VERSION = 'X.Y.Z';` |

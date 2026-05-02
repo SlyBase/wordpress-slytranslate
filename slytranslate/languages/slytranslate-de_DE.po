@@ -35,7 +35,7 @@ msgid_plural "%d translations created."
 msgstr[0] "%d Übersetzung erstellt."
 msgstr[1] "%d Übersetzungen erstellt."
 
-#: slytranslate/ai-translate.php:396
+#: slytranslate/slytranslate.php:396
 msgid "A translation already exists for the requested language."
 msgstr "Für die angeforderte Sprache existiert bereits eine Übersetzung."
 
@@ -54,7 +54,7 @@ msgid "A translation for language \"%1$s\" already exists (post %2$d)."
 msgstr ""
 "Eine Übersetzung für die Sprache \"%1$s\" existiert bereits (Beitrag %2$d)."
 
-#: slytranslate/ai-translate.php:325
+#: slytranslate/slytranslate.php:325
 msgid "A valid source post ID is required."
 msgstr "Eine gültige Quellbeitrags-ID ist erforderlich."
 
@@ -84,7 +84,7 @@ msgstr "Es ist ein unerwarteter Fehler aufgetreten."
 msgid "Available"
 msgstr "Vorhanden"
 
-#: slytranslate/ai-translate.php:287
+#: slytranslate/slytranslate.php:287
 msgid "Block content to translate is required."
 msgstr "Zu übersetzender Blockinhalt ist erforderlich."
 
@@ -213,7 +213,7 @@ msgstr ""
 #: slytranslate/inc/TranslationQueryService.php:20
 #: slytranslate/inc/TranslationQueryService.php:33
 #: slytranslate/inc/TranslationQueryService.php:77
-#: slytranslate/ai-translate.php:363
+#: slytranslate/slytranslate.php:363
 msgid "No supported translation plugin is active."
 msgstr "Es ist kein unterstütztes Übersetzungs-Plugin aktiv."
 
@@ -389,7 +389,7 @@ msgstr "Quell- und Zielsprache müssen unterschiedlich sein."
 msgid "Source language"
 msgstr "Ausgangssprache"
 
-#: slytranslate/ai-translate.php:264 slytranslate/ai-translate.php:290
+#: slytranslate/slytranslate.php:264 slytranslate/slytranslate.php:290
 msgid "Source language is required."
 msgstr "Die Quellsprache ist erforderlich."
 
@@ -422,12 +422,12 @@ msgid "Target language"
 msgstr "Zielsprache"
 
 #: slytranslate/inc/TranslationQueryService.php:82
-#: slytranslate/ai-translate.php:267 slytranslate/ai-translate.php:293
-#: slytranslate/ai-translate.php:328 slytranslate/ai-translate.php:358
+#: slytranslate/slytranslate.php:267 slytranslate/slytranslate.php:293
+#: slytranslate/slytranslate.php:328 slytranslate/slytranslate.php:358
 msgid "Target language is required."
 msgstr "Die Zielsprache ist erforderlich."
 
-#: slytranslate/ai-translate.php:261
+#: slytranslate/slytranslate.php:261
 msgid "Text to translate is required."
 msgstr "Der zu übersetzende Text ist erforderlich."
 
@@ -466,7 +466,7 @@ msgstr ""
 msgid "The requested post type does not exist."
 msgstr "Der angeforderte Inhaltstyp existiert nicht."
 
-#: slytranslate/ai-translate.php:389
+#: slytranslate/slytranslate.php:389
 msgid "The source content is already in the requested target language."
 msgstr "Der Quellinhalt liegt bereits in der angeforderten Zielsprache vor."
 
@@ -728,7 +728,7 @@ msgstr "Du darfst diesen Inhaltseintrag nicht prüfen."
 
 #: slytranslate/inc/PostTranslationService.php:55
 #: slytranslate/inc/ListTableTranslation.php:223
-#: slytranslate/ai-translate.php:382
+#: slytranslate/slytranslate.php:382
 msgid "You are not allowed to translate this content item."
 msgstr "Du darfst diesen Inhaltseintrag nicht übersetzen."
 
@@ -736,7 +736,7 @@ msgstr "Du darfst diesen Inhaltseintrag nicht übersetzen."
 msgid "You are not allowed to update the existing translation."
 msgstr "Du darfst die bestehende Übersetzung nicht aktualisieren."
 
-#: slytranslate/ai-translate.php:489
+#: slytranslate/slytranslate.php:489
 msgid "You must be logged in to save preferences."
 msgstr "Du musst angemeldet sein, um Einstellungen zu speichern."
 
