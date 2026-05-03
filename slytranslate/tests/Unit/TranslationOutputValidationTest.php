@@ -169,6 +169,19 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'invalid_translation_language_passthrough', $result->get_error_code() );
 	}
 
+	public function test_accepts_url_heavy_code_block_label_passthrough_when_target_is_german(): void {
+		// A short label + code block where the model echoes the HTML unchanged.
+		// Only 2 English markers ("from", "your") are present — the rest is a URL.
+		// The validator must NOT flag this as a passthrough false positive because
+		// the URL tokens dominate and the model legitimately preserved the code block.
+		$source_text = 'Enter Endpoint URL from your LLM: <code class="language-php">http://IPADRESS:8080/v1</code>';
+		$translated  = 'Enter Endpoint URL from your LLM: <code class="language-php">http://IPADRESS:8080/v1</code>';
+
+		$result = $this->invokeStatic( TranslationValidator::class, 'validate', array( $source_text, $translated, 'de' ) );
+
+		$this->assertNull( $result );
+	}
+
 	public function test_rejects_wrapped_german_passthrough_when_target_is_english(): void {
 		$source_text = 'Die Konfiguration ist abgeschlossen. WordPress 7, SlyTranslate, Polylang, MCP. Übersetzungen funktionieren mit einem Klick.';
 		$translated  = 'Kurzfassung: ' . $source_text . ' Als Nächstes plane ich automatisierte Übersetzungs-Workflows.';

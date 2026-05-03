@@ -692,6 +692,32 @@ class TranslationValidator {
 		return false === $count ? 0 : $count;
 	}
 
+	/**
+	 * Returns true when a significant fraction of the word tokens in the
+	 * normalised passthrough-compare string look like URL/endpoint fragments
+	 * (protocol keywords, numeric ports, version strings such as "v1").
+	 *
+	 * Used to suppress false-positive passthrough errors on short labels of
+	 * the form "Enter Endpoint URL from your LLM: http://HOST:8080/v1" where
+	 * exactly two incidental English function words sit next to a code block
+	 * that the model correctly preserved unchanged.
+	 */
+	private static function is_url_dominant_technical_content( string $normalized ): bool {
+		$tokens = preg_split( '/\s+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY );
+		if ( ! is_array( $tokens ) || count( $tokens ) < 4 ) {
+			return false;
+		}
+
+		$url_token_count = 0;
+		foreach ( $tokens as $token ) {
+			if ( preg_match( '/^(?:https?|ftp|www|\d{2,5}|v\d+)$/i', $token ) ) {
+				$url_token_count++;
+			}
+		}
+
+		return ( $url_token_count / count( $tokens ) ) >= 0.25;
+	}
+
 	private static function count_source_language_markers( string $text, string $target_language ): int {
 		if ( 0 === strpos( $target_language, 'de' ) ) {
 			return self::count_english_markers( $text );
@@ -738,13 +764,22 @@ class TranslationValidator {
 		}
 
 		if ( $source_normalized === $translated_normalized ) {
+			// Pre-compute once: is this URL-heavy technical content with exactly 2 source-language markers?
+			// If so, the markers are incidental noise (e.g. "from", "your" in an endpoint label) and
+			// the model correctly preserved a non-translatable code/URL block unchanged.
+			$is_url_technical = ( 2 === $source_markers && self::is_url_dominant_technical_content( $source_normalized ) );
+
 			if ( 0 === $target_markers ) {
 				if ( $source_markers >= 2 ) {
-					return true;
+					if ( ! $is_url_technical ) {
+						return true;
+					}
 				}
 
 				if ( false !== $token_count && $token_count >= 3 && $source_markers >= 1 ) {
-					return true;
+					if ( ! $is_url_technical ) {
+						return true;
+					}
 				}
 
 				if ( false !== $token_count && $token_count >= 4 && $has_non_ascii ) {
@@ -756,7 +791,11 @@ class TranslationValidator {
 				return false;
 			}
 
-			return $source_markers >= 2 && 0 === $target_markers;
+			if ( $source_markers >= 2 && 0 === $target_markers && ! $is_url_technical ) {
+				return true;
+			}
+
+			return false;
 		}
 
 		if ( self::text_length( $source_plain ) < 30 || self::text_length( $translated_plain ) < 30 ) {

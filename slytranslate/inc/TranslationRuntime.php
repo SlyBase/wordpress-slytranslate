@@ -86,7 +86,11 @@ class TranslationRuntime {
 		// ── xAI Grok ──────────────────────────────────────────────────────
 		'grok'            => 131072,
 
-		// ── Mistral AI ────────────────────────────────────────────────────
+		// ── Mistral AI / Ministral ──────────────────────────────────────────
+		// Ministral must precede mistral to avoid the broader `mistral` key
+		// matching first.
+		'ministral-3'     => 131072,  // Ministral 3B (2024): 128 K context.
+		'ministral'       => 131072,  // Ministral 8B (2024): 128 K context.
 		'codestral'       => 32768,
 		'pixtral'         => 128000,
 		'mistral-nemo'    => 131072,

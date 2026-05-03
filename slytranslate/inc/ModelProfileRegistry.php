@@ -202,8 +202,12 @@ final class ModelProfileRegistry {
 				'ministral',
 				array( 'ministral', 'ministral-8b', 'ministral-8b-instruct' ),
 				array(
-					'retry_profile' => array(
-						'retry_chunk_chars' => 1400,
+					// Ministral 8B on homelab hardware (~17 tok/s) times out for
+					// chunks above ~650 chars (same class as Granite 3/4).
+					'chunk_strategy'  => self::CHUNK_STRATEGY_TOWER,
+					'max_chunk_chars' => 650,
+					'retry_profile'   => array(
+						'retry_chunk_chars' => 1200,
 					),
 				)
 			),
