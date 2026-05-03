@@ -11,7 +11,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixes
 - WPGlobus adapter now uses `enabled_languages` (WPGlobus 3.x) and the correct curly-brace tag format `{:lang}text{:}` instead of the previously documented square-bracket format.
 - Validator no longer incorrectly flags code-block-heavy segments (e.g. URL endpoint labels) as untranslated when the model preserves them unchanged.
-- Ministral 8B now uses the `tower_conservative` chunk strategy (max 650 chars) and is registered in the known context-window table (131 072 tokens), preventing HTTP timeouts on slow-inference homelab hardware.
 
 ## [1.6.2]
 ### Changes
