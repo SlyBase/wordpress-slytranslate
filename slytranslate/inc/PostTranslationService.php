@@ -65,7 +65,7 @@ class PostTranslationService {
 		}
 		$to   = sanitize_key( $to );
 
-		if ( $adapter instanceof WpMultilangAdapter ) {
+		if ( $adapter instanceof WpMultilangAdapter || $adapter instanceof WpglobusAdapter ) {
 			if ( '' !== $requested_source_lang ) {
 				$available_languages = $adapter->get_languages();
 				if ( ! isset( $available_languages[ $requested_source_lang ] ) ) {

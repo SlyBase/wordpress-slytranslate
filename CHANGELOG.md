@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.3]
+### Features
+- WPGlobus support: SlyTranslate now detects WPGlobus and translates content stored in the `[:lang]...[/lang]` single-post format.
+
 ## [1.6.2]
 ### Changes
 - Installation: WordPress Plugin Directory installation is now the recommended primary method, with manual installation documented as an alternative.

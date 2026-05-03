@@ -36,7 +36,7 @@ class EditorBootstrap {
 			'abilitiesRunBasePath'      => self::get_editor_rest_base_path(),
 			'restNonce'                 => wp_create_nonce( 'wp_rest' ),
 			'translationPluginAvailable' => null !== AI_Translate::get_adapter(),
-			'singleEntryTranslationMode' => AI_Translate::get_adapter() instanceof WpMultilangAdapter,
+			'singleEntryTranslationMode' => AI_Translate::is_single_entry_translation_mode(),
 			'translationPluginLanguages' => self::get_translation_plugin_languages(),
 			'defaultSourceLanguage'     => self::get_editor_default_source_language(),
 			'lastAdditionalPrompt'      => $last_additional_prompt,

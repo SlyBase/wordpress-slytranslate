@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://github.com/SlyBase/wordpress-slytranslate/
 Description: AI translation abilities for WordPress using native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.6.2
+Version: 1.6.3
 Author: Timon Först
 Author URI: https://slybase.com
 Update URI: https://github.com/SlyBase/wordpress-slytranslate
@@ -57,6 +57,7 @@ class AI_Translate {
 				array(
 					new PolylangAdapter(),
 					new WpMultilangAdapter(),
+					new WpglobusAdapter(),
 				)
 			);
 
@@ -73,7 +74,8 @@ class AI_Translate {
 	}
 
 	public static function is_single_entry_translation_mode(): bool {
-		return self::get_adapter() instanceof WpMultilangAdapter;
+		$adapter = self::get_adapter();
+		return $adapter instanceof WpMultilangAdapter || $adapter instanceof WpglobusAdapter;
 	}
 
 	public static function current_user_can_access_translation_abilities(): bool {

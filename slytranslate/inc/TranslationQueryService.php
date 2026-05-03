@@ -50,7 +50,7 @@ class TranslationQueryService {
 		$source_lang  = $adapter->get_post_language( $post_id );
 		$translations = $adapter->get_post_translations( $post_id );
 		$languages    = $adapter->get_languages();
-		$is_single_entry_mode = $adapter instanceof WpMultilangAdapter;
+		$is_single_entry_mode = $adapter instanceof WpMultilangAdapter || $adapter instanceof WpglobusAdapter;
 		$source_title         = $post->post_title;
 
 		if ( $is_single_entry_mode ) {
@@ -240,7 +240,7 @@ class TranslationQueryService {
 		$adapter = AI_Translate::get_adapter();
 		if ( $adapter instanceof PolylangAdapter ) {
 			$query_args['lang'] = '';
-		} elseif ( $adapter instanceof WpMultilangAdapter ) {
+		} elseif ( $adapter instanceof WpMultilangAdapter || $adapter instanceof WpglobusAdapter ) {
 			$query_args['lang'] = 'all';
 		}
 

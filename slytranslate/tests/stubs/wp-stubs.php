@@ -464,3 +464,20 @@ function get_post_status_object( $post_status ): ?\stdClass {
 		return null;
 	} );
 }
+
+// -----------------------------------------------------------------------
+// WPGlobus stubs
+// -----------------------------------------------------------------------
+
+function wpglobus_languages_list(): array {
+	$result = slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+	return is_array( $result ) ? $result : array();
+}
+
+function wpglobus_default_language(): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 'en';
+	} );
+}
