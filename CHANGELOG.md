@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.3]
 ### Features
-- WPGlobus support: SlyTranslate now detects WPGlobus and translates content stored in the `[:lang]...[/lang]` single-post format.
+- WPGlobus support: SlyTranslate now detects WPGlobus and translates content stored in the `{:lang}text{:}` single-post format.
+
+### Fixes
+- WPGlobus adapter now uses `enabled_languages` (WPGlobus 3.x) and the correct curly-brace tag format `{:lang}text{:}` instead of the previously documented square-bracket format.
 
 ## [1.6.2]
 ### Changes

@@ -63,25 +63,25 @@ class WpglobusAdapterTest extends TestCase {
 	// -----------------------------------------------------------------------
 
 	public function test_get_language_variant_extracts_en_segment(): void {
-		$value  = '[:en]Hello world[/en][:de]Hallo Welt[/de]';
+		$value  = '{:en}Hello world{:}{:de}Hallo Welt{:}';
 		$result = $this->adapter->get_language_variant( $value, 'en' );
 		$this->assertSame( 'Hello world', $result );
 	}
 
 	public function test_get_language_variant_extracts_de_segment(): void {
-		$value  = '[:en]Hello world[/en][:de]Hallo Welt[/de]';
+		$value  = '{:en}Hello world{:}{:de}Hallo Welt{:}';
 		$result = $this->adapter->get_language_variant( $value, 'de' );
 		$this->assertSame( 'Hallo Welt', $result );
 	}
 
 	public function test_get_language_variant_returns_empty_for_missing_language(): void {
-		$value  = '[:en]Hello world[/en][:de]Hallo Welt[/de]';
+		$value  = '{:en}Hello world{:}{:de}Hallo Welt{:}';
 		$result = $this->adapter->get_language_variant( $value, 'fr' );
 		$this->assertSame( '', $result );
 	}
 
 	public function test_get_language_variant_handles_multiline_content(): void {
-		$value  = "[:en]Line one\nLine two[/en][:de]Zeile eins\nZeile zwei[/de]";
+		$value  = "{:en}Line one\nLine two{:}{:de}Zeile eins\nZeile zwei{:}";
 		$result = $this->adapter->get_language_variant( $value, 'de' );
 		$this->assertSame( "Zeile eins\nZeile zwei", $result );
 	}
@@ -92,7 +92,7 @@ class WpglobusAdapterTest extends TestCase {
 	}
 
 	public function test_get_language_variant_returns_empty_for_empty_language_code(): void {
-		$value  = '[:en]Hello[/en][:de]Hallo[/de]';
+		$value  = '{:en}Hello{:}{:de}Hallo{:}';
 		$result = $this->adapter->get_language_variant( $value, '' );
 		$this->assertSame( '', $result );
 	}
@@ -107,7 +107,7 @@ class WpglobusAdapterTest extends TestCase {
 			'merge_language_value',
 			array( 'Hello world', 'en', 'de', 'Hallo Welt', 'Hello world' )
 		);
-		$this->assertSame( '[:en]Hello world[/en][:de]Hallo Welt[/de]', $result );
+		$this->assertSame( '{:en}Hello world{:}{:de}Hallo Welt{:}', $result );
 	}
 
 	public function test_merge_language_value_plain_value_without_source_fallback(): void {
@@ -116,7 +116,7 @@ class WpglobusAdapterTest extends TestCase {
 			'merge_language_value',
 			array( 'Hello world', '', 'de', 'Hallo Welt', '' )
 		);
-		$this->assertSame( '[:de]Hallo Welt[/de]', $result );
+		$this->assertSame( '{:de}Hallo Welt{:}', $result );
 	}
 
 	// -----------------------------------------------------------------------
@@ -124,39 +124,39 @@ class WpglobusAdapterTest extends TestCase {
 	// -----------------------------------------------------------------------
 
 	public function test_merge_language_value_replaces_existing_target_segment(): void {
-		$existing = '[:en]Hello world[/en][:de]Alter Text[/de]';
+		$existing = '{:en}Hello world{:}{:de}Alter Text{:}';
 		$result   = $this->invokeMethod(
 			$this->adapter,
 			'merge_language_value',
 			array( $existing, 'en', 'de', 'Hallo Welt', 'Hello world' )
 		);
-		$this->assertSame( '[:en]Hello world[/en][:de]Hallo Welt[/de]', $result );
+		$this->assertSame( '{:en}Hello world{:}{:de}Hallo Welt{:}', $result );
 	}
 
 	public function test_merge_language_value_appends_new_target_segment(): void {
-		$existing = '[:en]Hello world[/en]';
+		$existing = '{:en}Hello world{:}';
 		$result   = $this->invokeMethod(
 			$this->adapter,
 			'merge_language_value',
 			array( $existing, 'en', 'de', 'Hallo Welt', 'Hello world' )
 		);
-		$this->assertStringContainsString( '[:de]Hallo Welt[/de]', $result );
-		$this->assertStringContainsString( '[:en]Hello world[/en]', $result );
+		$this->assertStringContainsString( '{:de}Hallo Welt{:}', $result );
+		$this->assertStringContainsString( '{:en}Hello world{:}', $result );
 	}
 
 	public function test_merge_language_value_adds_missing_source_segment(): void {
-		$existing = '[:fr]Bonjour[/fr]';
+		$existing = '{:fr}Bonjour{:}';
 		$result   = $this->invokeMethod(
 			$this->adapter,
 			'merge_language_value',
 			array( $existing, 'en', 'de', 'Hallo', 'Hello' )
 		);
-		$this->assertStringContainsString( '[:en]Hello[/en]', $result );
-		$this->assertStringContainsString( '[:de]Hallo[/de]', $result );
+		$this->assertStringContainsString( '{:en}Hello{:}', $result );
+		$this->assertStringContainsString( '{:de}Hallo{:}', $result );
 	}
 
 	public function test_merge_language_value_returns_existing_when_target_language_empty(): void {
-		$existing = '[:en]Hello[/en]';
+		$existing = '{:en}Hello{:}';
 		$result   = $this->invokeMethod(
 			$this->adapter,
 			'merge_language_value',
@@ -169,8 +169,8 @@ class WpglobusAdapterTest extends TestCase {
 	// has_wpglobus_markup
 	// -----------------------------------------------------------------------
 
-	public function test_has_wpglobus_markup_detects_closing_tag(): void {
-		$result = $this->invokeMethod( $this->adapter, 'has_wpglobus_markup', array( '[:en]Hello[/en]' ) );
+	public function test_has_wpglobus_markup_detects_opening_tag(): void {
+		$result = $this->invokeMethod( $this->adapter, 'has_wpglobus_markup', array( '{:en}Hello{:}' ) );
 		$this->assertTrue( $result );
 	}
 
@@ -180,7 +180,7 @@ class WpglobusAdapterTest extends TestCase {
 	}
 
 	public function test_has_wpglobus_markup_returns_false_for_wp_multilang_style(): void {
-		// WP Multilang uses [:en] without closing [/en] tag
+		// WP Multilang uses [:en] with square brackets, not curly braces
 		$result = $this->invokeMethod( $this->adapter, 'has_wpglobus_markup', array( '[:en]Hello[:de]Hallo[:]' ) );
 		$this->assertFalse( $result );
 	}

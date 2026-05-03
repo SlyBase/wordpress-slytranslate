@@ -44,7 +44,8 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			return $language_code === $default_language ? $value : '';
 		}
 
-		$pattern = '/\[\:' . preg_quote( $language_code, '/' ) . '\](.*?)\[\/' . preg_quote( $language_code, '/' ) . '\]/s';
+		// WPGlobus format: {:lang}text{:}
+		$pattern = '/\{:' . preg_quote( $language_code, '/' ) . '\}([\S\s]*?)\{:\}/m';
 		if ( preg_match( $pattern, $value, $matches ) ) {
 			return $matches[1];
 		}
@@ -240,8 +241,11 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 
 		if ( class_exists( 'WPGlobus', false ) ) {
 			$config = \WPGlobus::Config();
-			if ( isset( $config->languages ) && is_array( $config->languages ) ) {
-				return $config->languages;
+			// WPGlobus 3.x uses enabled_languages; older versions used languages or open_languages.
+			foreach ( array( 'enabled_languages', 'open_languages', 'languages' ) as $prop ) {
+				if ( isset( $config->$prop ) && is_array( $config->$prop ) ) {
+					return $config->$prop;
+				}
 			}
 		}
 
@@ -259,7 +263,8 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 	}
 
 	private function has_wpglobus_markup( string $value ): bool {
-		return (bool) preg_match( '/\[\/[a-z]{2,10}\]/', $value );
+		// WPGlobus format: {:lang}text{:} — detect opening language tag.
+		return (bool) preg_match( '/\{:[a-z]{2,10}\}/', $value );
 	}
 
 	private function extract_language_value( string $value, string $language_code, string $default_language ): string {
@@ -271,7 +276,8 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			return $language_code === $default_language ? $value : '';
 		}
 
-		$pattern = '/\[\:' . preg_quote( $language_code, '/' ) . '\](.*?)\[\/' . preg_quote( $language_code, '/' ) . '\]/s';
+		// WPGlobus format: {:lang}text{:}
+		$pattern = '/\{:' . preg_quote( $language_code, '/' ) . '\}([\S\s]*?)\{:\}/m';
 		if ( preg_match( $pattern, $value, $matches ) ) {
 			return $matches[1];
 		}
@@ -292,19 +298,24 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			return $existing_value;
 		}
 
+		// WPGlobus tag helper: {:lang}text{:}
+		$make_tag = static function ( string $lang, string $text ): string {
+			return '{:' . $lang . '}' . $text . '{:}';
+		};
+
 		if ( ! $this->has_wpglobus_markup( $existing_value ) ) {
 			// Plain value – wrap source in its language tag, append target.
 			$result = '';
 			if ( '' !== $source_language && '' !== $source_fallback ) {
-				$result .= '[:' . $source_language . ']' . $source_fallback . '[/' . $source_language . ']';
+				$result .= $make_tag( $source_language, $source_fallback );
 			}
-			$result .= '[:' . $target_language . ']' . $target_value . '[/' . $target_language . ']';
+			$result .= $make_tag( $target_language, $target_value );
 			return $result;
 		}
 
 		// Value already has WPGlobus markup – replace or insert target segment.
-		$target_pattern = '/\[\:' . preg_quote( $target_language, '/' ) . '\].*?\[\/' . preg_quote( $target_language, '/' ) . '\]/s';
-		$replacement    = '[:' . $target_language . ']' . $target_value . '[/' . $target_language . ']';
+		$target_pattern = '/\{:' . preg_quote( $target_language, '/' ) . '\}[\S\s]*?\{:\}/m';
+		$replacement    = $make_tag( $target_language, $target_value );
 
 		if ( preg_match( $target_pattern, $existing_value ) ) {
 			return (string) preg_replace( $target_pattern, $replacement, $existing_value );
@@ -312,9 +323,9 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 
 		// Ensure source segment exists if it is missing.
 		if ( '' !== $source_language ) {
-			$source_pattern = '/\[\:' . preg_quote( $source_language, '/' ) . '\].*?\[\/' . preg_quote( $source_language, '/' ) . '\]/s';
+			$source_pattern = '/\{:' . preg_quote( $source_language, '/' ) . '\}[\S\s]*?\{:\}/m';
 			if ( ! preg_match( $source_pattern, $existing_value ) && '' !== $source_fallback ) {
-				$existing_value .= '[:' . $source_language . ']' . $source_fallback . '[/' . $source_language . ']';
+				$existing_value .= $make_tag( $source_language, $source_fallback );
 			}
 		}
 

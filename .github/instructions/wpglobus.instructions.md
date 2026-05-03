@@ -10,8 +10,10 @@ description: 'WPGlobus adapter implementation rules for SlyTranslate'
 WPGlobus stores all language variants in a **single post** with inline markup:
 
 ```
-[:en]Hello world[/en][:de]Hallo Welt[/de][:fr]Bonjour le monde[/fr]
+{:en}Hello world{:}{:de}Hallo Welt{:}{:fr}Bonjour le monde{:}
 ```
+
+> **Important:** WPGlobus uses **curly braces** `{:lang}text{:}`, NOT square brackets. The closing tag is always `{:}` (no language code in the closing tag).
 
 This pattern applies to:
 - `post_title`
@@ -23,14 +25,29 @@ This pattern applies to:
 
 | Function | Purpose |
 |---|---|
-| `wpglobus_current_language()` | Returns current language code (e.g. `'en'`) |
-| `wpglobus_languages_list()` | Returns array of configured language codes |
-| `WPGlobus()->Shared->Config->Languages->Layer->get_languages_code()` | Low-level language list |
-| `wpglobus()->get_languages_code()` | Alternative accessor |
+| `wpglobus_current_language()` | Returns current language code (may not exist in v3.x) |
+| `wpglobus_languages_list()` | Returns array of configured language codes (may not exist in v3.x) |
+| `wpglobus_default_language()` | Returns the default language code |
+| `WPGlobus::Config()->enabled_languages` | Array of active language codes (WPGlobus 3.x) |
+| `WPGlobus::Config()->default_language` | Default language code string |
+| `WPGlobus::Config()->en_language_name` | Map of language code → English name |
+| `WPGlobus::LOCALE_TAG` | Tag format constant: `{:%s}%s{:}` |
+| `WPGlobus::LOCALE_TAG_OPEN` | `{:` |
+| `WPGlobus::LOCALE_TAG_CLOSE` | `}` |
+| `WPGlobus::LOCALE_TAG_END` | `{:}` |
 
-**Detection:**
+**Detection (works across all WPGlobus versions):**
 ```php
 class_exists( 'WPGlobus', false ) || function_exists( 'wpglobus_current_language' )
+```
+
+**Language list (WPGlobus 3.x uses `enabled_languages`, older versions used `languages` or `open_languages`):**
+```php
+foreach ( array( 'enabled_languages', 'open_languages', 'languages' ) as $prop ) {
+    if ( isset( $config->$prop ) && is_array( $config->$prop ) ) {
+        return $config->$prop;
+    }
+}
 ```
 
 ## 3. Adapter Contract (implements TranslationPluginAdapter)
@@ -49,29 +66,23 @@ The `WpglobusAdapter` must implement all methods from `TranslationPluginAdapter`
 ### Extract language variant from WPGlobus markup
 
 ```php
-private function get_language_variant( string $value, string $language_code ): string {
-    // Parse [:lang]...[/lang] blocks using regex or WPGlobus helper
-    // Return the segment matching $language_code
-    // Return empty string if language not found
-    // Return original value if no markup detected (single-language post)
+public function get_language_variant( string $value, string $language_code ): string {
+    // WPGlobus format: {:lang}text{:}
+    $pattern = '/{:' . preg_quote( $language_code, '/' ) . '}([\S\s]*?){:}/m';
+    preg_match( $pattern, $value, $matches );
 }
-```
-
-**Regex pattern:**
-```php
-$pattern = '/\[(' . preg_quote( $language_code, '/' ) . ')\](.*?)\[\/\1\]/s';
-preg_match( $pattern, $value, $matches );
 ```
 
 ### Merge translated variant into WPGlobus markup
 
 ```php
 private function merge_language_value( string $existing_value, string $target_language, string $target_value ): string {
+    $make_tag = static fn( string $lang, string $text ) => '{:' . $lang . '}' . $text . '{:}';
     // If existing value has WPGlobus markup:
-    //   - Replace or insert the target_language segment
+    //   - Replace: preg_replace( '/{:lang}[\S\s]*?{:}/m', $make_tag($lang, $text), $value )
+    //   - Or insert: append $make_tag($lang, $text)
     // If no markup detected:
-    //   - Wrap target_value with [:target_language]...[/target_language]
-    //   - Keep existing non-target segments intact
+    //   - Wrap source: $make_tag($source_lang, $source_text) . $make_tag($target_lang, $text)
 }
 ```
 
@@ -125,36 +136,43 @@ private function merge_language_value( string $existing_value, string $target_la
 
 3. **MCP smoke test:**
    - Use `ai-translate/translate-content` on post 7
-   - Model: `Qwen3.6-35B-A3B-UD-IQ3_XXS`
+   - Model: `Ministral-8B-Instruct-2410-Q4_K_M`
    - Additional instruction: `Anreden mit "du" statt "Sie". junger aber professioneller ton.`
-   - Verify resulting post content has correct `[:en]...[:de]...` markup
+   - Verify resulting post content has correct `{:en}...{:}{:de}...{:}` markup
 
 ## 9. Key Differences from WP Multilang
 
 | Aspect | WP Multilang | WPGlobus |
 |---|---|---|
-| Tag format | `[:en]...[:de]...` (no closing tag) | `[:en]...[/en][:de]...[/de]` (closing tag required) |
-| API functions | `wpm_string_to_ml_array()`, `wpm_ml_array_to_string()` | Regex parsing, `wpglobus_current_language()` |
-| Language config | `wpm_get_languages()` | `wpglobus_languages_list()` or `WPGlobus()->Shared->Config->Languages->Layer->get_languages_code()` |
-| Default language | `wpm_get_default_language()` | `wpglobus_default_language()` or config option |
+| Tag format | `[:en]text[:]` (square brackets, no closing lang tag) | `{:en}text{:}` (curly braces, generic closing tag) |
+| API functions | `wpm_string_to_ml_array()`, `wpm_ml_array_to_string()` | `WPGlobus::Config()->enabled_languages`, regex parsing |
+| Language config | `wpm_get_languages()` | `WPGlobus::Config()->enabled_languages` (v3.x) |
+| Default language | `wpm_get_default_language()` | `WPGlobus::Config()->default_language` |
 | Meta handling | Automatic per configured keys | Opt-in per custom field |
 | Post-type support | `wpm_get_post_config()` | All types (no per-type toggle) |
 
 ## 10. Regex Patterns for WPGlobus Markup
 
-**Extract segment:**
+**Extract segment (`{:lang}text{:}`):**
 ```php
-$pattern = '/\[' . preg_quote( $lang, '/' ) . '\](.*?)\[\/' . preg_quote( $lang, '/' ) . '\]/s';
+$pattern = '/\{:' . preg_quote( $lang, '/' ) . '\}([\S\s]*?)\{:\}/m';
 ```
 
 **Strip all markup (for raw content):**
 ```php
-$pattern = '/\[\/?[a-z]+\](.*?)\[\/[a-z]+\]/s';
+$pattern = '/\{:[a-z]{2,10}\}[\S\s]*?\{:\}/m';
 ```
 
 **Detect if value contains WPGlobus markup:**
 ```php
-boolval( preg_match( '/\[\/?[a-z]+\]/', $value ) )
+boolval( preg_match( '/\{:[a-z]{2,10}\}/', $value ) )
+```
+
+**Generate a tag:**
+```php
+sprintf( WPGlobus::LOCALE_TAG, $language, $text ) // "{:en}Hello{:}"
+// or equivalently:
+'{:' . $language . '}' . $text . '{:}'
 ```
 
 ## 11. Security Considerations
