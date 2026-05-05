@@ -58,6 +58,7 @@ class AI_Translate {
 					new PolylangAdapter(),
 					new WpMultilangAdapter(),
 					new WpglobusAdapter(),
+					new TranslatePressAdapter(),
 				)
 			);
 
@@ -75,7 +76,9 @@ class AI_Translate {
 
 	public static function is_single_entry_translation_mode(): bool {
 		$adapter = self::get_adapter();
-		return $adapter instanceof WpMultilangAdapter || $adapter instanceof WpglobusAdapter;
+		return $adapter instanceof WpMultilangAdapter
+			|| $adapter instanceof WpglobusAdapter
+			|| $adapter instanceof TranslatePressAdapter;
 	}
 
 	public static function current_user_can_access_translation_abilities(): bool {

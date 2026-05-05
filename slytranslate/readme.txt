@@ -55,12 +55,12 @@ Use SlyTranslate when you need one consistent translation workflow for:
 * WordPress 6.9+
 * PHP 8.1+
 * An AI connector configured in WordPress (Settings > Connectors)
-* A supported language plugin (Polylang, WP Multilang, or WPGlobus) for content-translation workflows across posts/pages/CPTs
+* A supported language plugin (Polylang, WP Multilang, WPGlobus, or TranslatePress Multilingual) for content-translation workflows across posts/pages/CPTs
 * WordPress MCP Adapter if you want MCP discovery
 
 **Supported plugins:**
 
-* Language plugin: Polylang, WP Multilang, WPGlobus
+* Language plugin: Polylang, WP Multilang, WPGlobus, TranslatePress Multilingual
 * SEO plugins: Genesis SEO, Yoast SEO, Rank Math, All in One SEO, The SEO Framework, SEOpress, Slim SEO
 
 **Supported model profiles:**
@@ -82,7 +82,7 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 2. In wp-admin, go to Plugins > Add New and search for "SlyTranslate".
 3. Install and activate SlyTranslate.
 4. Install and configure an AI connector in Settings > Connectors.
-5. Optional for content translation: install and activate Polylang, WP Multilang, or WPGlobus.
+5. Optional for content translation: install and activate Polylang, WP Multilang, WPGlobus, or TranslatePress Multilingual.
 6. Optional for local llama.cpp models: install AI Provider for llama.cpp.
 7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
 8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
@@ -93,7 +93,7 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 2. Copy the `slytranslate` directory to `/wp-content/plugins/`.
 3. Activate SlyTranslate in wp-admin.
 4. Install and configure an AI connector in Settings > Connectors.
-5. Optional for content translation: install and activate Polylang, WP Multilang, or WPGlobus.
+5. Optional for content translation: install and activate Polylang, WP Multilang, WPGlobus, or TranslatePress Multilingual.
 6. Optional for local llama.cpp models: install AI Provider for llama.cpp.
 7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
 8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
@@ -110,7 +110,7 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 
 = Does this work without a language plugin? =
 
-Yes, for text and block translation (`translate-text`, `translate-blocks`, inline selected-text workflow). Content translation workflows require a supported language plugin (Polylang, WP Multilang, or WPGlobus).
+Yes, for text and block translation (`translate-text`, `translate-blocks`, inline selected-text workflow). Content translation workflows require a supported language plugin (Polylang, WP Multilang, WPGlobus, or TranslatePress Multilingual).
 
 = Where are API keys configured? =
 
