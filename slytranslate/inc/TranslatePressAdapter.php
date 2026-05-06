@@ -40,6 +40,14 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 		return $result;
 	}
 
+	/**
+	 * TranslatePress stores source content directly in the post (no inline markup),
+	 * so the value itself is always the language variant for the default language.
+	 */
+	public function get_language_variant( string $value, string $language_code ): string {
+		return $value;
+	}
+
 	public function get_post_language( int $post_id ): ?string {
 		$settings = get_option( 'trp_settings', array() );
 		$default  = isset( $settings['default-language'] ) ? (string) $settings['default-language'] : '';

@@ -3,10 +3,12 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+## [1.8.0]
+### Features
+- TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 
 ## [1.7.0]
 ### Features
-- TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 - WPGlobus support: SlyTranslate now detects WPGlobus and translates content stored in the `{:lang}text{:}` single-post format.
 
 ### Fixes
