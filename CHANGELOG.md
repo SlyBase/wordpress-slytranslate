@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Features
 - TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 
+### Fixes
+- Paragraph blocks containing inline tags (`<a>`, `<code>`, `<strong>`, …) are no longer silently left untranslated when the model drops tags during the unwrap optimisation: failed inline-tag retries now fall through to translate the full inner HTML instead of keeping the source block.
+
 ## [1.7.0]
 ### Features
 - WPGlobus support: SlyTranslate now detects WPGlobus and translates content stored in the `{:lang}text{:}` single-post format.

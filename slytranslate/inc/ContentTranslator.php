@@ -619,14 +619,22 @@ class ContentTranslator {
 						if ( ! self::has_inline_formatting_loss( $inner_html, $retry_reconstructed ) ) {
 							$translated_inner = $retry_reconstructed;
 						} else {
-							return self::inline_formatting_loss_error();
+							// Both unwrap attempts dropped inline tags; fall through to the
+							// full inner-HTML path which sends the complete <p>…</p> to the
+							// model with an explicit tag-preservation instruction.
+							$translated_inner = null;
 						}
 					} else {
-						return self::inline_formatting_loss_error();
+						// Retry model call failed; fall through to inner-HTML path.
+						$translated_inner = null;
 					}
 				}
 
-				return $block_comments[0] . "\n" . $translated_inner . "\n" . $block_comments[1];
+				if ( null !== $translated_inner ) {
+					return $block_comments[0] . "\n" . $translated_inner . "\n" . $block_comments[1];
+				}
+				// Inline-tag preservation failed in both unwrap attempts; fall through to
+				// translate the full inner HTML with explicit tag-preservation instructions.
 			}
 
 			// No safe single-element unwrap available (multiple top-level elements or nested
