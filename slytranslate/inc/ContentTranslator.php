@@ -658,9 +658,13 @@ class ContentTranslator {
 					&& ! self::has_inline_formatting_loss( $inner_html, (string) $retry_inline )
 				) {
 					$translated_inner = $retry_inline;
-				} else {
-					return self::inline_formatting_loss_error();
+				} elseif ( ! is_wp_error( $retry_inline ) ) {
+					// The strict retry also lost some inline tags but returned a
+					// translation. Accept it — a block with minor formatting loss is
+					// far better UX than leaving the entire block in the source language.
+					$translated_inner = $retry_inline;
 				}
+				// If $retry_inline is a WP_Error, keep $translated_inner from attempt 3.
 			}
 
 			if ( is_wp_error( $translated_inner ) ) {

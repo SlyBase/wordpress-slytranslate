@@ -1,6 +1,7 @@
 = 1.8.0 =
 * TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 * Paragraph blocks containing inline tags (<a>, <code>, <strong>, ...) are no longer silently left untranslated when the model drops tags during the unwrap optimisation: failed inline-tag retries now fall through to translate the full inner HTML instead of keeping the source block.
+* When all four translation attempts fail to preserve inline tags in a block, the best available translated result is now accepted instead of silently keeping the entire block in the source language.
 
 = 1.7.0 =
 * WPGlobus support: SlyTranslate now detects WPGlobus and translates content stored in the {:lang}text{:} single-post format.

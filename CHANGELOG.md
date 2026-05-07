@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixes
 - Paragraph blocks containing inline tags (`<a>`, `<code>`, `<strong>`, …) are no longer silently left untranslated when the model drops tags during the unwrap optimisation: failed inline-tag retries now fall through to translate the full inner HTML instead of keeping the source block.
+- When all four translation attempts fail to preserve inline tags in a block, the best available translated result is now accepted instead of silently keeping the entire block in the source language.
 
 ## [1.7.0]
 ### Features
