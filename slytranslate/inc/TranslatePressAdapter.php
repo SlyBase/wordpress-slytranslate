@@ -303,8 +303,8 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 
 		if ( count( $original_segments ) === count( $translated_segments ) && ! empty( $original_segments ) ) {
 			foreach ( $original_segments as $i => $original_segment ) {
-				if ( '' !== trim( $original_segment ) ) {
-					$pairs[ $original_segment ] = $translated_segments[ $i ];
+				foreach ( $this->build_segment_lookup_keys( $original_segment ) as $lookup_key ) {
+					$pairs[ $lookup_key ] = $translated_segments[ $i ];
 				}
 			}
 			return $pairs;
@@ -343,14 +343,48 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 		$segments = array();
 		foreach ( $text_nodes as $node ) {
 			$text = (string) $node->nodeValue;
-			// Collapse consecutive whitespace characters into a single space.
-			$normalized = preg_replace( '/\s+/', ' ', $text ) ?? $text;
-			if ( '' !== trim( $normalized ) ) {
+			$normalized = $this->normalize_segment_whitespace( $text );
+			if ( '' !== $this->trim_segment_whitespace( $normalized ) ) {
 				$segments[] = $normalized;
 			}
 		}
 
 		return $segments;
+	}
+
+	/**
+	 * Build exact-match lookup keys for one TranslatePress text segment.
+	 *
+	 * TranslatePress can persist the same visible text both with and without
+	 * boundary whitespace around inline elements. Writing both variants keeps
+	 * lookups stable across those parser differences.
+	 *
+	 * @return string[]
+	 */
+	private function build_segment_lookup_keys( string $segment ): array {
+		$normalized = $this->normalize_segment_whitespace( $segment );
+		$trimmed    = $this->trim_segment_whitespace( $normalized );
+
+		if ( '' === $trimmed ) {
+			return array();
+		}
+
+		$keys = array( $normalized );
+		if ( $trimmed !== $normalized ) {
+			$keys[] = $trimmed;
+		}
+
+		return array_values( array_unique( $keys ) );
+	}
+
+	private function normalize_segment_whitespace( string $value ): string {
+		$normalized = preg_replace( '/[\p{Z}\s]+/u', ' ', $value );
+		return is_string( $normalized ) ? $normalized : $value;
+	}
+
+	private function trim_segment_whitespace( string $value ): string {
+		$trimmed = preg_replace( '/^[\p{Z}\s]+|[\p{Z}\s]+$/u', '', $value );
+		return is_string( $trimmed ) ? $trimmed : trim( $value );
 	}
 
 	/**

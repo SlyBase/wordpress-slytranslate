@@ -391,6 +391,85 @@ class TranslatePressAdapterTest extends TestCase {
 		$this->assertSame( 'en_US', $spy->insert_calls[0]['lang'] );
 	}
 
+	public function test_create_translation_inserts_trimmed_lookup_variants_for_link_boundary_segments(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		foreach (
+			array(
+				'In diesem ersten Teil zeige ich, wie die Einrichtung aussieht: von dem WordPress Connector, der über ',
+				'In diesem ersten Teil zeige ich, wie die Einrichtung aussieht: von dem WordPress Connector, der über',
+				' die erste echte Übersetzung eines Beitrags durchführt.',
+				'die erste echte Übersetzung eines Beitrags durchführt.',
+			) as $index => $original
+		) {
+			$id_row              = new \stdClass();
+			$id_row->original    = $original;
+			$id_row->id          = $index + 1;
+			$id_row->original_id = $index + 100;
+			$spy->string_ids_result[] = $id_row;
+		}
+
+		$post               = new \WP_Post();
+		$post->ID           = 15;
+		$post->post_title   = 'Titel';
+		$post->post_excerpt = '';
+		$post->post_content = '<p>In diesem ersten Teil zeige ich, wie die Einrichtung aussieht: von dem WordPress Connector, der über&nbsp;<a href="https://github.com/SlyBase/wordpress-slytranslate">SlyTranslate</a>&nbsp;die erste echte Übersetzung eines Beitrags durchführt.</p>';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$this->adapter->create_translation(
+			15,
+			'en',
+			array(
+				'post_content' => '<p>In this first part, I show what the setup looks like: from the WordPress Connector, which performs the first real translation of a post via <a href="https://github.com/SlyBase/wordpress-slytranslate">SlyTranslate</a>.</p>',
+				'overwrite'    => true,
+			)
+		);
+
+		$this->assertCount( 1, $spy->insert_calls );
+		$this->assertContains(
+			'In diesem ersten Teil zeige ich, wie die Einrichtung aussieht: von dem WordPress Connector, der über ',
+			$spy->insert_calls[0]['strings']
+		);
+		$this->assertContains(
+			'In diesem ersten Teil zeige ich, wie die Einrichtung aussieht: von dem WordPress Connector, der über',
+			$spy->insert_calls[0]['strings']
+		);
+		$this->assertContains(
+			' die erste echte Übersetzung eines Beitrags durchführt.',
+			$spy->insert_calls[0]['strings']
+		);
+		$this->assertContains(
+			'die erste echte Übersetzung eines Beitrags durchführt.',
+			$spy->insert_calls[0]['strings']
+		);
+
+		$this->assertCount( 1, $spy->update_calls );
+		$updated_originals = array_column( $spy->update_calls[0]['rows'], 'original' );
+		$this->assertContains(
+			'In diesem ersten Teil zeige ich, wie die Einrichtung aussieht: von dem WordPress Connector, der über ',
+			$updated_originals
+		);
+		$this->assertContains(
+			'In diesem ersten Teil zeige ich, wie die Einrichtung aussieht: von dem WordPress Connector, der über',
+			$updated_originals
+		);
+		$this->assertContains(
+			' die erste echte Übersetzung eines Beitrags durchführt.',
+			$updated_originals
+		);
+		$this->assertContains(
+			'die erste echte Übersetzung eines Beitrags durchführt.',
+			$updated_originals
+		);
+	}
+
 	// -----------------------------------------------------------------------
 	// link_translation
 	// -----------------------------------------------------------------------
