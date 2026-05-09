@@ -30,6 +30,11 @@ class TimingLogger {
 		'ai_calls'  => 0,
 		'retries'   => 0,
 		'fallbacks' => 0,
+		'tiny_calls' => 0,
+		'micro_batch_candidates' => 0,
+		'micro_batch_hits' => 0,
+		'list_batch_candidates' => 0,
+		'list_batch_hits' => 0,
 	);
 
 	/* ---------------------------------------------------------------
@@ -61,6 +66,11 @@ class TimingLogger {
 			'ai_calls'  => 0,
 			'retries'   => 0,
 			'fallbacks' => 0,
+			'tiny_calls' => 0,
+			'micro_batch_candidates' => 0,
+			'micro_batch_hits' => 0,
+			'list_batch_candidates' => 0,
+			'list_batch_hits' => 0,
 		);
 	}
 

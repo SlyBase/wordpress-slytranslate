@@ -146,14 +146,36 @@ class PostTranslationService {
 		try {
 			// Build extra candidates so title and excerpt can be folded into the
 			// meta batch when they are short enough — saving up to 2 API calls.
+			$batch_eligible_candidates = array();
 			$extra_candidates  = array();
 			$batch_title_key   = '_slytranslate_title';
 			$batch_excerpt_key = '_slytranslate_excerpt';
-			$will_batch_title  = $translate_title
+			$title_batch_eligible = $translate_title
 				&& '' !== $post->post_title
 				&& self::char_length( $post->post_title ) <= 1000;
-			$will_batch_excerpt = '' !== trim( $post->post_excerpt )
+			$excerpt_batch_eligible = '' !== trim( $post->post_excerpt )
 				&& self::char_length( $post->post_excerpt ) <= 1000;
+			if ( $title_batch_eligible ) {
+				$batch_eligible_candidates[ $batch_title_key ] = $post->post_title;
+			}
+			if ( $excerpt_batch_eligible ) {
+				$batch_eligible_candidates[ $batch_excerpt_key ] = $post->post_excerpt;
+			}
+
+			$meta_for_batch   = is_array( $all_meta ) ? $all_meta : array();
+			$meta_key_config  = MetaTranslationService::get_effective_meta_key_config( $post_id, $meta_for_batch );
+			$batch_candidates = MetaTranslationService::count_batch_eligible_candidates( $meta_for_batch, $meta_key_config, $batch_eligible_candidates );
+
+			$will_batch_title = $title_batch_eligible && $batch_candidates >= 2;
+			$will_batch_excerpt = $excerpt_batch_eligible && $batch_candidates >= 2;
+
+			if ( $title_batch_eligible && ! $will_batch_title ) {
+				TimingLogger::log( 'title_batch_defer_skipped', array(
+					'reason' => 'insufficient_batch_candidates',
+					'candidates' => $batch_candidates,
+				) );
+			}
+
 			if ( $will_batch_title ) {
 				$extra_candidates[ $batch_title_key ] = $post->post_title;
 			}
@@ -379,6 +401,11 @@ class PostTranslationService {
 			'ai_calls'    => $counters['ai_calls'] ?? 0,
 			'retries'     => $counters['retries'] ?? 0,
 			'fallbacks'   => $counters['fallbacks'] ?? 0,
+			'tiny_calls'  => $counters['tiny_calls'] ?? 0,
+			'micro_batch_candidates' => $counters['micro_batch_candidates'] ?? 0,
+			'micro_batch_hits' => $counters['micro_batch_hits'] ?? 0,
+			'list_batch_candidates' => $counters['list_batch_candidates'] ?? 0,
+			'list_batch_hits' => $counters['list_batch_hits'] ?? 0,
 			'ok'          => $ok,
 			'reason'      => $reason,
 		) );

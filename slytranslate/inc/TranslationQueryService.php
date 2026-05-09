@@ -191,8 +191,12 @@ class TranslationQueryService {
 			return 0;
 		}
 
-		$translations       = $adapter->get_post_translations( $post_id );
-		$translated_post_id = isset( $translations[ $target_language ] ) ? absint( $translations[ $target_language ] ) : 0;
+		if ( $adapter instanceof TranslatePressAdapter ) {
+			$translated_post_id = $adapter->get_post_translation_for_language( $post_id, $target_language );
+		} else {
+			$translations       = $adapter->get_post_translations( $post_id );
+			$translated_post_id = isset( $translations[ $target_language ] ) ? absint( $translations[ $target_language ] ) : 0;
+		}
 
 		if ( $translated_post_id < 1 || false === get_post_status( $translated_post_id ) ) {
 			return 0;

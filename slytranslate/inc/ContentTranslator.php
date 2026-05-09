@@ -12,6 +12,14 @@ defined( 'ABSPATH' ) || exit;
  */
 class ContentTranslator {
 
+	private const LIST_ITEM_BATCH_MIN_ITEMS = 2;
+	private const LIST_ITEM_BATCH_MAX_ITEMS = 12;
+	private const LIST_ITEM_BATCH_MAX_CHARS = 1800;
+	private const MICRO_BATCH_MIN_ITEMS = 3;
+	private const MICRO_BATCH_MAX_ITEMS = 12;
+	private const MICRO_BATCH_MAX_CHARS = 2200;
+	private const TINY_GROUP_CHAR_THRESHOLD = 260;
+
 	/**
 	 * Translate full post content, using the block parser when available.
 	 *
@@ -153,17 +161,35 @@ class ContentTranslator {
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
 			}
 
+			$micro_batch = self::translate_short_non_list_blocks_batch( $group, $to, $from, $additional_prompt );
+			if ( is_string( $micro_batch ) ) {
+				$sections[] = $micro_batch;
+				continue;
+			}
+
 			$group_started   = TimingLogger::start();
 			$calls_before    = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+			$group_chars     = function_exists( 'serialize_blocks' ) && function_exists( 'mb_strlen' )
+				? (int) mb_strlen( serialize_blocks( $group ), 'UTF-8' )
+				: 0;
 			$translated      = self::translate_serialized_blocks( $group, $to, $from, $additional_prompt );
 			$calls_after     = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
+			$subcalls        = $calls_after - $calls_before;
+
+			if ( $group_chars > 0 && $group_chars <= self::TINY_GROUP_CHAR_THRESHOLD && $subcalls > 0 ) {
+				TimingLogger::increment( 'tiny_calls', $subcalls );
+				TimingLogger::log( 'content_tiny_group', array(
+					'blocks'   => count( $group ),
+					'chars'    => $group_chars,
+					'subcalls' => $subcalls,
+				) );
+			}
+
 			$ok              = ! is_wp_error( $translated );
 			TimingLogger::log( 'content_group_done', array(
 				'blocks'      => count( $group ),
-				'chars'       => function_exists( 'serialize_blocks' ) && function_exists( 'mb_strlen' )
-					? (int) mb_strlen( serialize_blocks( $group ), 'UTF-8' )
-					: 0,
-				'subcalls'    => $calls_after - $calls_before,
+				'chars'       => $group_chars,
+				'subcalls'    => $subcalls,
 				'duration_ms' => TimingLogger::stop( $group_started ),
 				'ok'          => $ok,
 				'reason'      => $ok ? '' : $translated->get_error_code(),
@@ -442,7 +468,8 @@ class ContentTranslator {
 			return false;
 		}
 
-		if ( 'core/list' !== ( $block['blockName'] ?? '' ) ) {
+		$block_name = $block['blockName'] ?? '';
+		if ( ! in_array( $block_name, array( 'core/list', 'core/group', 'core/quote', 'core/columns', 'core/column' ), true ) ) {
 			return false;
 		}
 
@@ -460,16 +487,21 @@ class ContentTranslator {
 		string $from,
 		string $additional_prompt
 	): mixed {
-		$translated_inner_blocks = array();
-		foreach ( $block['innerBlocks'] as $inner_block ) {
-			if ( TranslationProgressTracker::is_cancelled() ) {
-				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+		$list_item_batch = self::translate_simple_list_items_batch( $block, $to, $from, $additional_prompt );
+		if ( is_array( $list_item_batch ) ) {
+			$translated_inner_blocks = $list_item_batch;
+		} else {
+			$translated_inner_blocks = array();
+			foreach ( $block['innerBlocks'] as $inner_block ) {
+				if ( TranslationProgressTracker::is_cancelled() ) {
+					return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
+				}
+				$inner_result = self::translate_single_block( $inner_block, $to, $from, $additional_prompt );
+				if ( is_wp_error( $inner_result ) ) {
+					return $inner_result;
+				}
+				$translated_inner_blocks[] = $inner_result;
 			}
-			$inner_result = self::translate_single_block( $inner_block, $to, $from, $additional_prompt );
-			if ( is_wp_error( $inner_result ) ) {
-				return $inner_result;
-			}
-			$translated_inner_blocks[] = $inner_result;
 		}
 
 		// Reconstruct: use the block's innerContent template which interleaves
@@ -496,6 +528,354 @@ class ContentTranslator {
 		$close_comment = '<!-- /wp:' . $block_name . ' -->';
 
 		return $open_comment . "\n" . $output . "\n" . $close_comment;
+	}
+
+	/**
+	 * Try to translate simple list-item inner blocks in a single JSON batch call.
+	 *
+	 * Returns null when the block is not an eligible list shape or when any
+	 * batch step fails; callers then fall back to the existing per-item path.
+	 *
+	 * @return string[]|null Serialized translated list-item blocks or null.
+	 */
+	private static function translate_simple_list_items_batch(
+		array $block,
+		string $to,
+		string $from,
+		string $additional_prompt
+	): ?array {
+		if ( 'core/list' !== ( $block['blockName'] ?? '' ) ) {
+			return self::skip_list_batch( 'not_core_list' );
+		}
+
+		TimingLogger::increment( 'list_batch_candidates' );
+
+		$inner_blocks = $block['innerBlocks'] ?? array();
+		if ( ! is_array( $inner_blocks ) ) {
+			return self::skip_list_batch( 'inner_blocks_not_array' );
+		}
+
+		$inner_count = count( $inner_blocks );
+		if ( $inner_count < self::LIST_ITEM_BATCH_MIN_ITEMS || $inner_count > self::LIST_ITEM_BATCH_MAX_ITEMS ) {
+			return self::skip_list_batch( 'item_count_out_of_range', array( 'items' => $inner_count ) );
+		}
+
+		$candidates   = array();
+		$metadata     = array();
+		$item_plan    = array();
+		$total_chars  = 0;
+
+		foreach ( $inner_blocks as $index => $inner_block ) {
+			if ( ! is_array( $inner_block ) || 'core/list-item' !== ( $inner_block['blockName'] ?? '' ) ) {
+				return self::skip_list_batch( 'non_list_item_inner_block', array( 'index' => $index ) );
+			}
+
+			if ( ! empty( $inner_block['innerBlocks'] ) ) {
+				$item_plan[] = array(
+					'type'  => 'recursive',
+					'block' => $inner_block,
+					'index' => $index,
+				);
+				continue;
+			}
+
+			$serialized = serialize_blocks( array( $inner_block ) );
+			if ( '' === trim( $serialized ) ) {
+				return self::skip_list_batch( 'empty_serialized_inner_block', array( 'index' => $index ) );
+			}
+
+			$matches = array();
+			$count   = preg_match_all( '/<!--\s*\/?wp:[^>]+-->/iu', $serialized, $matches );
+			if ( false === $count || empty( $matches[0] ) || ! is_array( $matches[0] ) ) {
+				return self::skip_list_batch( 'missing_block_comments', array( 'index' => $index ) );
+			}
+
+			$block_comments = $matches[0];
+			$inner_html     = self::extract_simple_wrapper_inner_html( $serialized, $block_comments );
+			if ( null === $inner_html ) {
+				return self::skip_list_batch( 'inner_html_extraction_failed', array( 'index' => $index ) );
+			}
+
+			$list_item_parts = self::extract_list_item_content_parts( $inner_html );
+			if ( null === $list_item_parts ) {
+				return self::skip_list_batch( 'list_item_wrapper_parse_failed', array( 'index' => $index ) );
+			}
+
+			$item_key                = 'item_' . $index;
+			$candidates[ $item_key ] = $list_item_parts['content'];
+			$metadata[ $item_key ]   = array(
+				'open_tag'      => $list_item_parts['open_tag'],
+				'close_tag'     => $list_item_parts['close_tag'],
+				'open_comment'  => $block_comments[0],
+				'close_comment' => $block_comments[ count( $block_comments ) - 1 ],
+			);
+			$item_plan[] = array(
+				'type' => 'batch',
+				'key'  => $item_key,
+				'index'=> $index,
+			);
+
+			$total_chars += function_exists( 'mb_strlen' )
+				? (int) mb_strlen( $list_item_parts['content'], 'UTF-8' )
+				: strlen( $list_item_parts['content'] );
+		}
+
+		if ( count( $candidates ) < self::LIST_ITEM_BATCH_MIN_ITEMS ) {
+			return self::skip_list_batch( 'insufficient_flat_items_for_batch', array( 'items' => count( $candidates ) ) );
+		}
+
+		if ( $total_chars < 1 || $total_chars > self::LIST_ITEM_BATCH_MAX_CHARS ) {
+			return self::skip_list_batch( 'total_chars_out_of_range', array( 'total_chars' => $total_chars ) );
+		}
+
+		$json_input = wp_json_encode( $candidates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		if ( false === $json_input ) {
+			return self::skip_list_batch( 'json_encode_failed' );
+		}
+
+		$json_hint = 'The input is a JSON object of list-item content fragments. Translate only values, preserve inline HTML tags inside values, keep keys unchanged, and return ONLY valid JSON with the identical keys.';
+		$prompt    = '' !== trim( $additional_prompt )
+			? trim( $additional_prompt ) . "\n\n" . $json_hint
+			: $json_hint;
+
+		$result = TranslationRuntime::translate_text( $json_input, $to, $from, $prompt );
+		if ( is_wp_error( $result ) ) {
+			return self::skip_list_batch( 'batch_call_error', array( 'error' => $result->get_error_code() ) );
+		}
+
+		$result_str = trim( (string) $result );
+		$result_str = (string) preg_replace( '/^```(?:json)?\s*/i', '', $result_str );
+		$result_str = (string) preg_replace( '/\s*```\s*$/i', '', $result_str );
+		$decoded    = json_decode( trim( $result_str ), true );
+		if ( ! is_array( $decoded ) ) {
+			return self::skip_list_batch( 'batch_json_decode_failed' );
+		}
+
+		$translated_inner_blocks = array();
+		foreach ( $item_plan as $item_step ) {
+			if ( 'recursive' === $item_step['type'] ) {
+				$recursive = self::translate_single_block( $item_step['block'], $to, $from, $additional_prompt );
+				if ( is_wp_error( $recursive ) ) {
+					return self::skip_list_batch( 'recursive_item_failed', array(
+						'index' => $item_step['index'],
+						'error' => $recursive->get_error_code(),
+					) );
+				}
+				$translated_inner_blocks[] = $recursive;
+				continue;
+			}
+
+			$item_key = $item_step['key'];
+			if ( ! array_key_exists( $item_key, $decoded ) || ! is_string( $decoded[ $item_key ] ) ) {
+				return self::skip_list_batch( 'batch_missing_item_key', array( 'key' => $item_key ) );
+			}
+
+			$source_content     = $candidates[ $item_key ];
+			$translated_content = $decoded[ $item_key ];
+			$validation         = TranslationValidator::validate( $source_content, $translated_content, $to );
+			if ( is_wp_error( $validation ) ) {
+				return self::skip_list_batch( 'batch_item_validation_failed', array(
+					'key'   => $item_key,
+					'error' => $validation->get_error_code(),
+				) );
+			}
+
+			$item_meta = $metadata[ $item_key ];
+			$translated_inner_blocks[] = $item_meta['open_comment']
+				. "\n"
+				. $item_meta['open_tag']
+				. $translated_content
+				. $item_meta['close_tag']
+				. "\n"
+				. $item_meta['close_comment'];
+		}
+
+		TimingLogger::increment( 'list_batch_hits' );
+
+		TimingLogger::log( 'content_list_batch', array(
+			'items'      => count( $translated_inner_blocks ),
+			'batched_items' => count( $candidates ),
+			'recursive_items' => $inner_count - count( $candidates ),
+			'total_chars'=> $total_chars,
+			'subcalls'   => 1,
+		) );
+
+		return $translated_inner_blocks;
+	}
+
+	private static function skip_list_batch( string $reason, array $context = array() ): ?array {
+		$payload = array( 'reason' => $reason );
+		if ( ! empty( $context ) ) {
+			$payload = array_merge( $payload, $context );
+		}
+
+		TimingLogger::log( 'content_list_batch_skip', $payload );
+		return null;
+	}
+
+	/**
+	 * Try a single JSON call for a group of short, simple non-list blocks.
+	 *
+	 * Returns a translated serialized group string on success. Returns null
+	 * when the group is not eligible or when validation fails.
+	 */
+	private static function translate_short_non_list_blocks_batch(
+		array $group,
+		string $to,
+		string $from,
+		string $additional_prompt
+	): ?string {
+		TimingLogger::increment( 'micro_batch_candidates' );
+
+		$group_count = count( $group );
+		if ( $group_count < self::MICRO_BATCH_MIN_ITEMS || $group_count > self::MICRO_BATCH_MAX_ITEMS ) {
+			return self::skip_micro_batch( 'group_size_out_of_range', array( 'blocks' => $group_count ) );
+		}
+
+		$candidates  = array();
+		$metadata    = array();
+		$total_chars = 0;
+
+		foreach ( $group as $index => $block ) {
+			if ( ! is_array( $block ) ) {
+				return self::skip_micro_batch( 'invalid_block_payload', array( 'index' => $index ) );
+			}
+
+			if ( ! empty( $block['innerBlocks'] ) ) {
+				return self::skip_micro_batch( 'block_has_inner_blocks', array( 'index' => $index ) );
+			}
+
+			if ( 'core/list' === ( $block['blockName'] ?? '' ) || 'core/list-item' === ( $block['blockName'] ?? '' ) ) {
+				return self::skip_micro_batch( 'list_block_in_group', array( 'index' => $index ) );
+			}
+
+			$serialized = serialize_blocks( array( $block ) );
+			if ( '' === trim( $serialized ) ) {
+				return self::skip_micro_batch( 'empty_serialized_block', array( 'index' => $index ) );
+			}
+
+			$matches = array();
+			$count   = preg_match_all( '/<!--\s*\/?wp:[^>]+-->/iu', $serialized, $matches );
+			if ( false === $count || empty( $matches[0] ) || ! is_array( $matches[0] ) ) {
+				return self::skip_micro_batch( 'missing_block_comments', array( 'index' => $index ) );
+			}
+
+			$block_comments = $matches[0];
+			$inner_html     = self::extract_simple_wrapper_inner_html( $serialized, $block_comments );
+			if ( null === $inner_html ) {
+				return self::skip_micro_batch( 'inner_html_extraction_failed', array( 'index' => $index ) );
+			}
+
+			$item_key                = 'block_' . $index;
+			$candidates[ $item_key ] = $inner_html;
+			$metadata[ $item_key ]   = array(
+				'open_comment'  => $block_comments[0],
+				'close_comment' => $block_comments[ count( $block_comments ) - 1 ],
+			);
+
+			$total_chars += function_exists( 'mb_strlen' )
+				? (int) mb_strlen( $inner_html, 'UTF-8' )
+				: strlen( $inner_html );
+		}
+
+		if ( $total_chars < 1 || $total_chars > self::MICRO_BATCH_MAX_CHARS ) {
+			return self::skip_micro_batch( 'total_chars_out_of_range', array( 'total_chars' => $total_chars ) );
+		}
+
+		$json_input = wp_json_encode( $candidates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		if ( false === $json_input ) {
+			return self::skip_micro_batch( 'json_encode_failed' );
+		}
+
+		$json_hint = 'The input is a JSON object where each value is inner HTML from one Gutenberg block. Translate only visible text inside the values, preserve all HTML tags and whitespace structure in each value, keep keys unchanged, and return ONLY valid JSON.';
+		$prompt    = '' !== trim( $additional_prompt )
+			? trim( $additional_prompt ) . "\n\n" . $json_hint
+			: $json_hint;
+
+		$result = TranslationRuntime::translate_text( $json_input, $to, $from, $prompt );
+		if ( is_wp_error( $result ) ) {
+			return self::skip_micro_batch( 'batch_call_error', array( 'error' => $result->get_error_code() ) );
+		}
+
+		$result_str = trim( (string) $result );
+		$result_str = (string) preg_replace( '/^```(?:json)?\s*/i', '', $result_str );
+		$result_str = (string) preg_replace( '/\s*```\s*$/i', '', $result_str );
+		$decoded    = json_decode( trim( $result_str ), true );
+		if ( ! is_array( $decoded ) ) {
+			return self::skip_micro_batch( 'batch_json_decode_failed' );
+		}
+
+		$translated = array();
+		foreach ( $candidates as $item_key => $source_inner_html ) {
+			if ( ! array_key_exists( $item_key, $decoded ) || ! is_string( $decoded[ $item_key ] ) ) {
+				return self::skip_micro_batch( 'batch_missing_item_key', array( 'key' => $item_key ) );
+			}
+
+			$validation = TranslationValidator::validate( $source_inner_html, $decoded[ $item_key ], $to );
+			if ( is_wp_error( $validation ) ) {
+				return self::skip_micro_batch( 'batch_item_validation_failed', array(
+					'key'   => $item_key,
+					'error' => $validation->get_error_code(),
+				) );
+			}
+
+			$translated[] = $metadata[ $item_key ]['open_comment']
+				. "\n"
+				. $decoded[ $item_key ]
+				. "\n"
+				. $metadata[ $item_key ]['close_comment'];
+		}
+
+		TimingLogger::increment( 'micro_batch_hits' );
+		TimingLogger::log( 'content_micro_batch', array(
+			'blocks'      => count( $translated ),
+			'total_chars' => $total_chars,
+			'subcalls'    => 1,
+		) );
+
+		return implode( '', $translated );
+	}
+
+	private static function skip_micro_batch( string $reason, array $context = array() ): ?string {
+		$payload = array( 'reason' => $reason );
+		if ( ! empty( $context ) ) {
+			$payload = array_merge( $payload, $context );
+		}
+
+		TimingLogger::log( 'content_micro_batch_skip', $payload );
+		return null;
+	}
+
+	/**
+	 * Extract <li> wrapper and inner content from one list-item fragment.
+	 *
+	 * Accepts nested HTML inside the item content and only requires the outer
+	 * list-item wrapper so the batch path can handle richer real-world list
+	 * markup (e.g. <li><p>..</p></li>) without falling back to per-item calls.
+	 *
+	 * @return array{open_tag:string,close_tag:string,content:string}|null
+	 */
+	private static function extract_list_item_content_parts( string $inner_html ): ?array {
+		$inner_html = trim( $inner_html );
+		if ( '' === $inner_html ) {
+			return null;
+		}
+
+		$matches = array();
+		if ( 1 !== preg_match( '/^(<li\b[^>]*>)([\S\s]*)(<\/li>)$/iu', $inner_html, $matches ) ) {
+			return null;
+		}
+
+		$content = trim( (string) $matches[2] );
+		if ( '' === $content ) {
+			return null;
+		}
+
+		return array(
+			'open_tag'  => (string) $matches[1],
+			'close_tag' => (string) $matches[3],
+			'content'   => $content,
+		);
 	}
 
 	/**

@@ -2,6 +2,16 @@
 Features:
 * TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 
+Changes:
+* TranslatePress existence checks now query only the requested target language and reuse request-local lookups, reducing preflight database work before a translation starts.
+* Content translation now batches eligible simple list items inside single core/list wrappers into one JSON-based model call, reducing list-related subcall fan-out while keeping the existing fallback path for complex lists.
+* List-item batching now accepts richer <li> HTML content and logs deterministic content_list_batch_skip reasons when a list is not batch-eligible, making the next speed bottlenecks directly observable in timing logs.
+* Content translation now attempts JSON micro-batching for groups of short non-list wrapper blocks, reducing tiny per-block model requests in content-heavy posts.
+* Mixed core/list blocks now batch only flat list items and recurse only nested items, preserving structure while still collapsing most list-item calls into one request.
+* Single-block recursive inner-block fast paths now cover additional wrapper block types with inner blocks, reducing avoidable group_structure_drift fallback rounds.
+* Title and excerpt are now only deferred into the meta batch when at least two batch-eligible candidates exist, avoiding unnecessary deferred fallbacks when batching is impossible.
+* Timing diagnostics now report tiny-call and batch hit/candidate counters at job end, making remaining request-amplification hotspots directly measurable.
+
 Fixes:
 * TranslatePress translations now persist stable string-pair lookups around inline links, so linked paragraph segments no longer stay untranslated because of boundary whitespace differences.
 * Paragraph blocks containing inline tags (<a>, <code>, <strong>, ...) are no longer silently left untranslated when the model drops tags during the unwrap optimisation: failed inline-tag retries now fall through to translate the full inner HTML instead of keeping the source block.

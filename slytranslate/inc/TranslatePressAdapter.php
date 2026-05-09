@@ -13,6 +13,9 @@ defined( 'ABSPATH' ) || exit;
  */
 class TranslatePressAdapter implements TranslationPluginAdapter {
 
+	/** @var array<string, int> */
+	private array $translation_lookup_cache = array();
+
 	public function is_available(): bool {
 		return class_exists( 'TRP_Translate_Press', false );
 	}
@@ -103,6 +106,60 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 	}
 
 	/**
+	 * Resolve whether one specific target language already has a translation.
+	 *
+	 * TranslatePress stores translations in string tables, so an existing target
+	 * translation still resolves to the source post ID in single-entry mode.
+	 */
+	public function get_post_translation_for_language( int $post_id, string $target_lang ): int {
+		$post_id     = absint( $post_id );
+		$target_lang = sanitize_key( $target_lang );
+
+		if ( $post_id < 1 || '' === $target_lang || ! $this->is_available() ) {
+			return 0;
+		}
+
+		$cache_key = $this->get_translation_lookup_cache_key( $post_id, $target_lang );
+		if ( array_key_exists( $cache_key, $this->translation_lookup_cache ) ) {
+			return $this->translation_lookup_cache[ $cache_key ];
+		}
+
+		$default_iso2 = $this->get_post_language( $post_id );
+		if ( null !== $default_iso2 && '' !== $default_iso2 && $default_iso2 === $target_lang ) {
+			return $this->remember_translation_lookup( $cache_key, $post_id );
+		}
+
+		$post = get_post( $post_id );
+		if ( ! ( $post instanceof \WP_Post ) ) {
+			return $this->remember_translation_lookup( $cache_key, 0 );
+		}
+
+		$query = $this->get_trp_query();
+		if ( null === $query ) {
+			return $this->remember_translation_lookup( $cache_key, 0 );
+		}
+
+		$trp_locale = $this->iso2_to_locale( $target_lang );
+		if ( null === $trp_locale ) {
+			return $this->remember_translation_lookup( $cache_key, 0 );
+		}
+
+		$title    = trim( (string) $post->post_title );
+		$existing = $query->get_existing_translations( array( $title ), $trp_locale );
+		if ( ! is_array( $existing ) ) {
+			return $this->remember_translation_lookup( $cache_key, 0 );
+		}
+
+		foreach ( $existing as $row ) {
+			if ( ! empty( $row->translated ) && (int) $row->status > 0 ) {
+				return $this->remember_translation_lookup( $cache_key, $post_id );
+			}
+		}
+
+		return $this->remember_translation_lookup( $cache_key, 0 );
+	}
+
+	/**
 	 * Save translated strings into TranslatePress DB tables.
 	 *
 	 * @return int|\WP_Error Source post ID on success, WP_Error on failure.
@@ -128,19 +185,16 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 		}
 
 		$overwrite = ! empty( $data['overwrite'] );
-		if ( ! $overwrite ) {
-			$translations = $this->get_post_translations( $source_post_id );
-			if ( isset( $translations[ $target_lang ] ) ) {
-				return new \WP_Error(
-					'translation_exists',
-					sprintf(
-						/* translators: 1: language code, 2: post ID. */
-						__( 'A translation for language "%1$s" already exists (post %2$d).', 'slytranslate' ),
-						$target_lang,
-						$source_post_id
-					)
-				);
-			}
+		if ( ! $overwrite && $this->get_post_translation_for_language( $source_post_id, $target_lang ) > 0 ) {
+			return new \WP_Error(
+				'translation_exists',
+				sprintf(
+					/* translators: 1: language code, 2: post ID. */
+					__( 'A translation for language "%1$s" already exists (post %2$d).', 'slytranslate' ),
+					$target_lang,
+					$source_post_id
+				)
+			);
 		}
 
 		$trp_locale = $this->iso2_to_locale( $target_lang );
@@ -169,6 +223,7 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 		}
 
 		$this->save_string_pairs( $pairs, $trp_locale );
+		$this->remember_translation_lookup( $this->get_translation_lookup_cache_key( $source_post_id, $target_lang ), $source_post_id );
 
 		return $source_post_id;
 	}
@@ -385,6 +440,15 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 	private function trim_segment_whitespace( string $value ): string {
 		$trimmed = preg_replace( '/^[\p{Z}\s]+|[\p{Z}\s]+$/u', '', $value );
 		return is_string( $trimmed ) ? $trimmed : trim( $value );
+	}
+
+	private function get_translation_lookup_cache_key( int $post_id, string $target_lang ): string {
+		return $post_id . ':' . $target_lang;
+	}
+
+	private function remember_translation_lookup( string $cache_key, int $translation_id ): int {
+		$this->translation_lookup_cache[ $cache_key ] = $translation_id;
+		return $translation_id;
 	}
 
 	/**

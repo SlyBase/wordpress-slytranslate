@@ -191,6 +191,20 @@ class MetaTranslationService {
 	}
 
 	/**
+	 * Count how many values are currently eligible for one meta batch call.
+	 *
+	 * Includes regular translatable meta values and optional extra candidates
+	 * (e.g. deferred title/excerpt pseudo-keys).
+	 */
+	public static function count_batch_eligible_candidates(
+		array $meta,
+		array $meta_key_config,
+		array $extra_candidates = array()
+	): int {
+		return count( self::collect_batch_candidates( $meta, $meta_key_config, $extra_candidates ) );
+	}
+
+	/**
 	 * Try to translate all eligible short string meta values in a single AI call.
 	 *
 	 * "Eligible" means: the meta key is in the translate list, the value is a
@@ -214,38 +228,7 @@ class MetaTranslationService {
 		string $additional_prompt,
 		array $extra_candidates = array()
 	): ?array {
-		$candidates = array();
-
-		// Pre-validated extra entries (e.g. title, excerpt) from the caller.
-		foreach ( $extra_candidates as $key => $value ) {
-			if ( is_string( $key ) && '' !== $key && is_string( $value ) ) {
-				$candidates[ $key ] = $value;
-			}
-		}
-
-		foreach ( $meta as $key => $values ) {
-			if ( self::should_skip_meta_key( (string) $key ) ) {
-				continue;
-			}
-			if ( ! in_array( $key, $meta_key_config['translate'], true ) ) {
-				continue;
-			}
-			// slim_seo is an array with custom key-level handling — skip from batching.
-			if ( 'slim_seo' === $key ) {
-				continue;
-			}
-
-			$value = maybe_unserialize( $values[0] ?? '' );
-			if ( ! is_string( $value ) || '' === trim( $value ) ) {
-				continue;
-			}
-			// Only batch short values; long strings get their own AI call.
-			if ( self::sum_value_chars( $value ) > 1000 ) {
-				continue;
-			}
-
-			$candidates[ $key ] = $value;
-		}
+		$candidates = self::collect_batch_candidates( $meta, $meta_key_config, $extra_candidates );
 
 		// Batching only pays off when there are at least two values.
 		if ( count( $candidates ) < 2 ) {
@@ -303,6 +286,52 @@ class MetaTranslationService {
 		}
 
 		return $decoded;
+	}
+
+	/**
+	 * Build the candidate map for batched meta translation.
+	 *
+	 * @return array<string,string>
+	 */
+	private static function collect_batch_candidates(
+		array $meta,
+		array $meta_key_config,
+		array $extra_candidates = array()
+	): array {
+		$candidates = array();
+
+		// Pre-validated extra entries (e.g. title, excerpt) from the caller.
+		foreach ( $extra_candidates as $key => $value ) {
+			if ( is_string( $key ) && '' !== $key && is_string( $value ) && '' !== trim( $value ) ) {
+				$candidates[ $key ] = $value;
+			}
+		}
+
+		foreach ( $meta as $key => $values ) {
+			if ( self::should_skip_meta_key( (string) $key ) ) {
+				continue;
+			}
+			if ( ! in_array( $key, $meta_key_config['translate'], true ) ) {
+				continue;
+			}
+			// slim_seo is an array with custom key-level handling — skip from batching.
+			if ( 'slim_seo' === $key ) {
+				continue;
+			}
+
+			$value = maybe_unserialize( $values[0] ?? '' );
+			if ( ! is_string( $value ) || '' === trim( $value ) ) {
+				continue;
+			}
+			// Only batch short values; long strings get their own AI call.
+			if ( self::sum_value_chars( $value ) > 1000 ) {
+				continue;
+			}
+
+			$candidates[ $key ] = $value;
+		}
+
+		return $candidates;
 	}
 
 	private static function sum_value_chars( $value ): int {

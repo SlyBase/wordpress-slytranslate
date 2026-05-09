@@ -225,6 +225,28 @@ class MetaExtraCandidatesTest extends TestCase {
 		$this->assertCount( 1, $calls );
 	}
 
+	public function test_count_batch_eligible_candidates_returns_one_for_single_extra_candidate(): void {
+		$count = MetaTranslationService::count_batch_eligible_candidates(
+			array(),
+			array( 'translate' => array(), 'clear' => array() ),
+			array( '_slytranslate_title' => 'Original Title' )
+		);
+
+		$this->assertSame( 1, $count );
+	}
+
+	public function test_count_batch_eligible_candidates_includes_eligible_meta_and_extras(): void {
+		$count = MetaTranslationService::count_batch_eligible_candidates(
+			array(
+				'_yoast_wpseo_metadesc' => array( 'SEO description' ),
+			),
+			array( 'translate' => array( '_yoast_wpseo_metadesc' ), 'clear' => array() ),
+			array( '_slytranslate_title' => 'Original Title' )
+		);
+
+		$this->assertSame( 2, $count );
+	}
+
 	/* ---------------------------------------------------------------
 	 * prepare_translation_meta integration
 	 * ------------------------------------------------------------- */

@@ -29,6 +29,9 @@ class TestablePressAdapter extends TranslatePressAdapter {
  */
 class SpyTrpQuery {
 
+	/** @var array<int, array{strings: string[], lang: string}> */
+	public array $existing_calls = array();
+
 	/** @var array<int, array{rows: array<int, array<string, mixed>>, lang: string}> */
 	public array $update_calls = array();
 
@@ -43,6 +46,7 @@ class SpyTrpQuery {
 
 	/** @return array<int, object> */
 	public function get_existing_translations( array $strings, string $lang ): array {
+		$this->existing_calls[] = array( 'strings' => $strings, 'lang' => $lang );
 		return $this->existing_result;
 	}
 
@@ -199,6 +203,64 @@ class TranslatePressAdapterTest extends TestCase {
 		$this->assertSame( 'English (US)', $languages['en'] );
 	}
 
+	public function test_get_post_translation_for_language_queries_only_requested_locale(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		$existing             = new \stdClass();
+		$existing->translated = 'Title';
+		$existing->status     = 2;
+		$spy->existing_result = array( $existing );
+
+		$post               = new \WP_Post();
+		$post->ID           = 7;
+		$post->post_title   = 'Titel';
+		$post->post_content = '';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US', 'fr_FR' ),
+		) );
+
+		$result = $this->adapter->get_post_translation_for_language( 7, 'en' );
+
+		$this->assertSame( 7, $result );
+		$this->assertCount( 1, $spy->existing_calls );
+		$this->assertSame( array( 'Titel' ), $spy->existing_calls[0]['strings'] );
+		$this->assertSame( 'en_US', $spy->existing_calls[0]['lang'] );
+	}
+
+	public function test_get_post_translation_for_language_uses_request_cache(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		$existing             = new \stdClass();
+		$existing->translated = 'Title';
+		$existing->status     = 2;
+		$spy->existing_result = array( $existing );
+
+		$post               = new \WP_Post();
+		$post->ID           = 7;
+		$post->post_title   = 'Titel';
+		$post->post_content = '';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US', 'fr_FR' ),
+		) );
+
+		$this->assertSame( 7, $this->adapter->get_post_translation_for_language( 7, 'en' ) );
+		$this->assertSame( 7, $this->adapter->get_post_translation_for_language( 7, 'en' ) );
+
+		$this->assertCount( 1, $spy->existing_calls );
+	}
+
 	// -----------------------------------------------------------------------
 	// extract_string_segments (via reflection)
 	// -----------------------------------------------------------------------
@@ -323,6 +385,36 @@ class TranslatePressAdapterTest extends TestCase {
 
 		$result = $this->adapter->create_translation( 7, 'en', array( 'post_title' => 'Title', 'overwrite' => true ) );
 		$this->assertSame( 7, $result );
+	}
+
+	public function test_create_translation_existing_check_queries_only_target_locale(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		$existing             = new \stdClass();
+		$existing->translated = 'Title';
+		$existing->status     = 2;
+		$spy->existing_result = array( $existing );
+
+		$post               = new \WP_Post();
+		$post->ID           = 7;
+		$post->post_title   = 'Titel';
+		$post->post_content = '';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US', 'fr_FR' ),
+		) );
+
+		$result = $this->adapter->create_translation( 7, 'en', array( 'post_title' => 'Title' ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'translation_exists', $result->get_error_code() );
+		$this->assertCount( 1, $spy->existing_calls );
+		$this->assertSame( 'en_US', $spy->existing_calls[0]['lang'] );
 	}
 
 	public function test_create_translation_saves_string_pairs_with_status_2(): void {
