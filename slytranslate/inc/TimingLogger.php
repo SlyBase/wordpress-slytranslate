@@ -28,6 +28,8 @@ class TimingLogger {
 	/** @var array<string, int> */
 	private static $counters = array(
 		'ai_calls'  => 0,
+		'ai_input_chars' => 0,
+		'ai_output_chars' => 0,
 		'retries'   => 0,
 		'fallbacks' => 0,
 		'tiny_calls' => 0,
@@ -35,6 +37,8 @@ class TimingLogger {
 		'micro_batch_hits' => 0,
 		'list_batch_candidates' => 0,
 		'list_batch_hits' => 0,
+		'content_groups_total' => 0,
+		'content_single_block_groups' => 0,
 	);
 
 	/* ---------------------------------------------------------------
@@ -64,6 +68,8 @@ class TimingLogger {
 	public static function reset_counters(): void {
 		self::$counters = array(
 			'ai_calls'  => 0,
+			'ai_input_chars' => 0,
+			'ai_output_chars' => 0,
 			'retries'   => 0,
 			'fallbacks' => 0,
 			'tiny_calls' => 0,
@@ -71,6 +77,8 @@ class TimingLogger {
 			'micro_batch_hits' => 0,
 			'list_batch_candidates' => 0,
 			'list_batch_hits' => 0,
+			'content_groups_total' => 0,
+			'content_single_block_groups' => 0,
 		);
 	}
 

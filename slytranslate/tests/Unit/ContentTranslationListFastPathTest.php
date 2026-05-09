@@ -444,4 +444,152 @@ class ContentTranslationListFastPathTest extends TestCase {
 		$this->assertStringContainsString( 'block_1', $batch_calls[0] );
 		$this->assertStringContainsString( 'block_2', $batch_calls[0] );
 	}
+
+	public function test_recursive_fast_path_requires_real_inner_blocks(): void {
+		$placeholder_inner = array(
+			array(
+				'blockName'   => 'core/list',
+				'innerBlocks' => array( array() ),
+			),
+		);
+
+		$real_inner = array(
+			array(
+				'blockName'   => 'core/list',
+				'innerBlocks' => array(
+					array(
+						'blockName'   => 'core/list-item',
+						'innerBlocks' => array(),
+					),
+				),
+			),
+		);
+
+		$this->assertFalse(
+			$this->invokeStatic( ContentTranslator::class, 'should_use_recursive_inner_block_fast_path', array( $placeholder_inner ) )
+		);
+		$this->assertTrue(
+			$this->invokeStatic( ContentTranslator::class, 'should_use_recursive_inner_block_fast_path', array( $real_inner ) )
+		);
+	}
+
+	public function test_prepare_translation_groups_merges_small_wrapper_singletons_for_micro_batching(): void {
+		$this->stubWpFunction( 'serialize_blocks',
+			static function ( array $blocks ): string {
+				$serialized = '';
+				foreach ( $blocks as $block ) {
+					$length      = (int) ( $block['attrs']['__len'] ?? 10 );
+					$serialized .= str_repeat( 'x', max( 1, $length ) );
+				}
+				return $serialized;
+			}
+		);
+
+		$pending_blocks = array(
+			array( 'blockName' => 'core/paragraph', 'attrs' => array( '__len' => 700 ), 'innerBlocks' => array() ),
+			array( 'blockName' => 'core/paragraph', 'attrs' => array( '__len' => 700 ), 'innerBlocks' => array() ),
+			array( 'blockName' => 'core/paragraph', 'attrs' => array( '__len' => 700 ), 'innerBlocks' => array() ),
+		);
+
+		$groups = $this->invokeStatic(
+			ContentTranslator::class,
+			'prepare_translation_groups',
+			array( $pending_blocks, 1200 )
+		);
+
+		$this->assertCount( 1, $groups );
+		$this->assertCount( 3, $groups[0] );
+	}
+
+	public function test_micro_batch_allows_two_item_group_for_small_pending_payload(): void {
+		$calls = array();
+
+		$this->stubWpFunctionReturn( 'get_current_user_id', 1 );
+		$this->stubWpFunction( 'serialize_blocks',
+			static function ( array $blocks ): string {
+				$parts = array();
+				foreach ( $blocks as $block ) {
+					$name = $block['blockName'] ?? '';
+					if ( 'core/paragraph' === $name ) {
+						$content = $block['attrs']['__test_content'] ?? 'Text';
+						$parts[] = "<!-- wp:paragraph -->\n<p>{$content}</p>\n<!-- /wp:paragraph -->";
+					}
+				}
+				return implode( "\n", $parts );
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$calls ) {
+				$calls[] = $text;
+
+				return new class {
+					public function using_system_instruction( string $prompt ) {
+						return $this;
+					}
+
+					public function using_temperature( float $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						return wp_json_encode( array(
+							'block_0' => '<p>Dies ist der erste deutsche Absatz.</p>',
+							'block_1' => '<p>Dies ist der zweite deutsche Absatz.</p>',
+						) ) ?: '';
+					}
+				};
+			}
+		);
+
+		$group = array(
+			array(
+				'blockName'    => 'core/paragraph',
+				'attrs'        => array( '__test_content' => 'Paragraph one' ),
+				'innerBlocks'  => array(),
+				'innerHTML'    => '<p>Paragraph one</p>',
+				'innerContent' => array( '<p>Paragraph one</p>' ),
+			),
+			array(
+				'blockName'    => 'core/paragraph',
+				'attrs'        => array( '__test_content' => 'Paragraph two' ),
+				'innerBlocks'  => array(),
+				'innerHTML'    => '<p>Paragraph two</p>',
+				'innerContent' => array( '<p>Paragraph two</p>' ),
+			),
+		);
+
+		\SlyTranslate\TimingLogger::reset_counters();
+
+		$result = $this->invokeStatic(
+			ContentTranslator::class,
+			'translate_short_non_list_blocks_batch',
+			array(
+				$group,
+				'de',
+				'en',
+				'',
+				array(
+					'pending_blocks' => 2,
+					'pending_chars'  => 220,
+				)
+			)
+		);
+
+		$counters = \SlyTranslate\TimingLogger::get_counters();
+
+		$this->assertTrue( is_string( $result ) || null === $result );
+		$this->assertGreaterThanOrEqual( 1, count( $calls ) );
+		$this->assertStringContainsString( 'block_0', $calls[0] );
+		$this->assertStringContainsString( 'block_1', $calls[0] );
+		$this->assertSame( 1, (int) ( $counters['micro_batch_candidates'] ?? 0 ) );
+		$this->assertSame( 0, (int) ( $counters['micro_batch_skip_group_size_out_of_range'] ?? 0 ) );
+	}
 }

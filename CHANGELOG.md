@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Single-block recursive inner-block fast paths now cover additional wrapper block types with inner blocks, reducing avoidable `group_structure_drift` fallback rounds.
 - Title and excerpt are now only deferred into the meta batch when at least two batch-eligible candidates exist, avoiding unnecessary deferred fallbacks when batching is impossible.
 - Timing diagnostics now report tiny-call and batch hit/candidate counters at job end, making remaining request-amplification hotspots directly measurable.
+- Content grouping now applies minimum-size rebalancing, wrapper pre-consolidation, and tiny-series coalescing before translation, enabling more micro-batch hits and reducing one-block call fan-out.
+- Micro-batching now adaptively allows 2-block groups for small pending payloads while preserving per-item validation and fallback safety.
+- Job-end diagnostics now include skip-reason aggregates plus KPI ratios (`tiny_call_ratio`, `micro_batch_hit_rate`, `avg_chars_per_ai_call`, `single_block_group_ratio`) with explicit target corridor values.
 
 ### Fixes
 - TranslatePress translations now persist stable string-pair lookups around inline links, so linked paragraph segments no longer stay untranslated because of boundary whitespace differences.

@@ -7,6 +7,7 @@ defined( 'ABSPATH' ) || exit;
 class TextSplitter {
 
 	private const MIN_TRANSLATION_CHARS = 1200;
+	private const SMALL_BLOCK_GROUPING_MAX_CHARS = 900;
 
 	public static function count_content_translation_chunks( string $content, int $chunk_char_limit ): int {
 		if ( '' === trim( $content ) ) {
@@ -200,11 +201,23 @@ class TextSplitter {
 	 * the downstream translation layer handles oversized single-block inputs the same
 	 * way it always has.
 	 *
-	 * @param array[] $blocks           Parsed Gutenberg blocks (translatable only).
-	 * @param int     $chunk_char_limit Maximum serialized characters per group.
+	 * @param array[] $blocks                Parsed Gutenberg blocks (translatable only).
+	 * @param int     $chunk_char_limit      Maximum serialized characters per group.
+	 * @param int     $soft_min_group_blocks Optional soft lower bound for group size.
+	 *                                       Small groups below this threshold are
+	 *                                       opportunistically merged with adjacent
+	 *                                       groups when allowed by $soft_merge_char_limit.
+	 * @param int     $soft_merge_char_limit Optional merge ceiling used by the soft
+	 *                                       minimum heuristic. Defaults to
+	 *                                       $chunk_char_limit when not provided.
 	 * @return array[]                  Array of block groups (each group is an array of blocks).
 	 */
-	public static function group_blocks_for_translation( array $blocks, int $chunk_char_limit ): array {
+	public static function group_blocks_for_translation(
+		array $blocks,
+		int $chunk_char_limit,
+		int $soft_min_group_blocks = 1,
+		int $soft_merge_char_limit = 0
+	): array {
 		$chunk_char_limit = max( self::MIN_TRANSLATION_CHARS, $chunk_char_limit );
 		$groups           = array();
 		$current_group    = array();
@@ -227,7 +240,98 @@ class TextSplitter {
 			$groups[] = $current_group;
 		}
 
+		if ( $soft_min_group_blocks > 1 ) {
+			$groups = self::rebalance_small_groups(
+				$groups,
+				$soft_min_group_blocks,
+				$soft_merge_char_limit > 0 ? $soft_merge_char_limit : $chunk_char_limit
+			);
+		}
+
 		return $groups;
+	}
+
+	/**
+	 * Merge small groups below the soft minimum into adjacent groups when safe.
+	 *
+	 * This is intentionally heuristic: groups that cannot be merged while
+	 * staying below $soft_merge_char_limit remain unchanged.
+	 *
+	 * @param array[] $groups
+	 * @return array[]
+	 */
+	private static function rebalance_small_groups(
+		array $groups,
+		int $soft_min_group_blocks,
+		int $soft_merge_char_limit
+	): array {
+		if ( count( $groups ) < 2 ) {
+			return $groups;
+		}
+
+		$soft_min_group_blocks = max( 2, $soft_min_group_blocks );
+		$soft_merge_char_limit = max( self::MIN_TRANSLATION_CHARS, $soft_merge_char_limit );
+
+		$rebalanced = array();
+		$count      = count( $groups );
+
+		for ( $index = 0; $index < $count; $index++ ) {
+			$current = $groups[ $index ];
+
+			if ( count( $current ) < $soft_min_group_blocks && self::is_small_block_group( $current ) ) {
+				if ( isset( $groups[ $index + 1 ] )
+					&& self::can_merge_groups_with_limit( $current, $groups[ $index + 1 ], $soft_merge_char_limit )
+				) {
+					$rebalanced[] = array_merge( $current, $groups[ $index + 1 ] );
+					++$index;
+					continue;
+				}
+
+				$last_index = count( $rebalanced ) - 1;
+				if ( $last_index >= 0
+					&& self::can_merge_groups_with_limit( $rebalanced[ $last_index ], $current, $soft_merge_char_limit )
+				) {
+					$rebalanced[ $last_index ] = array_merge( $rebalanced[ $last_index ], $current );
+					continue;
+				}
+			}
+
+			$rebalanced[] = $current;
+		}
+
+		return $rebalanced;
+	}
+
+	/**
+	 * @param array[] $group
+	 */
+	private static function is_small_block_group( array $group ): bool {
+		if ( empty( $group ) ) {
+			return false;
+		}
+
+		foreach ( $group as $block ) {
+			$size = self::text_length( serialize_blocks( array( $block ) ) );
+			if ( $size > self::SMALL_BLOCK_GROUPING_MAX_CHARS ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param array[] $left
+	 * @param array[] $right
+	 */
+	private static function can_merge_groups_with_limit( array $left, array $right, int $char_limit ): bool {
+		if ( empty( $left ) || empty( $right ) ) {
+			return false;
+		}
+
+		$merged_size = self::text_length( serialize_blocks( array_merge( $left, $right ) ) );
+
+		return $merged_size > 0 && $merged_size <= $char_limit;
 	}
 
 	private static function count_translation_chunks( string $text, int $chunk_char_limit ): int {

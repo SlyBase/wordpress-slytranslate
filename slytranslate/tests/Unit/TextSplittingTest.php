@@ -154,6 +154,30 @@ class TextSplittingTest extends TestCase {
 		);
 	}
 
+	public function test_group_blocks_for_translation_soft_minimum_merges_small_singletons(): void {
+		$this->stubWpFunction( 'serialize_blocks',
+			static function ( array $blocks ): string {
+				$serialized = '';
+				foreach ( $blocks as $block ) {
+					$length      = (int) ( $block['attrs']['__len'] ?? 10 );
+					$serialized .= str_repeat( 'x', max( 1, $length ) );
+				}
+				return $serialized;
+			}
+		);
+
+		$blocks = array(
+			array( 'blockName' => 'core/paragraph', 'attrs' => array( '__len' => 700 ) ),
+			array( 'blockName' => 'core/paragraph', 'attrs' => array( '__len' => 700 ) ),
+			array( 'blockName' => 'core/paragraph', 'attrs' => array( '__len' => 700 ) ),
+		);
+
+		$groups = TextSplitter::group_blocks_for_translation( $blocks, 1200, 2, 2200 );
+
+		$this->assertCount( 1, $groups );
+		$this->assertCount( 3, $groups[0] );
+	}
+
 	public function test_tower_chunk_strategy_applies_conservative_limit(): void {
 		$tower_profile = TranslationRuntime::get_model_profile( 'TowerInstruct-7B-v0.2.Q4_K_M' );
 		$limit         = $this->invokeStatic( TranslationRuntime::class, 'apply_chunk_strategy_to_limit', array( 4096, $tower_profile ) );

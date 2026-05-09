@@ -1160,6 +1160,7 @@ class TranslationRuntime {
 
 		$wp_duration_ms = TimingLogger::stop( $wp_started );
 		TimingLogger::increment( 'ai_calls' );
+		TimingLogger::increment( 'ai_input_chars', $input_chars );
 
 		if ( is_wp_error( $result ) ) {
 			$result = self::normalize_transport_error( $result, $model_slug );
@@ -1191,11 +1192,13 @@ class TranslationRuntime {
 			return $result;
 		}
 
+		$output_chars = is_string( $result ) ? self::char_length( $result ) : 0;
+		TimingLogger::increment( 'ai_output_chars', $output_chars );
 		TimingLogger::log( 'ai_call', array(
 			'transport'    => 'wp_ai_client',
 			'model'        => $model_slug,
 			'input_chars'  => $input_chars,
-			'output_chars' => is_string( $result ) ? self::char_length( $result ) : 0,
+			'output_chars' => $output_chars,
 			'duration_ms'  => $wp_duration_ms,
 			'attempt'      => $validation_attempt,
 			'ok'           => true,
@@ -1373,6 +1376,7 @@ class TranslationRuntime {
 		);
 		$wp_duration_ms = TimingLogger::stop( $wp_started );
 		TimingLogger::increment( 'ai_calls' );
+		TimingLogger::increment( 'ai_input_chars', $input_chars );
 
 		if ( is_wp_error( $result ) ) {
 			$result = self::normalize_transport_error( $result, $model_slug );
@@ -1401,6 +1405,7 @@ class TranslationRuntime {
 		}
 
 		$output_chars = is_string( $result ) ? self::char_length( $result ) : 0;
+		TimingLogger::increment( 'ai_output_chars', $output_chars );
 		TimingLogger::log( 'ai_call', array(
 			'transport'    => 'wp_ai_client_plain',
 			'model'        => $model_slug,

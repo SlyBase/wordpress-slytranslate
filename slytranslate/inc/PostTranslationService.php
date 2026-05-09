@@ -394,21 +394,87 @@ class PostTranslationService {
 	}
 
 	private static function log_job_end( int $post_id, float $job_started_at, bool $ok, string $reason = '' ): void {
-		$counters = TimingLogger::get_counters();
+		$counters                   = TimingLogger::get_counters();
+		$ai_calls                   = (int) ( $counters['ai_calls'] ?? 0 );
+		$ai_input_chars             = (int) ( $counters['ai_input_chars'] ?? 0 );
+		$ai_output_chars            = (int) ( $counters['ai_output_chars'] ?? 0 );
+		$tiny_calls                 = (int) ( $counters['tiny_calls'] ?? 0 );
+		$micro_batch_candidates     = (int) ( $counters['micro_batch_candidates'] ?? 0 );
+		$micro_batch_hits           = (int) ( $counters['micro_batch_hits'] ?? 0 );
+		$content_groups_total       = (int) ( $counters['content_groups_total'] ?? 0 );
+		$content_single_block_group = (int) ( $counters['content_single_block_groups'] ?? 0 );
+
+		$tiny_call_ratio         = self::safe_ratio( $tiny_calls, $ai_calls );
+		$micro_batch_hit_rate    = self::safe_ratio( $micro_batch_hits, $micro_batch_candidates );
+		$avg_chars_per_ai_call   = $ai_calls > 0 ? round( $ai_input_chars / $ai_calls, 1 ) : 0.0;
+		$single_block_group_ratio = self::safe_ratio( $content_single_block_group, $content_groups_total );
+
+		$micro_batch_skip_reasons = self::extract_prefixed_counters( $counters, 'micro_batch_skip_' );
+		$list_batch_skip_reasons  = self::extract_prefixed_counters( $counters, 'list_batch_skip_' );
+
 		TimingLogger::log( 'job_end', array(
 			'post'        => $post_id,
 			'total_ms'    => TimingLogger::stop( $job_started_at ),
-			'ai_calls'    => $counters['ai_calls'] ?? 0,
+			'ai_calls'    => $ai_calls,
+			'ai_input_chars' => $ai_input_chars,
+			'ai_output_chars' => $ai_output_chars,
 			'retries'     => $counters['retries'] ?? 0,
 			'fallbacks'   => $counters['fallbacks'] ?? 0,
-			'tiny_calls'  => $counters['tiny_calls'] ?? 0,
-			'micro_batch_candidates' => $counters['micro_batch_candidates'] ?? 0,
-			'micro_batch_hits' => $counters['micro_batch_hits'] ?? 0,
+			'tiny_calls'  => $tiny_calls,
+			'micro_batch_candidates' => $micro_batch_candidates,
+			'micro_batch_hits' => $micro_batch_hits,
 			'list_batch_candidates' => $counters['list_batch_candidates'] ?? 0,
 			'list_batch_hits' => $counters['list_batch_hits'] ?? 0,
+			'content_groups_total' => $content_groups_total,
+			'content_single_block_groups' => $content_single_block_group,
+			'tiny_call_ratio' => $tiny_call_ratio,
+			'micro_batch_hit_rate' => $micro_batch_hit_rate,
+			'avg_chars_per_ai_call' => $avg_chars_per_ai_call,
+			'single_block_group_ratio' => $single_block_group_ratio,
+			'micro_batch_skip_reasons' => $micro_batch_skip_reasons,
+			'list_batch_skip_reasons' => $list_batch_skip_reasons,
+			'target_tiny_calls_max' => 42,
+			'target_ai_calls_max' => 74,
+			'target_micro_batch_hits_min' => 1,
+			'target_total_ms_max' => 271597,
+			'target_tiny_call_ratio_max' => 0.25,
+			'target_micro_batch_hit_rate_min' => 0.10,
+			'target_single_block_group_ratio_max' => 0.35,
 			'ok'          => $ok,
 			'reason'      => $reason,
 		) );
+	}
+
+	private static function safe_ratio( int $numerator, int $denominator, int $precision = 4 ): float {
+		if ( $denominator < 1 ) {
+			return 0.0;
+		}
+
+		return round( $numerator / $denominator, $precision );
+	}
+
+	/**
+	 * @return array<string, int>
+	 */
+	private static function extract_prefixed_counters( array $counters, string $prefix ): array {
+		$result = array();
+
+		foreach ( $counters as $key => $value ) {
+			if ( ! is_string( $key ) || ! str_starts_with( $key, $prefix ) ) {
+				continue;
+			}
+
+			$reason = substr( $key, strlen( $prefix ) );
+			if ( '' === $reason ) {
+				continue;
+			}
+
+			$result[ $reason ] = (int) $value;
+		}
+
+		ksort( $result );
+
+		return $result;
 	}
 
 	/* ---------------------------------------------------------------

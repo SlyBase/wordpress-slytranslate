@@ -16,9 +16,15 @@ class ContentTranslator {
 	private const LIST_ITEM_BATCH_MAX_ITEMS = 12;
 	private const LIST_ITEM_BATCH_MAX_CHARS = 1800;
 	private const MICRO_BATCH_MIN_ITEMS = 3;
+	private const MICRO_BATCH_MIN_ITEMS_ADAPTIVE = 2;
 	private const MICRO_BATCH_MAX_ITEMS = 12;
 	private const MICRO_BATCH_MAX_CHARS = 2200;
+	private const MICRO_BATCH_ADAPTIVE_MAX_TOTAL_BLOCKS = 12;
+	private const MICRO_BATCH_ADAPTIVE_MAX_TOTAL_CHARS = 4800;
+	private const SMALL_WRAPPER_BLOCK_MAX_CHARS = 900;
 	private const TINY_GROUP_CHAR_THRESHOLD = 260;
+	private const TINY_GROUP_COALESCE_MAX_CHARS = 900;
+	private const TINY_GROUP_SERIES_STOP_THRESHOLD = 3;
 
 	/**
 	 * Translate full post content, using the block parser when available.
@@ -154,14 +160,41 @@ class ContentTranslator {
 			return array();
 		}
 
-		$sections = array();
+		$sections      = array();
+		$pending_chars = self::serialized_block_char_length( $pending_blocks );
+		$groups        = self::prepare_translation_groups( $pending_blocks, $chunk_char_limit );
 
-		foreach ( TextSplitter::group_blocks_for_translation( $pending_blocks, $chunk_char_limit ) as $group ) {
+		$single_block_groups = 0;
+		foreach ( $groups as $group ) {
+			if ( 1 === count( $group ) ) {
+				++$single_block_groups;
+			}
+		}
+
+		TimingLogger::increment( 'content_groups_total', count( $groups ) );
+		TimingLogger::increment( 'content_single_block_groups', $single_block_groups );
+		TimingLogger::log( 'content_group_plan', array(
+			'groups'              => count( $groups ),
+			'single_block_groups' => $single_block_groups,
+			'pending_blocks'      => count( $pending_blocks ),
+			'pending_chars'       => $pending_chars,
+		) );
+
+		foreach ( $groups as $group ) {
 			if ( TranslationProgressTracker::is_cancelled() ) {
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
 			}
 
-			$micro_batch = self::translate_short_non_list_blocks_batch( $group, $to, $from, $additional_prompt );
+			$micro_batch = self::translate_short_non_list_blocks_batch(
+				$group,
+				$to,
+				$from,
+				$additional_prompt,
+				array(
+					'pending_blocks' => count( $pending_blocks ),
+					'pending_chars'  => $pending_chars,
+				)
+			);
 			if ( is_string( $micro_batch ) ) {
 				$sections[] = $micro_batch;
 				continue;
@@ -205,6 +238,289 @@ class ContentTranslator {
 		}
 
 		return $sections;
+	}
+
+	/**
+	 * Build translation groups with wrapper-aware consolidation heuristics.
+	 *
+	 * The soft-min rebalancing in TextSplitter reduces avoidable one-block
+	 * groups. Additional passes then merge adjacent short wrapper groups and
+	 * coalesce tiny-group series so the micro-batch path can activate.
+	 *
+	 * @param array[] $pending_blocks
+	 * @return array[]
+	 */
+	private static function prepare_translation_groups( array $pending_blocks, int $chunk_char_limit ): array {
+		$groups = TextSplitter::group_blocks_for_translation(
+			$pending_blocks,
+			$chunk_char_limit,
+			2,
+			self::MICRO_BATCH_MAX_CHARS
+		);
+
+		if ( count( $groups ) < 2 ) {
+			return $groups;
+		}
+
+		$groups = self::apply_min_block_group_heuristic( $groups );
+		$groups = self::consolidate_small_wrapper_groups( $groups );
+
+		return self::coalesce_tiny_group_series( $groups );
+	}
+
+	/**
+	 * Ensure small one-block groups are merged with adjacent wrapper groups when possible.
+	 *
+	 * @param array[] $groups
+	 * @return array[]
+	 */
+	private static function apply_min_block_group_heuristic( array $groups ): array {
+		$rebalanced = array();
+		$count      = count( $groups );
+		$merges     = 0;
+
+		for ( $index = 0; $index < $count; $index++ ) {
+			$current = $groups[ $index ];
+
+			if ( 1 === count( $current ) && self::is_small_wrapper_group( $current ) ) {
+				if ( isset( $groups[ $index + 1 ] ) && self::can_merge_wrapper_groups( $current, $groups[ $index + 1 ] ) ) {
+					$rebalanced[] = array_merge( $current, $groups[ $index + 1 ] );
+					++$index;
+					++$merges;
+					continue;
+				}
+
+				$last_index = count( $rebalanced ) - 1;
+				if ( $last_index >= 0 && self::can_merge_wrapper_groups( $rebalanced[ $last_index ], $current ) ) {
+					$rebalanced[ $last_index ] = array_merge( $rebalanced[ $last_index ], $current );
+					++$merges;
+					continue;
+				}
+			}
+
+			$rebalanced[] = $current;
+		}
+
+		if ( $merges > 0 ) {
+			TimingLogger::log( 'content_group_compaction', array(
+				'stage'  => 'min_block_heuristic',
+				'merges' => $merges,
+			) );
+		}
+
+		return $rebalanced;
+	}
+
+	/**
+	 * Consolidate consecutive short-wrapper groups before translation.
+	 *
+	 * @param array[] $groups
+	 * @return array[]
+	 */
+	private static function consolidate_small_wrapper_groups( array $groups ): array {
+		if ( count( $groups ) < 2 ) {
+			return $groups;
+		}
+
+		$compacted = array();
+		$merges    = 0;
+
+		foreach ( $groups as $group ) {
+			if ( empty( $compacted ) ) {
+				$compacted[] = $group;
+				continue;
+			}
+
+			$last_index = count( $compacted ) - 1;
+			if ( self::can_merge_wrapper_groups( $compacted[ $last_index ], $group ) ) {
+				$compacted[ $last_index ] = array_merge( $compacted[ $last_index ], $group );
+				++$merges;
+				continue;
+			}
+
+			$compacted[] = $group;
+		}
+
+		if ( $merges > 0 ) {
+			TimingLogger::log( 'content_group_compaction', array(
+				'stage'  => 'wrapper_pre_consolidation',
+				'merges' => $merges,
+			) );
+		}
+
+		return $compacted;
+	}
+
+	/**
+	 * Coalesce runs of tiny wrapper groups to reduce tiny-call series.
+	 *
+	 * @param array[] $groups
+	 * @return array[]
+	 */
+	private static function coalesce_tiny_group_series( array $groups ): array {
+		if ( count( $groups ) < 2 ) {
+			return $groups;
+		}
+
+		$coalesced        = array();
+		$series_count     = 0;
+		$merged_group_sum = 0;
+		$index            = 0;
+		$total            = count( $groups );
+
+		while ( $index < $total ) {
+			if ( ! self::is_tiny_wrapper_group( $groups[ $index ] ) ) {
+				$coalesced[] = $groups[ $index ];
+				++$index;
+				continue;
+			}
+
+			$run = array();
+			while ( $index < $total && self::is_tiny_wrapper_group( $groups[ $index ] ) ) {
+				$run[] = $groups[ $index ];
+				++$index;
+			}
+
+			if ( count( $run ) >= self::TINY_GROUP_SERIES_STOP_THRESHOLD ) {
+				++$series_count;
+			}
+
+			$packed = self::pack_tiny_group_series( $run );
+			$merged_group_sum += max( 0, count( $run ) - count( $packed ) );
+			$coalesced = array_merge( $coalesced, $packed );
+		}
+
+		if ( $merged_group_sum > 0 ) {
+			TimingLogger::log( 'content_tiny_series_coalesced', array(
+				'series'        => $series_count,
+				'merged_groups' => $merged_group_sum,
+				'stop_after'    => self::TINY_GROUP_SERIES_STOP_THRESHOLD,
+			) );
+		}
+
+		return $coalesced;
+	}
+
+	/**
+	 * @param array<int, array<int, array<string, mixed>>> $series
+	 * @return array<int, array<int, array<string, mixed>>>
+	 */
+	private static function pack_tiny_group_series( array $series ): array {
+		if ( empty( $series ) ) {
+			return array();
+		}
+
+		$packed  = array();
+		$current = array_shift( $series );
+
+		foreach ( $series as $group ) {
+			if ( self::can_merge_wrapper_groups( $current, $group, self::TINY_GROUP_COALESCE_MAX_CHARS ) ) {
+				$current = array_merge( $current, $group );
+				continue;
+			}
+
+			$packed[] = $current;
+			$current  = $group;
+		}
+
+		$packed[] = $current;
+
+		return $packed;
+	}
+
+	/**
+	 * @param array[] $left
+	 * @param array[] $right
+	 */
+	private static function can_merge_wrapper_groups( array $left, array $right, int $char_limit = self::MICRO_BATCH_MAX_CHARS ): bool {
+		if ( empty( $left ) || empty( $right ) ) {
+			return false;
+		}
+
+		if ( ! self::is_small_wrapper_group( $left ) || ! self::is_small_wrapper_group( $right ) ) {
+			return false;
+		}
+
+		$combined_blocks = count( $left ) + count( $right );
+		if ( $combined_blocks > self::MICRO_BATCH_MAX_ITEMS ) {
+			return false;
+		}
+
+		$merged_chars = self::serialized_block_char_length( array_merge( $left, $right ) );
+		return $merged_chars > 0 && $merged_chars <= max( 1, $char_limit );
+	}
+
+	/**
+	 * @param array[] $group
+	 */
+	private static function is_small_wrapper_group( array $group ): bool {
+		if ( empty( $group ) ) {
+			return false;
+		}
+
+		foreach ( $group as $block ) {
+			if ( ! is_array( $block ) ) {
+				return false;
+			}
+
+			if ( ! self::is_wrapper_batch_candidate_block( $block ) ) {
+				return false;
+			}
+
+			if ( self::serialized_block_char_length( array( $block ) ) > self::SMALL_WRAPPER_BLOCK_MAX_CHARS ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param array[] $group
+	 */
+	private static function is_tiny_wrapper_group( array $group ): bool {
+		if ( ! self::is_small_wrapper_group( $group ) ) {
+			return false;
+		}
+
+		$chars = self::serialized_block_char_length( $group );
+		return $chars > 0 && $chars <= self::TINY_GROUP_CHAR_THRESHOLD;
+	}
+
+	/**
+	 * @param array<string, mixed> $block
+	 */
+	private static function is_wrapper_batch_candidate_block( array $block ): bool {
+		if ( ! empty( $block['innerBlocks'] ) ) {
+			return false;
+		}
+
+		$block_name = (string) ( $block['blockName'] ?? '' );
+		if ( 'core/list' === $block_name || 'core/list-item' === $block_name ) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param array[] $blocks
+	 */
+	private static function serialized_block_char_length( array $blocks ): int {
+		if ( empty( $blocks ) || ! function_exists( 'serialize_blocks' ) ) {
+			return 0;
+		}
+
+		$serialized = serialize_blocks( $blocks );
+		if ( ! is_string( $serialized ) || '' === $serialized ) {
+			return 0;
+		}
+
+		if ( function_exists( 'mb_strlen' ) ) {
+			return (int) mb_strlen( $serialized, 'UTF-8' );
+		}
+
+		return strlen( $serialized );
 	}
 
 	/**
@@ -473,7 +789,18 @@ class ContentTranslator {
 			return false;
 		}
 
-		return ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] );
+		$inner_blocks = $block['innerBlocks'] ?? null;
+		if ( ! is_array( $inner_blocks ) || empty( $inner_blocks ) ) {
+			return false;
+		}
+
+		foreach ( $inner_blocks as $inner_block ) {
+			if ( is_array( $inner_block ) && ! empty( $inner_block['blockName'] ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -704,6 +1031,8 @@ class ContentTranslator {
 	}
 
 	private static function skip_list_batch( string $reason, array $context = array() ): ?array {
+		TimingLogger::increment( self::reason_counter_key( 'list_batch_skip_', $reason ) );
+
 		$payload = array( 'reason' => $reason );
 		if ( ! empty( $context ) ) {
 			$payload = array_merge( $payload, $context );
@@ -719,17 +1048,43 @@ class ContentTranslator {
 	 * Returns a translated serialized group string on success. Returns null
 	 * when the group is not eligible or when validation fails.
 	 */
+	private static function resolve_micro_batch_min_items( array $group, array $context ): int {
+		if ( 2 !== count( $group ) || ! self::is_small_wrapper_group( $group ) ) {
+			return self::MICRO_BATCH_MIN_ITEMS;
+		}
+
+		$pending_blocks = (int) ( $context['pending_blocks'] ?? 0 );
+		$pending_chars  = (int) ( $context['pending_chars'] ?? 0 );
+
+		if ( ( $pending_blocks > 0 && $pending_blocks <= self::MICRO_BATCH_ADAPTIVE_MAX_TOTAL_BLOCKS )
+			|| ( $pending_chars > 0 && $pending_chars <= self::MICRO_BATCH_ADAPTIVE_MAX_TOTAL_CHARS )
+		) {
+			return self::MICRO_BATCH_MIN_ITEMS_ADAPTIVE;
+		}
+
+		return self::MICRO_BATCH_MIN_ITEMS;
+	}
+
+	/**
+	 * Returns a translated serialized group string on success. Returns null
+	 * when the group is not eligible or when validation fails.
+	 */
 	private static function translate_short_non_list_blocks_batch(
 		array $group,
 		string $to,
 		string $from,
-		string $additional_prompt
+		string $additional_prompt,
+		array $context = array()
 	): ?string {
 		TimingLogger::increment( 'micro_batch_candidates' );
 
 		$group_count = count( $group );
-		if ( $group_count < self::MICRO_BATCH_MIN_ITEMS || $group_count > self::MICRO_BATCH_MAX_ITEMS ) {
-			return self::skip_micro_batch( 'group_size_out_of_range', array( 'blocks' => $group_count ) );
+		$min_items   = self::resolve_micro_batch_min_items( $group, $context );
+		if ( $group_count < $min_items || $group_count > self::MICRO_BATCH_MAX_ITEMS ) {
+			return self::skip_micro_batch( 'group_size_out_of_range', array(
+				'blocks'    => $group_count,
+				'min_items' => $min_items,
+			) );
 		}
 
 		$candidates  = array();
@@ -837,6 +1192,8 @@ class ContentTranslator {
 	}
 
 	private static function skip_micro_batch( string $reason, array $context = array() ): ?string {
+		TimingLogger::increment( self::reason_counter_key( 'micro_batch_skip_', $reason ) );
+
 		$payload = array( 'reason' => $reason );
 		if ( ! empty( $context ) ) {
 			$payload = array_merge( $payload, $context );
@@ -844,6 +1201,17 @@ class ContentTranslator {
 
 		TimingLogger::log( 'content_micro_batch_skip', $payload );
 		return null;
+	}
+
+	private static function reason_counter_key( string $prefix, string $reason ): string {
+		$normalized = strtolower( (string) preg_replace( '/[^a-z0-9_]+/', '_', $reason ) );
+		$normalized = trim( $normalized, '_' );
+
+		if ( '' === $normalized ) {
+			$normalized = 'unknown';
+		}
+
+		return $prefix . $normalized;
 	}
 
 	/**
