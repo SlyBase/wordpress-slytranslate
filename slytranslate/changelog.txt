@@ -1,4 +1,9 @@
 = 1.8.0 =
+Changes:
+* TranslatePress string-table batches are now sized by their encoded JSON length instead of raw source characters, preventing the runtime chunk splitter from cutting a batch into two invalid JSON fragments.
+* When a string-table batch returns malformed JSON (e.g. two concatenated objects), the batch is automatically halved and each half is retried up to four levels deep, recovering from transient model errors without failing the whole translation job.
+* Decode failures now log detailed diagnostics including object_count_hint, ends_with_brace, and an output_excerpt, making the root cause immediately visible in timing logs.
+
 Features:
 * TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 * TranslatePress content is now translated via a JSON string-table fast path that batches individual text segments in groups of up to 24, replacing the full Gutenberg block-tree path and reducing the number of AI calls from ~54 to ~8–10 per post.

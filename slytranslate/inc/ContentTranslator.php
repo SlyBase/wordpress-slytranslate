@@ -643,6 +643,15 @@ class ContentTranslator {
 	}
 
 	/**
+	 * UTF-8-aware string length (falls back to strlen when mbstring is absent).
+	 */
+	private static function char_length( string $text ): int {
+		return function_exists( 'mb_strlen' )
+			? (int) mb_strlen( $text, 'UTF-8' )
+			: strlen( $text );
+	}
+
+	/**
 	 * True for freeform parse_blocks entries that carry only inter-block whitespace.
 	 *
 	 * Keeping these as hard section boundaries forces tiny 1-block translation
@@ -1840,32 +1849,17 @@ class ContentTranslator {
 			return array();
 		}
 
-		$pairs   = array();
-		$batches = self::chunk_string_table_units( $units, 24, 2200 );
+		$pairs    = array();
+		$batches  = self::chunk_string_table_units( $units, self::STRING_TABLE_BATCH_MAX_ITEMS );
+		$json_hint = self::string_table_batch_prompt();
+		$prompt    = '' !== trim( $additional_prompt )
+			? trim( $additional_prompt ) . "\n\n" . $json_hint
+			: $json_hint;
 
 		foreach ( $batches as $batch_index => $batch ) {
 			$batch_started = TimingLogger::start();
-			$input         = array();
-			$batch_chars   = 0;
 
-			foreach ( $batch as $unit ) {
-				$input[ $unit['id'] ] = $unit['source'];
-				$batch_chars         += function_exists( 'mb_strlen' )
-					? (int) mb_strlen( $unit['source'], 'UTF-8' )
-					: strlen( $unit['source'] );
-			}
-
-			$json_input = wp_json_encode( $input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
-			if ( false === $json_input ) {
-				return new \WP_Error( 'string_batch_json_encode_failed', __( 'Could not encode translation batch.', 'slytranslate' ) );
-			}
-
-			$json_hint = self::string_table_batch_prompt();
-			$prompt    = '' !== trim( $additional_prompt )
-				? trim( $additional_prompt ) . "\n\n" . $json_hint
-				: $json_hint;
-
-			$result = TranslationRuntime::translate_text( $json_input, $to, $from, $prompt );
+			$result = self::translate_string_table_batch_with_retry( $batch, $to, $from, $prompt, $batch_index );
 			if ( is_wp_error( $result ) ) {
 				TimingLogger::log( 'content_string_batch_error', array(
 					'batch'       => $batch_index,
@@ -1875,23 +1869,18 @@ class ContentTranslator {
 				return $result;
 			}
 
-			// Strip code fences before decoding.
-			$result_str = trim( (string) $result );
-			$result_str = (string) preg_replace( '/^```(?:json)?\s*/i', '', $result_str );
-			$result_str = (string) preg_replace( '/\s*```\s*$/i', '', $result_str );
-			$decoded    = json_decode( trim( $result_str ), true );
-
-			if ( ! is_array( $decoded ) ) {
-				return new \WP_Error( 'string_batch_json_decode_failed', __( 'Translation batch did not return valid JSON.', 'slytranslate' ) );
+			$batch_chars = 0;
+			foreach ( $batch as $unit ) {
+				$batch_chars += self::char_length( $unit['source'] );
 			}
 
 			foreach ( $batch as $unit ) {
 				$id = $unit['id'];
-				if ( ! isset( $decoded[ $id ] ) || ! is_string( $decoded[ $id ] ) ) {
+				if ( ! isset( $result[ $id ] ) || ! is_string( $result[ $id ] ) ) {
 					return new \WP_Error( 'string_batch_missing_key', __( 'The translation batch omitted a string.', 'slytranslate' ) );
 				}
 
-				$translated = $decoded[ $id ];
+				$translated = $result[ $id ];
 				$validation = TranslationValidator::validate( $unit['source'], $translated, $to );
 				if ( is_wp_error( $validation ) ) {
 					return $validation;
@@ -1915,6 +1904,114 @@ class ContentTranslator {
 	}
 
 	/**
+	 * Translate a single batch, retrying by halving on JSON-decode failure.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 * @return array<string, string>|\WP_Error
+	 */
+	private static function translate_string_table_batch_with_retry(
+		array $batch,
+		string $to,
+		string $from,
+		string $prompt,
+		int $batch_index = 0,
+		int $depth = 0
+	): array|\WP_Error {
+		$result = self::translate_one_string_table_batch( $batch, $to, $from, $prompt, $batch_index );
+		if ( ! is_wp_error( $result ) || 'string_batch_json_decode_failed' !== $result->get_error_code() ) {
+			return $result;
+		}
+
+		if ( count( $batch ) <= 1 || $depth >= 4 ) {
+			return $result;
+		}
+
+		$halves = array_chunk( $batch, (int) ceil( count( $batch ) / 2 ) );
+		$merged = array();
+		foreach ( $halves as $half ) {
+			$partial = self::translate_string_table_batch_with_retry( $half, $to, $from, $prompt, $batch_index, $depth + 1 );
+			if ( is_wp_error( $partial ) ) {
+				return $partial;
+			}
+			$merged = array_merge( $merged, $partial );
+		}
+
+		TimingLogger::increment( 'string_batch_split_retries' );
+		return $merged;
+	}
+
+	/**
+	 * Execute one JSON batch call and return a decoded id→translation map.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 * @return array<string, string>|\WP_Error
+	 */
+	private static function translate_one_string_table_batch(
+		array $batch,
+		string $to,
+		string $from,
+		string $prompt,
+		int $batch_index = 0
+	): array|\WP_Error {
+		$input = array();
+		foreach ( $batch as $unit ) {
+			$input[ $unit['id'] ] = $unit['source'];
+		}
+
+		$json_input = wp_json_encode( $input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		if ( false === $json_input ) {
+			return new \WP_Error( 'string_batch_json_encode_failed', __( 'Could not encode translation batch.', 'slytranslate' ) );
+		}
+
+		$input_chars = self::char_length( $json_input );
+		$safe_limit  = self::get_string_table_batch_char_limit();
+		if ( $input_chars > $safe_limit ) {
+			TimingLogger::log( 'content_string_batch_oversized', array(
+				'batch'       => $batch_index,
+				'items'       => count( $batch ),
+				'input_chars' => $input_chars,
+				'safe_limit'  => $safe_limit,
+			) );
+		}
+
+		$result = TranslationRuntime::translate_text( $json_input, $to, $from, $prompt );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return self::decode_string_table_json( (string) $result, $batch_index, $input_chars );
+	}
+
+	/**
+	 * Strip code fences, decode JSON and return diagnostic WP_Error on failure.
+	 *
+	 * @return array<string, mixed>|\WP_Error
+	 */
+	private static function decode_string_table_json( string $raw, int $batch_index, int $input_chars ): array|\WP_Error {
+		$stripped = trim( $raw );
+		$stripped = (string) preg_replace( '/^```(?:json)?\s*/i', '', $stripped );
+		$stripped = (string) preg_replace( '/\s*```\s*$/i', '', $stripped );
+		$stripped = trim( $stripped );
+
+		$decoded = json_decode( $stripped, true );
+		if ( is_array( $decoded ) ) {
+			return $decoded;
+		}
+
+		TimingLogger::log( 'content_string_batch_decode_failed', array(
+			'batch'             => $batch_index,
+			'input_chars'       => $input_chars,
+			'output_chars'      => self::char_length( $stripped ),
+			'json_error'        => json_last_error_msg(),
+			'object_count_hint' => substr_count( $stripped, '}{' ) + 1,
+			'ends_with_brace'   => str_ends_with( rtrim( $stripped ), '}' ) ? 1 : 0,
+			'output_excerpt'    => mb_substr( (string) preg_replace( '/\s+/', ' ', $stripped ), 0, 240 ),
+		) );
+
+		return new \WP_Error( 'string_batch_json_decode_failed', __( 'Translation batch did not return valid JSON.', 'slytranslate' ) );
+	}
+
+	/**
 	 * Prompt hint for string-table JSON batch calls.
 	 */
 	private static function string_table_batch_prompt(): string {
@@ -1922,29 +2019,73 @@ class ContentTranslator {
 	}
 
 	/**
-	 * Split translation units into size-bounded batches.
+	 * Maximum batch size per item count.
+	 */
+	private const STRING_TABLE_BATCH_MAX_ITEMS = 24;
+
+	/**
+	 * Safety margin subtracted from the runtime chunk limit for batch sizing.
+	 */
+	private const STRING_TABLE_BATCH_SAFETY_CHARS = 200;
+
+	/**
+	 * Return the maximum encoded JSON length (in chars) for a single string-table batch.
+	 *
+	 * The value is derived from the runtime chunk limit so that no batch ever
+	 * gets internally split by TranslationRuntime::translate_text().
+	 */
+	public static function get_string_table_batch_char_limit(): int {
+		$runtime_limit = TranslationRuntime::get_chunk_char_limit();
+		return max( 400, $runtime_limit - self::STRING_TABLE_BATCH_SAFETY_CHARS );
+	}
+
+	/**
+	 * Measure the encoded JSON length of a batch to decide whether adding
+	 * another unit would exceed the safe limit.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 */
+	private static function encoded_string_batch_length( array $batch ): int {
+		$input = array();
+		foreach ( $batch as $unit ) {
+			$input[ $unit['id'] ] = $unit['source'];
+		}
+
+		$json = wp_json_encode( $input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		if ( false === $json ) {
+			return PHP_INT_MAX;
+		}
+
+		return self::char_length( $json );
+	}
+
+	/**
+	 * Split translation units into encoded-length-bounded batches.
+	 *
+	 * Uses the actual JSON-encoded length of each candidate batch to ensure no
+	 * batch exceeds the runtime chunk limit (minus a safety margin).
 	 *
 	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $units
 	 * @return array<int, array<int, array{id: string, source: string, lookup_keys: string[]}>>
 	 */
-	private static function chunk_string_table_units( array $units, int $max_items, int $max_chars ): array {
-		$chunks  = array();
-		$current = array();
-		$chars   = 0;
+	private static function chunk_string_table_units( array $units, int $max_items ): array {
+		$max_chars = self::get_string_table_batch_char_limit();
+		$chunks    = array();
+		$current   = array();
 
 		foreach ( $units as $unit ) {
-			$length = function_exists( 'mb_strlen' )
-				? (int) mb_strlen( $unit['source'], 'UTF-8' )
-				: strlen( $unit['source'] );
+			$candidate   = $current;
+			$candidate[] = $unit;
 
-			if ( ! empty( $current ) && ( count( $current ) >= $max_items || $chars + $length > $max_chars ) ) {
+			if ( ! empty( $current )
+				&& ( count( $candidate ) > $max_items || self::encoded_string_batch_length( $candidate ) > $max_chars )
+			) {
 				$chunks[] = $current;
-				$current  = array();
-				$chars    = 0;
+				$current  = array( $unit );
+				continue;
 			}
 
-			$current[] = $unit;
-			$chars    += $length;
+			$current = $candidate;
 		}
 
 		if ( ! empty( $current ) ) {
