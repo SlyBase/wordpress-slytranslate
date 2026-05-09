@@ -119,6 +119,13 @@ class ContentTranslator {
 				return new \WP_Error( 'translation_cancelled', 'Translation cancelled.' );
 			}
 
+			// parse_blocks() emits freeform null blocks for inter-block whitespace.
+			// Treating these as hard run boundaries creates mostly 1-block groups
+			// and prevents micro-batching on real neighboring content blocks.
+			if ( self::is_ignorable_whitespace_block( $block ) ) {
+				continue;
+			}
+
 			if ( self::should_skip_block( $block ) || ! self::has_translatable_content( $block ) ) {
 				$result = self::translate_pending_blocks( $pending_blocks, $chunk_char_limit, $to, $from, $additional_prompt );
 				if ( is_wp_error( $result ) ) {
@@ -521,6 +528,35 @@ class ContentTranslator {
 		}
 
 		return strlen( $serialized );
+	}
+
+	/**
+	 * True for freeform parse_blocks entries that carry only inter-block whitespace.
+	 *
+	 * Keeping these as hard section boundaries forces tiny 1-block translation
+	 * runs. We can safely ignore them because block serialization already inserts
+	 * stable separators around real blocks.
+	 */
+	private static function is_ignorable_whitespace_block( array $block ): bool {
+		$block_name = $block['blockName'] ?? null;
+		if ( is_string( $block_name ) && '' !== trim( $block_name ) ) {
+			return false;
+		}
+
+		if ( ! empty( $block['innerBlocks'] ) ) {
+			return false;
+		}
+
+		$serialized = function_exists( 'serialize_blocks' )
+			? serialize_blocks( array( $block ) )
+			: (string) ( $block['innerHTML'] ?? '' );
+
+		if ( '' === $serialized ) {
+			return true;
+		}
+
+		$without_tags = wp_strip_all_tags( $serialized );
+		return '' === trim( html_entity_decode( $without_tags, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 	}
 
 	/**

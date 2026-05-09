@@ -592,4 +592,100 @@ class ContentTranslationListFastPathTest extends TestCase {
 		$this->assertSame( 1, (int) ( $counters['micro_batch_candidates'] ?? 0 ) );
 		$this->assertSame( 0, (int) ( $counters['micro_batch_skip_group_size_out_of_range'] ?? 0 ) );
 	}
+
+	public function test_whitespace_freeform_blocks_do_not_split_translatable_run(): void {
+		$calls = array();
+
+		$this->stubWpFunctionReturn( 'get_current_user_id', 1 );
+		$this->stubWpFunction( 'serialize_blocks',
+			static function ( array $blocks ): string {
+				$parts = array();
+				foreach ( $blocks as $block ) {
+					$name = $block['blockName'] ?? null;
+
+					if ( 'core/paragraph' === $name ) {
+						$content = $block['attrs']['__test_content'] ?? 'Text';
+						$parts[] = "<!-- wp:paragraph -->\n<p>{$content}</p>\n<!-- /wp:paragraph -->";
+						continue;
+					}
+
+					if ( null === $name ) {
+						$parts[] = (string) ( $block['innerHTML'] ?? "\n\n" );
+					}
+				}
+
+				return implode( '', $parts );
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$calls ) {
+				$calls[] = $text;
+
+				return new class {
+					public function using_system_instruction( string $prompt ) {
+						return $this;
+					}
+
+					public function using_temperature( float $temperature ) {
+						return $this;
+					}
+
+					public function using_model_preference( string $model_slug ) {
+						return $this;
+					}
+
+					public function using_max_tokens( int $max_tokens ) {
+						return $this;
+					}
+
+					public function generate_text(): string {
+						return wp_json_encode( array(
+							'block_0' => '<p>Dies ist ein deutscher Absatz.</p>',
+							'block_1' => '<p>Dies ist ein weiterer deutscher Absatz.</p>',
+						) ) ?: '';
+					}
+				};
+			}
+		);
+
+		$blocks = array(
+			array(
+				'blockName'    => 'core/paragraph',
+				'attrs'        => array( '__test_content' => 'Paragraph one' ),
+				'innerBlocks'  => array(),
+				'innerHTML'    => '<p>Paragraph one</p>',
+				'innerContent' => array( '<p>Paragraph one</p>' ),
+			),
+			array(
+				'blockName'    => null,
+				'attrs'        => array(),
+				'innerBlocks'  => array(),
+				'innerHTML'    => "\n\n",
+				'innerContent' => array( "\n\n" ),
+			),
+			array(
+				'blockName'    => 'core/paragraph',
+				'attrs'        => array( '__test_content' => 'Paragraph two' ),
+				'innerBlocks'  => array(),
+				'innerHTML'    => '<p>Paragraph two</p>',
+				'innerContent' => array( '<p>Paragraph two</p>' ),
+			),
+		);
+
+		\SlyTranslate\TimingLogger::reset_counters();
+
+		$result = $this->invokeStatic(
+			ContentTranslator::class,
+			'do_translate_block_sections',
+			array( $blocks, 'de', 'en', '' )
+		);
+		$counters = \SlyTranslate\TimingLogger::get_counters();
+		$batch_calls = array_values( array_filter( $calls, static fn( string $text ): bool => false !== strpos( $text, 'block_0' ) && false !== strpos( $text, 'block_1' ) ) );
+
+		$this->assertIsString( $result );
+		$this->assertStringContainsString( 'deutscher Absatz', $result );
+		$this->assertNotEmpty( $batch_calls, 'Expected at least one two-item micro-batch attempt for the merged run.' );
+		$this->assertSame( 1, (int) ( $counters['micro_batch_candidates'] ?? 0 ) );
+		$this->assertSame( 0, (int) ( $counters['micro_batch_skip_group_size_out_of_range'] ?? 0 ) );
+	}
 }
