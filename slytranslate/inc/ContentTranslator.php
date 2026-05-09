@@ -21,6 +21,7 @@ class ContentTranslator {
 	private const MICRO_BATCH_MAX_CHARS = 2200;
 	private const MICRO_BATCH_ADAPTIVE_MAX_TOTAL_BLOCKS = 12;
 	private const MICRO_BATCH_ADAPTIVE_MAX_TOTAL_CHARS = 4800;
+	private const PLACEHOLDER_STRICT_PROMPT_MIN_COMMENTS = 4;
 	private const SMALL_WRAPPER_BLOCK_MAX_CHARS = 900;
 	private const TINY_GROUP_CHAR_THRESHOLD = 260;
 	private const TINY_GROUP_COALESCE_MAX_CHARS = 900;
@@ -265,14 +266,15 @@ class ContentTranslator {
 			self::MICRO_BATCH_MAX_CHARS
 		);
 
-		if ( count( $groups ) < 2 ) {
+		if ( empty( $groups ) ) {
 			return $groups;
 		}
 
 		$groups = self::apply_min_block_group_heuristic( $groups );
 		$groups = self::consolidate_small_wrapper_groups( $groups );
+		$groups = self::coalesce_tiny_group_series( $groups );
 
-		return self::coalesce_tiny_group_series( $groups );
+		return self::isolate_nested_block_groups( $groups );
 	}
 
 	/**
@@ -409,6 +411,89 @@ class ContentTranslator {
 	}
 
 	/**
+	 * Split mixed groups so nested-wrapper blocks do not force flat wrappers
+	 * into expensive group-level structure-drift fallbacks.
+	 *
+	 * @param array[] $groups
+	 * @return array[]
+	 */
+	private static function isolate_nested_block_groups( array $groups ): array {
+		if ( empty( $groups ) ) {
+			return $groups;
+		}
+
+		$isolated        = array();
+		$split_groups    = 0;
+		$isolated_blocks = 0;
+
+		foreach ( $groups as $group ) {
+			if ( count( $group ) < 2 || ! self::is_mixed_nested_group( $group ) ) {
+				$isolated[] = $group;
+				continue;
+			}
+
+			$flat_buffer = array();
+
+			foreach ( $group as $block ) {
+				if ( self::has_recursive_inner_blocks( $block ) ) {
+					if ( ! empty( $flat_buffer ) ) {
+						$isolated[]  = $flat_buffer;
+						$flat_buffer = array();
+					}
+
+					$isolated[] = array( $block );
+					++$isolated_blocks;
+					continue;
+				}
+
+				$flat_buffer[] = $block;
+			}
+
+			if ( ! empty( $flat_buffer ) ) {
+				$isolated[] = $flat_buffer;
+			}
+
+			++$split_groups;
+		}
+
+		if ( $split_groups > 0 ) {
+			TimingLogger::log( 'content_group_compaction', array(
+				'stage'           => 'nested_block_isolation',
+				'groups'          => $split_groups,
+				'isolated_blocks' => $isolated_blocks,
+			) );
+		}
+
+		return $isolated;
+	}
+
+	/**
+	 * @param array[] $group
+	 */
+	private static function is_mixed_nested_group( array $group ): bool {
+		$has_nested = false;
+		$has_flat   = false;
+
+		foreach ( $group as $block ) {
+			if ( ! is_array( $block ) ) {
+				return false;
+			}
+
+			if ( self::has_recursive_inner_blocks( $block ) ) {
+				$has_nested = true;
+			} else {
+				$has_flat = true;
+			}
+
+			if ( $has_nested && $has_flat ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * @param array<int, array<int, array<string, mixed>>> $series
 	 * @return array<int, array<int, array<string, mixed>>>
 	 */
@@ -508,6 +593,33 @@ class ContentTranslator {
 		}
 
 		return true;
+	}
+
+	/**
+	 * True when a block contains meaningful nested block content.
+	 */
+	private static function has_recursive_inner_blocks( array $block ): bool {
+		$inner_blocks = $block['innerBlocks'] ?? null;
+		if ( ! is_array( $inner_blocks ) || empty( $inner_blocks ) ) {
+			return false;
+		}
+
+		foreach ( $inner_blocks as $inner_block ) {
+			if ( ! is_array( $inner_block ) ) {
+				continue;
+			}
+
+			if ( ! empty( $inner_block['blockName'] ) || ! empty( $inner_block['innerBlocks'] ) ) {
+				return true;
+			}
+
+			$inner_html = (string) ( $inner_block['innerHTML'] ?? '' );
+			if ( '' !== trim( wp_strip_all_tags( $inner_html ) ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -825,18 +937,7 @@ class ContentTranslator {
 			return false;
 		}
 
-		$inner_blocks = $block['innerBlocks'] ?? null;
-		if ( ! is_array( $inner_blocks ) || empty( $inner_blocks ) ) {
-			return false;
-		}
-
-		foreach ( $inner_blocks as $inner_block ) {
-			if ( is_array( $inner_block ) && ! empty( $inner_block['blockName'] ) ) {
-				return true;
-			}
-		}
-
-		return false;
+		return self::has_recursive_inner_blocks( $block );
 	}
 
 	/**
@@ -1464,8 +1565,23 @@ class ContentTranslator {
 		$sentinel  = "\n<!--SLYWPCSENTINEL-->";
 		$stripped .= $sentinel;
 
-		$retry_prompt        = $block_inner_prompt . "\n\nCRITICAL: Preserve ALL placeholder markers like <!--SLYWPC0-->, <!--SLYWPC1-->, <!--SLYWPC2--> etc. exactly as they appear. Do not remove, merge, or alter these markers.";
-		$translated_stripped = TranslationRuntime::translate_text( $stripped, $to, $from, $block_inner_prompt );
+		$retry_prompt                  = $block_inner_prompt . "\n\nCRITICAL: Preserve ALL placeholder markers like <!--SLYWPC0-->, <!--SLYWPC1-->, <!--SLYWPC2--> etc. exactly as they appear. Do not remove, merge, or alter these markers.";
+		$placeholder_count             = count( $block_comments );
+		$use_strict_placeholder_prompt = $placeholder_count >= self::PLACEHOLDER_STRICT_PROMPT_MIN_COMMENTS;
+
+		if ( $use_strict_placeholder_prompt ) {
+			TimingLogger::log( 'content_placeholder_mode', array(
+				'mode'         => 'strict_first',
+				'placeholders' => $placeholder_count,
+			) );
+		}
+
+		$translated_stripped = TranslationRuntime::translate_text(
+			$stripped,
+			$to,
+			$from,
+			$use_strict_placeholder_prompt ? $retry_prompt : $block_inner_prompt
+		);
 		if ( is_wp_error( $translated_stripped ) ) {
 			return $translated_stripped;
 		}
@@ -1482,20 +1598,25 @@ class ContentTranslator {
 			}
 		}
 
-		// Retry once with an explicit preservation instruction if any placeholder was dropped.
+		// Retry once with an explicit preservation instruction when the initial
+		// call was not already strict.
 		if ( $placeholders_missing ) {
-			$stripped_retry      = $stripped; // sentinel already appended above
-			$translated_stripped = TranslationRuntime::translate_text( $stripped_retry, $to, $from, $retry_prompt );
-			if ( is_wp_error( $translated_stripped ) ) {
-				return $translated_stripped;
-			}
-			$translated_stripped = (string) preg_replace( '/\s*<!--SLYWPCSENTINEL-->\s*$/i', '', $translated_stripped );
+			$still_missing = true;
 
-			$still_missing = false;
-			foreach ( array_keys( $block_comments ) as $i ) {
-				if ( false === strpos( $translated_stripped, '<!--SLYWPC' . $i . '-->' ) ) {
-					$still_missing = true;
-					break;
+			if ( ! $use_strict_placeholder_prompt ) {
+				$stripped_retry      = $stripped; // sentinel already appended above
+				$translated_stripped = TranslationRuntime::translate_text( $stripped_retry, $to, $from, $retry_prompt );
+				if ( is_wp_error( $translated_stripped ) ) {
+					return $translated_stripped;
+				}
+				$translated_stripped = (string) preg_replace( '/\s*<!--SLYWPCSENTINEL-->\s*$/i', '', $translated_stripped );
+
+				$still_missing = false;
+				foreach ( array_keys( $block_comments ) as $i ) {
+					if ( false === strpos( $translated_stripped, '<!--SLYWPC' . $i . '-->' ) ) {
+						$still_missing = true;
+						break;
+					}
 				}
 			}
 
@@ -1694,5 +1815,142 @@ class ContentTranslator {
 	 */
 	private static function has_translatable_content( array $block ): bool {
 		return TextSplitter::should_translate_block_fragment( serialize_blocks( array( $block ) ) );
+	}
+
+	/* ---------------------------------------------------------------
+	 * String-table fast path (used by StringTableContentAdapter)
+	 * ------------------------------------------------------------- */
+
+	/**
+	 * Translate a flat list of text units via JSON batching.
+	 *
+	 * Returns a map of lookup_key → translated_string, ready to hand off to
+	 * TranslatePressAdapter::create_translation() as `content_string_pairs`.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $units
+	 * @return array<string, string>|\WP_Error
+	 */
+	public static function translate_string_table_units(
+		array $units,
+		string $to,
+		string $from,
+		string $additional_prompt = ''
+	): array|\WP_Error {
+		if ( empty( $units ) ) {
+			return array();
+		}
+
+		$pairs   = array();
+		$batches = self::chunk_string_table_units( $units, 24, 2200 );
+
+		foreach ( $batches as $batch_index => $batch ) {
+			$batch_started = TimingLogger::start();
+			$input         = array();
+			$batch_chars   = 0;
+
+			foreach ( $batch as $unit ) {
+				$input[ $unit['id'] ] = $unit['source'];
+				$batch_chars         += function_exists( 'mb_strlen' )
+					? (int) mb_strlen( $unit['source'], 'UTF-8' )
+					: strlen( $unit['source'] );
+			}
+
+			$json_input = wp_json_encode( $input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			if ( false === $json_input ) {
+				return new \WP_Error( 'string_batch_json_encode_failed', __( 'Could not encode translation batch.', 'slytranslate' ) );
+			}
+
+			$json_hint = self::string_table_batch_prompt();
+			$prompt    = '' !== trim( $additional_prompt )
+				? trim( $additional_prompt ) . "\n\n" . $json_hint
+				: $json_hint;
+
+			$result = TranslationRuntime::translate_text( $json_input, $to, $from, $prompt );
+			if ( is_wp_error( $result ) ) {
+				TimingLogger::log( 'content_string_batch_error', array(
+					'batch'       => $batch_index,
+					'error'       => $result->get_error_code(),
+					'duration_ms' => TimingLogger::stop( $batch_started ),
+				) );
+				return $result;
+			}
+
+			// Strip code fences before decoding.
+			$result_str = trim( (string) $result );
+			$result_str = (string) preg_replace( '/^```(?:json)?\s*/i', '', $result_str );
+			$result_str = (string) preg_replace( '/\s*```\s*$/i', '', $result_str );
+			$decoded    = json_decode( trim( $result_str ), true );
+
+			if ( ! is_array( $decoded ) ) {
+				return new \WP_Error( 'string_batch_json_decode_failed', __( 'Translation batch did not return valid JSON.', 'slytranslate' ) );
+			}
+
+			foreach ( $batch as $unit ) {
+				$id = $unit['id'];
+				if ( ! isset( $decoded[ $id ] ) || ! is_string( $decoded[ $id ] ) ) {
+					return new \WP_Error( 'string_batch_missing_key', __( 'The translation batch omitted a string.', 'slytranslate' ) );
+				}
+
+				$translated = $decoded[ $id ];
+				$validation = TranslationValidator::validate( $unit['source'], $translated, $to );
+				if ( is_wp_error( $validation ) ) {
+					return $validation;
+				}
+
+				foreach ( $unit['lookup_keys'] as $lookup_key ) {
+					$pairs[ $lookup_key ] = $translated;
+				}
+			}
+
+			TimingLogger::log( 'content_string_batch_done', array(
+				'batch'       => $batch_index,
+				'items'       => count( $batch ),
+				'chars'       => $batch_chars,
+				'duration_ms' => TimingLogger::stop( $batch_started ),
+				'ok'          => true,
+			) );
+		}
+
+		return $pairs;
+	}
+
+	/**
+	 * Prompt hint for string-table JSON batch calls.
+	 */
+	private static function string_table_batch_prompt(): string {
+		return 'The input is a JSON object of independent WordPress text segments. Translate only the values, keep all keys unchanged, preserve inline placeholders and whitespace intent, and return ONLY valid JSON with the identical keys.';
+	}
+
+	/**
+	 * Split translation units into size-bounded batches.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $units
+	 * @return array<int, array<int, array{id: string, source: string, lookup_keys: string[]}>>
+	 */
+	private static function chunk_string_table_units( array $units, int $max_items, int $max_chars ): array {
+		$chunks  = array();
+		$current = array();
+		$chars   = 0;
+
+		foreach ( $units as $unit ) {
+			$length = function_exists( 'mb_strlen' )
+				? (int) mb_strlen( $unit['source'], 'UTF-8' )
+				: strlen( $unit['source'] );
+
+			if ( ! empty( $current ) && ( count( $current ) >= $max_items || $chars + $length > $max_chars ) ) {
+				$chunks[] = $current;
+				$current  = array();
+				$chars    = 0;
+			}
+
+			$current[] = $unit;
+			$chars    += $length;
+		}
+
+		if ( ! empty( $current ) ) {
+			$chunks[] = $current;
+		}
+
+		return $chunks;
 	}
 }

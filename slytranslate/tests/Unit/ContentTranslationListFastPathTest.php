@@ -501,6 +501,56 @@ class ContentTranslationListFastPathTest extends TestCase {
 		$this->assertCount( 3, $groups[0] );
 	}
 
+	public function test_prepare_translation_groups_isolates_nested_blocks_from_flat_wrappers(): void {
+		$this->stubWpFunction( 'serialize_blocks',
+			static function ( array $blocks ): string {
+				$serialized = '';
+				foreach ( $blocks as $block ) {
+					$length      = (int) ( $block['attrs']['__len'] ?? 20 );
+					$serialized .= str_repeat( 'x', max( 1, $length ) );
+				}
+
+				return $serialized;
+			}
+		);
+
+		$pending_blocks = array(
+			array(
+				'blockName'   => 'core/paragraph',
+				'attrs'       => array( '__len' => 260 ),
+				'innerBlocks' => array(),
+			),
+			array(
+				'blockName'   => 'core/group',
+				'attrs'       => array( '__len' => 260 ),
+				'innerBlocks' => array(
+					array(
+						'blockName'   => 'core/paragraph',
+						'innerBlocks' => array(),
+						'innerHTML'   => '<p>Nested</p>',
+					),
+				),
+			),
+			array(
+				'blockName'   => 'core/paragraph',
+				'attrs'       => array( '__len' => 260 ),
+				'innerBlocks' => array(),
+			),
+		);
+
+		$groups = $this->invokeStatic(
+			ContentTranslator::class,
+			'prepare_translation_groups',
+			array( $pending_blocks, 1200 )
+		);
+
+		$this->assertCount( 3, $groups );
+		$this->assertCount( 1, $groups[0] );
+		$this->assertCount( 1, $groups[1] );
+		$this->assertCount( 1, $groups[2] );
+		$this->assertSame( 'core/group', $groups[1][0]['blockName'] );
+	}
+
 	public function test_micro_batch_allows_two_item_group_for_small_pending_payload(): void {
 		$calls = array();
 

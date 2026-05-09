@@ -220,12 +220,44 @@ class PostTranslationService {
 
 			TimingLogger::log( 'phase_start', array( 'phase' => 'content', 'chars' => self::char_length( $post->post_content ) ) );
 			$phase_started = TimingLogger::start();
-			$content = ContentTranslator::translate_parsed_blocks( $parsed_blocks, $post->post_content, $to, $from, $additional_prompt );
-			if ( is_wp_error( $content ) ) {
-				TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $content->get_error_code() ) );
-				self::log_job_end( $post_id, $job_started_at, false );
-				return $content;
+
+			$content_string_pairs = null;
+
+			if ( $adapter instanceof StringTableContentAdapter && $adapter->supports_pretranslated_content_pairs() ) {
+				// String-table fast path: translate individual text segments as JSON batches
+				// instead of the full block tree. This is correct for adapters like
+				// TranslatePress that store original→translated string pairs rather than
+				// translated post_content.
+				$units = $adapter->build_content_translation_units( $post->post_content );
+
+				TimingLogger::log( 'content_string_batch_plan', array(
+					'units' => count( $units ),
+					'chars' => array_sum( array_map(
+						static fn( array $u ) => function_exists( 'mb_strlen' )
+							? (int) mb_strlen( $u['source'], 'UTF-8' )
+							: strlen( $u['source'] ),
+						$units
+					) ),
+				) );
+
+				$content_string_pairs = ContentTranslator::translate_string_table_units( $units, $to, $from, $additional_prompt );
+				if ( is_wp_error( $content_string_pairs ) ) {
+					TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $content_string_pairs->get_error_code() ) );
+					self::log_job_end( $post_id, $job_started_at, false );
+					return $content_string_pairs;
+				}
+
+				// TranslatePress keeps the source post_content unchanged.
+				$content = $post->post_content;
+			} else {
+				$content = ContentTranslator::translate_parsed_blocks( $parsed_blocks, $post->post_content, $to, $from, $additional_prompt );
+				if ( is_wp_error( $content ) ) {
+					TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $content->get_error_code() ) );
+					self::log_job_end( $post_id, $job_started_at, false );
+					return $content;
+				}
 			}
+
 			TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true ) );
 
 			// Fill any remaining content budget so the bar never stalls when
@@ -313,15 +345,19 @@ class PostTranslationService {
 			$phase_started = TimingLogger::start();
 
 			// Persist via adapter.
-			$result = $adapter->create_translation( $post_id, $to, array(
-				'post_title'   => $title,
-				'post_content' => $content,
-				'post_excerpt' => $excerpt,
-				'post_status'  => $target_status,
-				'meta'         => $processed_meta,
-				'overwrite'    => $overwrite,
+			$create_payload = array(
+				'post_title'      => $title,
+				'post_content'    => $content,
+				'post_excerpt'    => $excerpt,
+				'post_status'     => $target_status,
+				'meta'            => $processed_meta,
+				'overwrite'       => $overwrite,
 				'source_language' => $from,
-			) );
+			);
+			if ( is_array( $content_string_pairs ) ) {
+				$create_payload['content_string_pairs'] = $content_string_pairs;
+			}
+			$result = $adapter->create_translation( $post_id, $to, $create_payload );
 
 			$saving_ok = ! is_wp_error( $result );
 			TimingLogger::log( 'phase_end', array(

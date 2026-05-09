@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
  * no language markup in post content, no separate translated posts.
  * This adapter operates in single-entry-translation mode.
  */
-class TranslatePressAdapter implements TranslationPluginAdapter {
+class TranslatePressAdapter implements TranslationPluginAdapter, StringTableContentAdapter {
 
 	/** @var array<string, int> */
 	private array $translation_lookup_cache = array();
@@ -49,6 +49,41 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 	 */
 	public function get_language_variant( string $value, string $language_code ): string {
 		return $value;
+	}
+
+	/* ---------------------------------------------------------------
+	 * StringTableContentAdapter
+	 * ------------------------------------------------------------- */
+
+	public function supports_pretranslated_content_pairs(): bool {
+		return true;
+	}
+
+	/**
+	 * Build translatable text units from post content for the JSON-batch fast path.
+	 *
+	 * {@inheritDoc}
+	 *
+	 * @return array<int, array{id: string, source: string, lookup_keys: string[]}>
+	 */
+	public function build_content_translation_units( string $source_content ): array {
+		$segments = $this->extract_string_segments( $source_content );
+		$units    = array();
+
+		foreach ( $segments as $index => $segment ) {
+			$lookup_keys = $this->build_segment_lookup_keys( $segment );
+			if ( empty( $lookup_keys ) ) {
+				continue;
+			}
+
+			$units[] = array(
+				'id'          => 'seg_' . $index,
+				'source'      => $segment,
+				'lookup_keys' => $lookup_keys,
+			);
+		}
+
+		return $units;
 	}
 
 	public function get_post_language( int $post_id ): ?string {
@@ -218,7 +253,13 @@ class TranslatePressAdapter implements TranslationPluginAdapter {
 			}
 		}
 
-		if ( isset( $data['post_content'] ) ) {
+		if ( isset( $data['content_string_pairs'] ) && is_array( $data['content_string_pairs'] ) ) {
+			foreach ( $data['content_string_pairs'] as $original => $translated ) {
+				if ( is_string( $original ) && is_string( $translated ) && '' !== trim( $original ) ) {
+					$pairs[ $original ] = $translated;
+				}
+			}
+		} elseif ( isset( $data['post_content'] ) ) {
 			$pairs = array_merge( $pairs, $this->build_content_pairs( (string) $post->post_content, (string) $data['post_content'] ) );
 		}
 

@@ -571,8 +571,94 @@ class TranslatePressAdapterTest extends TestCase {
 		$this->assertTrue( $result );
 	}
 
-	// -----------------------------------------------------------------------
-	// Helpers
+	// -----------------------------------------------------------------------	// build_content_translation_units
+	// -------------------------------------------------------------------------
+
+	public function test_build_content_translation_units_returns_lookup_variants(): void {
+		// A segment that touches a link boundary so extract_string_segments emits
+		// both a trimmed and an untrimmed variant.
+		$html = '<p>Text <a href="#">mit Link</a> danach</p>';
+
+		$units = $this->adapter->build_content_translation_units( $html );
+
+		$this->assertNotEmpty( $units );
+		foreach ( $units as $unit ) {
+			$this->assertArrayHasKey( 'id', $unit );
+			$this->assertArrayHasKey( 'source', $unit );
+			$this->assertArrayHasKey( 'lookup_keys', $unit );
+			$this->assertNotEmpty( $unit['lookup_keys'] );
+		}
+
+		// At least one unit must contain lookup key variants that differ in whitespace.
+		$multi_key_unit = null;
+		foreach ( $units as $unit ) {
+			if ( count( $unit['lookup_keys'] ) > 1 ) {
+				$multi_key_unit = $unit;
+				break;
+			}
+		}
+		$this->assertNotNull( $multi_key_unit, 'Expected at least one unit with multiple lookup keys' );
+	}
+
+	public function test_build_content_translation_units_empty_content(): void {
+		$units = $this->adapter->build_content_translation_units( '' );
+		$this->assertSame( array(), $units );
+	}
+
+	// -------------------------------------------------------------------------
+	// create_translation – content_string_pairs fast path
+	// -------------------------------------------------------------------------
+
+	public function test_create_translation_uses_pretranslated_content_pairs(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		$post               = new \WP_Post();
+		$post->ID           = 7;
+		$post->post_title   = 'Titel';
+		$post->post_content = '<p>Erster Satz</p><p>Zweiter Satz</p>';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$content_pairs = array(
+			'Erster Satz'  => 'First sentence',
+			'Zweiter Satz' => 'Second sentence',
+		);
+
+		$result = $this->adapter->create_translation( 7, 'en', array(
+			'post_title'           => 'Title',
+			'post_content'         => $post->post_content,
+			'content_string_pairs' => $content_pairs,
+			'overwrite'            => true,
+		) );
+
+		$this->assertSame( 7, $result );
+
+		// Verify the string pairs were passed to the TRP spy.
+		$all_inserted = array();
+		foreach ( $spy->insert_calls as $call ) {
+			$all_inserted = array_merge( $all_inserted, $call['strings'] );
+		}
+		$all_updated_originals = array();
+		foreach ( $spy->update_calls as $call ) {
+			foreach ( $call['rows'] as $row ) {
+				$all_updated_originals[] = $row['original'] ?? '';
+			}
+		}
+		$all_strings = array_merge( $all_inserted, $all_updated_originals );
+
+		// Both content pair originals must have been processed.
+		$this->assertContains( 'Erster Satz', $all_strings );
+		$this->assertContains( 'Zweiter Satz', $all_strings );
+	}
+
+	// -------------------------------------------------------------------------	// Helpers
 	// -----------------------------------------------------------------------
 
 	private function invokeMethod( object $object, string $method, array $args = array() ): mixed {

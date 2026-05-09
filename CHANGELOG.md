@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.8.0]
 ### Features
 - TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
+- TranslatePress content is now translated via a JSON string-table fast path that batches individual text segments in groups of up to 24, replacing the full Gutenberg block-tree path and reducing the number of AI calls from ~54 to ~8–10 per post.
 
 ### Changes
 - TranslatePress existence checks now query only the requested target language and reuse request-local lookups, reducing preflight database work before a translation starts.
@@ -20,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Micro-batching now adaptively allows 2-block groups for small pending payloads while preserving per-item validation and fallback safety.
 - Job-end diagnostics now include skip-reason aggregates plus KPI ratios (`tiny_call_ratio`, `micro_batch_hit_rate`, `avg_chars_per_ai_call`, `single_block_group_ratio`) with explicit target corridor values.
 - Content run building now ignores whitespace-only freeform parser blocks, so neighboring translatable blocks are no longer split into artificial one-block runs.
+- Mixed groups are now split before translation so nested-wrapper blocks are isolated from flat wrappers, reducing costly `group_structure_drift` fallback cascades.
+- Multi-block placeholder-preservation calls now start with strict marker instructions, avoiding redundant retry calls when block markers are dropped.
 
 ### Fixes
 - TranslatePress translations now persist stable string-pair lookups around inline links, so linked paragraph segments no longer stay untranslated because of boundary whitespace differences.
