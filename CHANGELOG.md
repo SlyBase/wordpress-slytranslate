@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Multi-block placeholder-preservation calls now start with strict marker instructions, avoiding redundant retry calls when block markers are dropped.
 
 ### Fixes
+- TranslatePress string-table batches now retry and isolate empty per-segment model results instead of failing the whole content translation.
 - TranslatePress translations now persist stable string-pair lookups around inline links, so linked paragraph segments no longer stay untranslated because of boundary whitespace differences.
 - Paragraph blocks containing inline tags (`<a>`, `<code>`, `<strong>`, …) are no longer silently left untranslated when the model drops tags during the unwrap optimisation: failed inline-tag retries now fall through to translate the full inner HTML instead of keeping the source block.
 - When all four translation attempts fail to preserve inline tags in a block, the best available translated result is now accepted instead of silently keeping the entire block in the source language.

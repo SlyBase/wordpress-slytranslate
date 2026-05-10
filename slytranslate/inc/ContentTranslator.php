@@ -1859,7 +1859,7 @@ class ContentTranslator {
 		foreach ( $batches as $batch_index => $batch ) {
 			$batch_started = TimingLogger::start();
 
-			$result = self::translate_string_table_batch_with_retry( $batch, $to, $from, $prompt, $batch_index );
+			$result = self::translate_string_table_batch_validated( $batch, $to, $from, $prompt, $batch_index );
 			if ( is_wp_error( $result ) ) {
 				TimingLogger::log( 'content_string_batch_error', array(
 					'batch'       => $batch_index,
@@ -1875,17 +1875,8 @@ class ContentTranslator {
 			}
 
 			foreach ( $batch as $unit ) {
-				$id = $unit['id'];
-				if ( ! isset( $result[ $id ] ) || ! is_string( $result[ $id ] ) ) {
-					return new \WP_Error( 'string_batch_missing_key', __( 'The translation batch omitted a string.', 'slytranslate' ) );
-				}
-
+				$id         = $unit['id'];
 				$translated = $result[ $id ];
-				$validation = TranslationValidator::validate( $unit['source'], $translated, $to );
-				if ( is_wp_error( $validation ) ) {
-					return $validation;
-				}
-
 				foreach ( $unit['lookup_keys'] as $lookup_key ) {
 					$pairs[ $lookup_key ] = $translated;
 				}
@@ -1901,6 +1892,186 @@ class ContentTranslator {
 		}
 
 		return $pairs;
+	}
+
+	/**
+	 * Translate a batch and recover from per-item validation failures.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 * @return array<string, string>|\WP_Error
+	 */
+	private static function translate_string_table_batch_validated(
+		array $batch,
+		string $to,
+		string $from,
+		string $prompt,
+		int $batch_index = 0,
+		int $depth = 0
+	): array|\WP_Error {
+		$result = self::translate_string_table_batch_with_retry( $batch, $to, $from, $prompt, $batch_index );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$issues = self::find_string_table_batch_issues( $batch, $result, $to );
+		if ( empty( $issues ) ) {
+			return self::normalize_string_table_batch_result( $batch, $result );
+		}
+
+		self::log_string_table_batch_validation_issues( $issues, $batch_index, $depth );
+
+		if ( 0 === $depth ) {
+			TimingLogger::increment( 'retries' );
+			TimingLogger::increment( 'string_batch_validation_retries' );
+			TimingLogger::log( 'content_string_batch_validation_retry', array(
+				'batch'    => $batch_index,
+				'items'    => count( $batch ),
+				'issues'   => count( $issues ),
+				'depth'    => $depth,
+				'strategy' => 'strict_batch',
+			) );
+
+			return self::translate_string_table_batch_validated(
+				$batch,
+				$to,
+				$from,
+				self::string_table_strict_retry_prompt( $prompt ),
+				$batch_index,
+				$depth + 1
+			);
+		}
+
+		if ( count( $batch ) > 1 && $depth < self::STRING_TABLE_VALIDATION_MAX_DEPTH ) {
+			TimingLogger::increment( 'retries' );
+			TimingLogger::increment( 'string_batch_validation_split_retries' );
+			TimingLogger::log( 'content_string_batch_validation_retry', array(
+				'batch'    => $batch_index,
+				'items'    => count( $batch ),
+				'issues'   => count( $issues ),
+				'depth'    => $depth,
+				'strategy' => 'split_batch',
+			) );
+
+			$halves = array_chunk( $batch, (int) ceil( count( $batch ) / 2 ) );
+			$merged = array();
+			foreach ( $halves as $half ) {
+				$partial = self::translate_string_table_batch_validated( $half, $to, $from, $prompt, $batch_index, $depth + 1 );
+				if ( is_wp_error( $partial ) ) {
+					return $partial;
+				}
+				$merged = array_merge( $merged, $partial );
+			}
+
+			return $merged;
+		}
+
+		return self::recover_string_table_batch_validation_issues( $batch, $result, $issues, $batch_index, $depth );
+	}
+
+	/**
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 * @param array<string, mixed> $result
+	 * @return array<int, array{id: string, error: string, source: string, translated: string}>
+	 */
+	private static function find_string_table_batch_issues( array $batch, array $result, string $to ): array {
+		$issues = array();
+
+		foreach ( $batch as $unit ) {
+			$id = (string) $unit['id'];
+			if ( ! array_key_exists( $id, $result ) || ! is_string( $result[ $id ] ) ) {
+				$issues[] = array(
+					'id'         => $id,
+					'error'      => 'string_batch_missing_key',
+					'source'     => (string) $unit['source'],
+					'translated' => '',
+				);
+				continue;
+			}
+
+			$translated = (string) $result[ $id ];
+			$validation = TranslationValidator::validate( (string) $unit['source'], $translated, $to );
+			if ( is_wp_error( $validation ) ) {
+				$issues[] = array(
+					'id'         => $id,
+					'error'      => (string) $validation->get_error_code(),
+					'source'     => (string) $unit['source'],
+					'translated' => $translated,
+				);
+			}
+		}
+
+		return $issues;
+	}
+
+	/**
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 * @param array<string, mixed> $result
+	 * @return array<string, string>
+	 */
+	private static function normalize_string_table_batch_result( array $batch, array $result ): array {
+		$normalized = array();
+		foreach ( $batch as $unit ) {
+			$id                = (string) $unit['id'];
+			$normalized[ $id ] = (string) $result[ $id ];
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * @param array<int, array{id: string, error: string, source: string, translated: string}> $issues
+	 */
+	private static function log_string_table_batch_validation_issues( array $issues, int $batch_index, int $depth ): void {
+		$first = $issues[0];
+		TimingLogger::log( 'content_string_batch_validation_failed', array(
+			'batch'          => $batch_index,
+			'issues'         => count( $issues ),
+			'depth'          => $depth,
+			'first_id'       => $first['id'],
+			'first_error'    => $first['error'],
+			'source_chars'   => self::char_length( $first['source'] ),
+			'output_chars'   => self::char_length( $first['translated'] ),
+			'source_excerpt' => self::string_table_log_excerpt( $first['source'] ),
+			'output_excerpt' => self::string_table_log_excerpt( $first['translated'] ),
+		) );
+	}
+
+	/**
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 * @param array<string, mixed> $result
+	 * @param array<int, array{id: string, error: string, source: string, translated: string}> $issues
+	 * @return array<string, string>
+	 */
+	private static function recover_string_table_batch_validation_issues( array $batch, array $result, array $issues, int $batch_index, int $depth ): array {
+		$issue_by_id = array();
+		foreach ( $issues as $issue ) {
+			$issue_by_id[ $issue['id'] ] = $issue;
+		}
+
+		$recovered = array();
+		foreach ( $batch as $unit ) {
+			$id = (string) $unit['id'];
+			if ( ! isset( $issue_by_id[ $id ] ) ) {
+				$recovered[ $id ] = (string) $result[ $id ];
+				continue;
+			}
+
+			$issue = $issue_by_id[ $id ];
+			TimingLogger::increment( 'fallbacks' );
+			TimingLogger::increment( 'string_batch_items_kept_in_source' );
+			TimingLogger::log( 'content_string_batch_item_kept_in_source', array(
+				'batch'          => $batch_index,
+				'id'             => $id,
+				'depth'          => $depth,
+				'reason'         => $issue['error'],
+				'source_excerpt' => self::string_table_log_excerpt( $issue['source'] ),
+				'output_excerpt' => self::string_table_log_excerpt( $issue['translated'] ),
+			) );
+
+			$recovered[ $id ] = (string) $unit['source'];
+		}
+
+		return $recovered;
 	}
 
 	/**
@@ -2015,7 +2186,20 @@ class ContentTranslator {
 	 * Prompt hint for string-table JSON batch calls.
 	 */
 	private static function string_table_batch_prompt(): string {
-		return 'The input is a JSON object of independent WordPress text segments. Translate only the values, keep all keys unchanged, preserve inline placeholders and whitespace intent, and return ONLY valid JSON with the identical keys.';
+		return 'The input is a JSON object of independent WordPress text segments. Translate only the values and return ONLY valid JSON with the identical keys. Preserve every key exactly. Never omit, merge, move, or leave empty any non-empty value. Translate sentence fragments as fragments, preserving boundary whitespace intent. If a value is a code identifier, URL, shortcode, model slug, ability name, or function name, copy it unchanged.';
+	}
+
+	private static function string_table_strict_retry_prompt( string $prompt ): string {
+		return $prompt . "\n\nCRITICAL STRING-TABLE RETRY: Every input key with non-empty source text MUST have a non-empty value in the output. Do not combine neighboring keys. Do not move words from one key into another key. Keep code-like values unchanged. Return one valid JSON object only.";
+	}
+
+	private static function string_table_log_excerpt( string $value ): string {
+		$compact = preg_replace( '/\s+/u', ' ', $value );
+		$compact = is_string( $compact ) ? trim( $compact ) : trim( $value );
+
+		return function_exists( 'mb_substr' )
+			? mb_substr( $compact, 0, 160, 'UTF-8' )
+			: substr( $compact, 0, 160 );
 	}
 
 	/**
@@ -2027,6 +2211,11 @@ class ContentTranslator {
 	 * Safety margin subtracted from the runtime chunk limit for batch sizing.
 	 */
 	private const STRING_TABLE_BATCH_SAFETY_CHARS = 200;
+
+	/**
+	 * Maximum recursive validation-retry depth for string-table batches.
+	 */
+	private const STRING_TABLE_VALIDATION_MAX_DEPTH = 4;
 
 	/**
 	 * Return the maximum encoded JSON length (in chars) for a single string-table batch.

@@ -161,6 +161,85 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		$this->assertSame( array(), $result );
 	}
 
+	public function test_string_batch_retries_empty_item_with_strict_prompt(): void {
+		$units = array(
+			array(
+				'id'          => 'seg_0',
+				'source'      => 'gespeicherten Connector.',
+				'lookup_keys' => array( 'gespeicherten Connector.' ),
+			),
+		);
+
+		$responses = array(
+			(string) json_encode( array( 'seg_0' => '' ) ),
+			(string) json_encode( array( 'seg_0' => 'saved connector.' ) ),
+		);
+		$call_count = 0;
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
+		$this->stubWpFunction( 'wp_json_encode', static fn( $val, $flags = 0 ) => json_encode( $val, $flags ) );
+		$this->stubWpAiClientWithResponseSequence( $responses, $call_count );
+
+		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
+
+		$this->assertIsArray( $result );
+		$this->assertSame( 'saved connector.', $result['gespeicherten Connector.'] );
+		$this->assertSame( 2, $call_count );
+	}
+
+	public function test_string_batch_splits_after_strict_retry_still_has_empty_item(): void {
+		$units = array(
+			array(
+				'id'          => 'seg_0',
+				'source'      => 'Hallo Welt',
+				'lookup_keys' => array( 'Hallo Welt' ),
+			),
+			array(
+				'id'          => 'seg_1',
+				'source'      => 'gespeicherten Connector.',
+				'lookup_keys' => array( 'gespeicherten Connector.' ),
+			),
+		);
+
+		$responses = array(
+			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => '' ) ),
+			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => '' ) ),
+			(string) json_encode( array( 'seg_0' => 'Hello world' ) ),
+			(string) json_encode( array( 'seg_1' => 'saved connector.' ) ),
+		);
+		$call_count = 0;
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
+		$this->stubWpFunction( 'wp_json_encode', static fn( $val, $flags = 0 ) => json_encode( $val, $flags ) );
+		$this->stubWpAiClientWithResponseSequence( $responses, $call_count );
+
+		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
+
+		$this->assertIsArray( $result );
+		$this->assertSame( 'Hello world', $result['Hallo Welt'] );
+		$this->assertSame( 'saved connector.', $result['gespeicherten Connector.'] );
+		$this->assertSame( 4, $call_count );
+	}
+
+	public function test_string_batch_keeps_single_item_in_source_after_empty_retries(): void {
+		$units = array(
+			array(
+				'id'          => 'seg_0',
+				'source'      => 'gespeicherten Connector.',
+				'lookup_keys' => array( 'gespeicherten Connector.' ),
+			),
+		);
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
+		$this->stubWpFunction( 'wp_json_encode', static fn( $val, $flags = 0 ) => json_encode( $val, $flags ) );
+		$this->stubWpAiClientWithFixedResponse( (string) json_encode( array( 'seg_0' => '' ) ) );
+
+		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
+
+		$this->assertIsArray( $result );
+		$this->assertSame( 'gespeicherten Connector.', $result['gespeicherten Connector.'] );
+	}
+
 	// -----------------------------------------------------------------------
 	// JSON decode diagnostics and split-retry
 	// -----------------------------------------------------------------------
@@ -242,31 +321,32 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 	// translate_string_table_units – error cases
 	// -----------------------------------------------------------------------
 
-	public function test_string_batch_rejects_missing_key(): void {
+	public function test_string_batch_keeps_missing_key_in_source_after_retries(): void {
 		$units = array(
 			array(
 				'id'          => 'seg_0',
-				'source'      => 'Hello',
-				'lookup_keys' => array( 'Hello' ),
+				'source'      => 'Hallo',
+				'lookup_keys' => array( 'Hallo' ),
 			),
 			array(
 				'id'          => 'seg_1',
-				'source'      => 'World',
-				'lookup_keys' => array( 'World' ),
+				'source'      => 'Welt',
+				'lookup_keys' => array( 'Welt' ),
 			),
 		);
 
 		// Batch returns JSON with seg_0 but misses seg_1.
-		$response_json = json_encode( array( 'seg_0' => 'Hallo' ) );
+		$response_json = json_encode( array( 'seg_0' => 'Hello' ) );
 
 		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
 		$this->stubWpFunction( 'wp_json_encode', static fn( $val, $flags = 0 ) => json_encode( $val, $flags ) );
 		$this->stubWpAiClientWithFixedResponse( $response_json );
 
-		$result = ContentTranslator::translate_string_table_units( $units, 'de', 'en' );
+		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertSame( 'string_batch_missing_key', $result->get_error_code() );
+		$this->assertIsArray( $result );
+		$this->assertSame( 'Hello', $result['Hallo'] );
+		$this->assertSame( 'Welt', $result['Welt'] );
 	}
 
 	public function test_string_batch_returns_error_on_invalid_json(): void {
@@ -315,10 +395,24 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 	 * Stub wp_ai_client_prompt to return a fixed JSON string.
 	 */
 	private function stubWpAiClientWithFixedResponse( string $fixed_response ): void {
+		$call_count = 0;
+		$this->stubWpAiClientWithResponseSequence( array( $fixed_response ), $call_count );
+	}
+
+	/**
+	 * Stub wp_ai_client_prompt to return a sequence of responses.
+	 *
+	 * @param string[] $responses
+	 */
+	private function stubWpAiClientWithResponseSequence( array $responses, int &$call_count ): void {
 		$this->stubWpFunction(
 			'wp_ai_client_prompt',
-			static function () use ( $fixed_response ) {
-				return new class( $fixed_response ) {
+			static function () use ( $responses, &$call_count ) {
+				$response_index = $call_count;
+				$call_count++;
+				$response = $responses[ $response_index ] ?? end( $responses );
+
+				return new class( (string) $response ) {
 					private string $resp;
 
 					public function __construct( string $resp ) {
