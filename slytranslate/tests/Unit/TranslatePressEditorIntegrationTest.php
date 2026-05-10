@@ -87,6 +87,8 @@ class TranslatePressEditorIntegrationTest extends TestCase {
 		$this->assertCount( 1, $localized );
 		$this->assertSame( 'SlyTranslateTranslatePressEditor', $localized[0]['object_name'] );
 		$this->assertTrue( $localized[0]['data']['enabled'] );
+		$this->assertArrayHasKey( 'debugLogEnabled', $localized[0]['data'] );
+		$this->assertFalse( $localized[0]['data']['debugLogEnabled'] );
 		$this->assertSame( 42, $localized[0]['data']['postId'] );
 		$this->assertSame( 'Smoke Test Post', $localized[0]['data']['postTitle'] );
 		$this->assertSame( 'de', $localized[0]['data']['sourceLanguage'] );

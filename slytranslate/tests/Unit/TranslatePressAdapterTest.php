@@ -64,13 +64,89 @@ class SpyTrpQuery {
 	}
 }
 
+class FakeWpdb {
+	public string $prefix = 'wp_';
+
+	/** @var array<int, object> */
+	public array $original_rows = array();
+
+	/** @var array<int, object> */
+	public array $dictionary_rows = array();
+
+	/** @var array<int, array<string, mixed>> */
+	public array $update_calls = array();
+
+	/** @var array<int, array<string, mixed>> */
+	public array $insert_calls = array();
+
+	public function prepare( string $query, ...$args ): array {
+		return array(
+			'query' => $query,
+			'args'  => $args,
+		);
+	}
+
+	/** @return array<int, object> */
+	public function get_results( $prepared ): array {
+		$query = is_array( $prepared ) ? (string) ( $prepared['query'] ?? '' ) : (string) $prepared;
+		$args  = is_array( $prepared ) ? (array) ( $prepared['args'] ?? array() ) : array();
+
+		if ( false !== strpos( $query, 'trp_original_strings' ) ) {
+			$wanted = array_fill_keys( array_map( 'strval', $args ), true );
+			return array_values( array_filter( $this->original_rows, static function ( $row ) use ( $wanted ) {
+				return isset( $row->original ) && isset( $wanted[ (string) $row->original ] );
+			} ) );
+		}
+
+		if ( false !== strpos( $query, 'trp_dictionary_' ) ) {
+			$wanted = array_fill_keys( array_map( 'intval', $args ), true );
+			return array_values( array_filter( $this->dictionary_rows, static function ( $row ) use ( $wanted ) {
+				return isset( $row->original_id ) && isset( $wanted[ (int) $row->original_id ] );
+			} ) );
+		}
+
+		return array();
+	}
+
+	public function update( string $table, array $data, array $where ): int {
+		$this->update_calls[] = array(
+			'table' => $table,
+			'data'  => $data,
+			'where' => $where,
+		);
+
+		return 1;
+	}
+
+	public function insert( string $table, array $data ): int {
+		$this->insert_calls[] = array(
+			'table' => $table,
+			'data'  => $data,
+		);
+
+		return 1;
+	}
+}
+
 class TranslatePressAdapterTest extends TestCase {
 
 	private TestablePressAdapter $adapter;
+	private mixed $previous_wpdb = null;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->adapter = new TestablePressAdapter();
+		$this->previous_wpdb = $GLOBALS['wpdb'] ?? null;
+	}
+
+	protected function tearDown(): void {
+		if ( null === $this->previous_wpdb ) {
+			unset( $GLOBALS['wpdb'] );
+		} else {
+			$GLOBALS['wpdb'] = $this->previous_wpdb;
+		}
+
+		parent::tearDown();
 	}
 
 	// -----------------------------------------------------------------------
@@ -261,6 +337,33 @@ class TranslatePressAdapterTest extends TestCase {
 		$this->assertCount( 1, $spy->existing_calls );
 	}
 
+	public function test_get_string_translation_prefers_exact_lookup_key_match(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		$exact             = new \stdClass();
+		$exact->original   = 'Wähle Text → "Übersetzen".';
+		$exact->translated = 'Select text -> "Translate".';
+		$exact->status     = 2;
+
+		$texturized             = new \stdClass();
+		$texturized->original   = 'Wähle Text → &#8222;Übersetzen&#8220;.';
+		$texturized->translated = 'Select text -> "Translate".';
+		$texturized->status     = 2;
+
+		$spy->existing_result = array( $texturized, $exact );
+
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$this->assertSame( 'Select text -> "Translate".', $this->adapter->get_string_translation( 'Wähle Text → "Übersetzen".', 'en' ) );
+		$this->assertSame( 'en_US', $spy->existing_calls[0]['lang'] );
+		$this->assertContains( 'Wähle Text → "Übersetzen".', $spy->existing_calls[0]['strings'] );
+	}
+
 	// -----------------------------------------------------------------------
 	// extract_string_segments (via reflection)
 	// -----------------------------------------------------------------------
@@ -447,6 +550,85 @@ class TranslatePressAdapterTest extends TestCase {
 		$this->assertSame( 2, $row['status'] );
 		$this->assertSame( 'Title', $row['translated'] );
 		$this->assertSame( 'Titel', $row['original'] );
+	}
+
+	public function test_create_translation_persists_real_original_string_ids_via_tables(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+		$wpdb                           = new FakeWpdb();
+		$GLOBALS['wpdb']                = $wpdb;
+
+		$id_row           = new \stdClass();
+		$id_row->original = 'Titel';
+		$id_row->id       = 42;
+		$spy->string_ids_result = array( $id_row );
+
+		$original_row           = new \stdClass();
+		$original_row->id       = 10;
+		$original_row->original = 'Titel';
+		$wpdb->original_rows    = array( $original_row );
+
+		$dictionary_row              = new \stdClass();
+		$dictionary_row->id          = 99;
+		$dictionary_row->original_id = 10;
+		$wpdb->dictionary_rows       = array( $dictionary_row );
+
+		$post               = new \WP_Post();
+		$post->ID           = 7;
+		$post->post_title   = 'Titel';
+		$post->post_content = '';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$this->adapter->create_translation( 7, 'en', array( 'post_title' => 'Title', 'overwrite' => true ) );
+
+		$this->assertCount( 0, $spy->update_calls );
+		$this->assertCount( 1, $wpdb->update_calls );
+		$this->assertSame( 'wp_trp_dictionary_de_de_en_us', $wpdb->update_calls[0]['table'] );
+		$this->assertSame( array( 'id' => 99 ), $wpdb->update_calls[0]['where'] );
+		$this->assertSame( 10, $wpdb->update_calls[0]['data']['original_id'] );
+	}
+
+	public function test_create_translation_inserts_new_dictionary_row_with_real_original_string_id(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+		$wpdb                           = new FakeWpdb();
+		$GLOBALS['wpdb']                = $wpdb;
+
+		$id_row           = new \stdClass();
+		$id_row->original = 'Titel';
+		$id_row->id       = 42;
+		$spy->string_ids_result = array( $id_row );
+
+		$original_row           = new \stdClass();
+		$original_row->id       = 10;
+		$original_row->original = 'Titel';
+		$wpdb->original_rows    = array( $original_row );
+
+		$post               = new \WP_Post();
+		$post->ID           = 7;
+		$post->post_title   = 'Titel';
+		$post->post_content = '';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$this->adapter->create_translation( 7, 'en', array( 'post_title' => 'Title', 'overwrite' => true ) );
+
+		$this->assertCount( 1, $wpdb->insert_calls );
+		$this->assertSame( 'wp_trp_dictionary_de_de_en_us', $wpdb->insert_calls[0]['table'] );
+		$this->assertSame( 10, $wpdb->insert_calls[0]['data']['original_id'] );
 	}
 
 	public function test_create_translation_inserts_missing_strings(): void {

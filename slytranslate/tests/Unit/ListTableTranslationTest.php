@@ -28,7 +28,6 @@ class ListTableTranslationTest extends TestCase {
 
 			public function get_languages(): array {
 				return array(
-					'en' => 'English',
 					'de' => 'Deutsch',
 				);
 			}
@@ -61,6 +60,8 @@ class ListTableTranslationTest extends TestCase {
 
 		$this->assertArrayHasKey( 'slytranslate', $actions );
 		$this->assertStringContainsString( 'class="slytranslate-ajax-translate"', $actions['slytranslate'] );
+		$this->assertStringContainsString( 'data-source-lang="en"', $actions['slytranslate'] );
+		$this->assertStringContainsString( 'data-all-langs="[{&quot;code&quot;:&quot;en&quot;,&quot;name&quot;:&quot;EN&quot;},{&quot;code&quot;:&quot;de&quot;,&quot;name&quot;:&quot;Deutsch&quot;}]"', $actions['slytranslate'] );
 		$this->assertStringContainsString( 'data-existing-langs="[&quot;de&quot;]"', $actions['slytranslate'] );
 		$this->assertStringContainsString( 'data-langs="[{&quot;code&quot;:&quot;de&quot;,&quot;name&quot;:&quot;Deutsch&quot;}]"', $actions['slytranslate'] );
 	}

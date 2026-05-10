@@ -192,6 +192,14 @@ class AI_Translate {
 				'callback'            => array( self::class, 'execute_get_progress' ),
 				'permission_callback' => $translation_permission,
 			),
+			'/ai-translate/log-editor-event/run'      => array(
+				'callback'            => array( self::class, 'execute_log_editor_event' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/get-existing-translation/run' => array(
+				'callback'            => array( self::class, 'execute_get_existing_translation' ),
+				'permission_callback' => $translation_permission,
+			),
 			'/ai-translate/cancel-translation/run'    => array(
 				'callback'            => array( self::class, 'execute_cancel_translation' ),
 				'permission_callback' => $translation_permission,
@@ -389,6 +397,87 @@ class AI_Translate {
 				);
 			}
 		);
+	}
+
+	public static function execute_get_existing_translation( $input ) {
+		$input = is_array( $input ) ? $input : array();
+
+		$target_language = self::require_language_code_input( $input, 'target_language', 'missing_target_language', __( 'Target language is required.', 'slytranslate' ) );
+		if ( is_wp_error( $target_language ) ) { return $target_language; }
+
+		$source_text = isset( $input['source_text'] ) && is_string( $input['source_text'] )
+			? trim( wp_strip_all_tags( $input['source_text'], false ) )
+			: '';
+
+		if ( '' === $source_text ) {
+			return new \WP_Error( 'missing_source_text', __( 'Source text is required.', 'slytranslate' ) );
+		}
+
+		$adapter = self::get_adapter();
+		if ( ! $adapter instanceof TranslatePressAdapter ) {
+			return new \WP_Error( 'translatepress_not_available', __( 'TranslatePress is not active.', 'slytranslate' ) );
+		}
+
+		$translated_text = $adapter->get_string_translation( $source_text, $target_language );
+
+		return array(
+			'target_language' => $target_language,
+			'source_text'     => $source_text,
+			'translated_text' => is_string( $translated_text ) ? $translated_text : '',
+			'found'           => is_string( $translated_text ) && '' !== trim( $translated_text ),
+		);
+	}
+
+	public static function execute_log_editor_event( $input ) {
+		$input = is_array( $input ) ? $input : array();
+
+		if ( ! TimingLogger::is_enabled() ) {
+			return array( 'logged' => false );
+		}
+
+		$event = isset( $input['event'] ) && is_string( $input['event'] )
+			? sanitize_key( $input['event'] )
+			: '';
+
+		if ( '' === $event ) {
+			return new \WP_Error( 'missing_event', __( 'Editor event is required.', 'slytranslate' ) );
+		}
+
+		$context         = array();
+		$allowed_context = array(
+			'post_id',
+			'target_count',
+			'target_language',
+			'reason',
+			'phase',
+			'percent',
+			'model_slug',
+			'source_length',
+			'has_source_field',
+			'has_target_field',
+			'is_running',
+			'found',
+		);
+
+		foreach ( $allowed_context as $key ) {
+			if ( ! array_key_exists( $key, $input ) ) {
+				continue;
+			}
+
+			$value = $input[ $key ];
+			if ( is_bool( $value ) || is_numeric( $value ) ) {
+				$context[ $key ] = $value;
+				continue;
+			}
+
+			if ( is_string( $value ) ) {
+				$context[ $key ] = sanitize_text_field( $value );
+			}
+		}
+
+		TimingLogger::log( 'translatepress_editor', array_merge( array( 'event' => $event ), $context ) );
+
+		return array( 'logged' => true );
 	}
 
 	public static function execute_translate_posts( $input ) {

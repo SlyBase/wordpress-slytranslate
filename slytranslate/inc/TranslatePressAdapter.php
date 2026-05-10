@@ -194,6 +194,59 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 		return $this->remember_translation_lookup( $cache_key, 0 );
 	}
 
+	public function get_string_translation( string $source_text, string $target_lang ): ?string {
+		if ( ! $this->is_available() ) {
+			return null;
+		}
+
+		$target_lang = sanitize_key( $target_lang );
+		if ( '' === $target_lang ) {
+			return null;
+		}
+
+		$trp_locale = $this->iso2_to_locale( $target_lang );
+		if ( null === $trp_locale ) {
+			return null;
+		}
+
+		$query = $this->get_trp_query();
+		if ( null === $query ) {
+			return null;
+		}
+
+		$lookup_keys = $this->build_segment_lookup_keys( $source_text );
+		if ( empty( $lookup_keys ) ) {
+			return null;
+		}
+
+		$rows = $query->get_existing_translations( $lookup_keys, $trp_locale );
+		if ( ! is_array( $rows ) || empty( $rows ) ) {
+			return null;
+		}
+
+		$translations = array();
+		foreach ( $rows as $row ) {
+			if ( ! isset( $row->original, $row->translated ) || empty( $row->status ) ) {
+				continue;
+			}
+
+			$translated = (string) $row->translated;
+			if ( '' === trim( $translated ) ) {
+				continue;
+			}
+
+			$translations[ (string) $row->original ] = $translated;
+		}
+
+		foreach ( $lookup_keys as $lookup_key ) {
+			if ( isset( $translations[ $lookup_key ] ) ) {
+				return $translations[ $lookup_key ];
+			}
+		}
+
+		return empty( $translations ) ? null : reset( $translations );
+	}
+
 	/**
 	 * Save translated strings into TranslatePress DB tables.
 	 *
@@ -610,6 +663,10 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			$query->insert_strings( $missing, $trp_locale );
 		}
 
+		if ( $this->persist_string_pairs_via_tables( $pairs, $trp_locale ) ) {
+			return;
+		}
+
 		// Re-fetch IDs for all originals (including newly inserted ones).
 		$string_id_rows = $query->get_string_ids( $originals, $trp_locale );
 		if ( ! is_array( $string_id_rows ) || empty( $string_id_rows ) ) {
@@ -625,13 +682,17 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			if ( ! isset( $pairs[ $original ] ) ) {
 				continue;
 			}
+			$original_id = isset( $row->original_id ) ? (int) $row->original_id : 0;
+			if ( $original_id < 1 && isset( $row->id ) ) {
+				$original_id = (int) $row->id;
+			}
 			$update_rows[] = array(
 				'id'          => isset( $row->id ) ? (int) $row->id : 0,
 				'original'    => $original,
 				'translated'  => $pairs[ $original ],
 				'status'      => 2,
 				'block_type'  => 0,
-				'original_id' => isset( $row->original_id ) ? (int) $row->original_id : 0,
+				'original_id' => $original_id,
 			);
 		}
 
@@ -645,5 +706,155 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			'inserted'  => count( $missing ),
 			'updated'   => count( $update_rows ),
 		) );
+	}
+
+	/**
+	 * Persist string pairs via direct TranslatePress table updates when available.
+	 *
+	 * On some TranslatePress installs, TRP_Query::get_string_ids() returns the
+	 * dictionary row id rather than the original string id, which produces orphan
+	 * dictionary rows that the editor cannot resolve later. Reading the real
+	 * original-string ids from wp_trp_original_strings avoids that mismatch.
+	 */
+	private function persist_string_pairs_via_tables( array $pairs, string $trp_locale ): bool {
+		global $wpdb;
+
+		if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! method_exists( $wpdb, 'prepare' ) || ! method_exists( $wpdb, 'get_results' ) || ! method_exists( $wpdb, 'update' ) || ! method_exists( $wpdb, 'insert' ) ) {
+			return false;
+		}
+
+		$dictionary_table = $this->get_dictionary_table_name( $trp_locale );
+		if ( null === $dictionary_table ) {
+			return false;
+		}
+
+		$original_id_map = $this->get_original_string_id_map( array_keys( $pairs ) );
+		if ( empty( $original_id_map ) ) {
+			return false;
+		}
+
+		$dictionary_rows = $this->get_dictionary_rows_by_original_id( $dictionary_table, array_values( $original_id_map ) );
+		$updated         = 0;
+		$inserted        = 0;
+
+		foreach ( $pairs as $original => $translated ) {
+			if ( ! isset( $original_id_map[ $original ] ) ) {
+				continue;
+			}
+
+			$original_id = $original_id_map[ $original ];
+			$data        = array(
+				'original'    => $original,
+				'translated'  => $translated,
+				'status'      => 2,
+				'block_type'  => 0,
+				'original_id' => $original_id,
+			);
+
+			if ( isset( $dictionary_rows[ $original_id ] ) && isset( $dictionary_rows[ $original_id ]->id ) ) {
+				$wpdb->update( $dictionary_table, $data, array( 'id' => (int) $dictionary_rows[ $original_id ]->id ) );
+				$updated++;
+				continue;
+			}
+
+			$wpdb->insert( $dictionary_table, $data );
+			$inserted++;
+		}
+
+		TimingLogger::log( 'translatepress_pairs_saved', array(
+			'locale'    => $trp_locale,
+			'originals' => count( $pairs ),
+			'inserted'  => $inserted,
+			'updated'   => $updated,
+		) );
+
+		return true;
+	}
+
+	/**
+	 * @param string[] $originals
+	 * @return array<string, int>
+	 */
+	private function get_original_string_id_map( array $originals ): array {
+		global $wpdb;
+
+		$originals = array_values( array_unique( array_filter( $originals, static function ( $value ) {
+			return is_string( $value ) && '' !== trim( $value );
+		} ) ) );
+
+		if ( empty( $originals ) ) {
+			return array();
+		}
+
+		$placeholders = implode( ', ', array_fill( 0, count( $originals ), '%s' ) );
+		$table        = $wpdb->prefix . 'trp_original_strings';
+		$sql          = $wpdb->prepare( "SELECT id, original FROM {$table} WHERE original IN ({$placeholders})", ...$originals );
+		$rows         = $wpdb->get_results( $sql );
+
+		if ( ! is_array( $rows ) || empty( $rows ) ) {
+			return array();
+		}
+
+		$result = array();
+		foreach ( $rows as $row ) {
+			if ( ! isset( $row->id, $row->original ) ) {
+				continue;
+			}
+
+			$result[ (string) $row->original ] = (int) $row->id;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param int[] $original_ids
+	 * @return array<int, object>
+	 */
+	private function get_dictionary_rows_by_original_id( string $dictionary_table, array $original_ids ): array {
+		global $wpdb;
+
+		$original_ids = array_values( array_unique( array_filter( array_map( 'intval', $original_ids ), static function ( int $value ) {
+			return $value > 0;
+		} ) ) );
+
+		if ( empty( $original_ids ) ) {
+			return array();
+		}
+
+		$placeholders = implode( ', ', array_fill( 0, count( $original_ids ), '%d' ) );
+		$sql          = $wpdb->prepare( "SELECT id, original_id FROM {$dictionary_table} WHERE original_id IN ({$placeholders})", ...$original_ids );
+		$rows         = $wpdb->get_results( $sql );
+
+		if ( ! is_array( $rows ) || empty( $rows ) ) {
+			return array();
+		}
+
+		$result = array();
+		foreach ( $rows as $row ) {
+			if ( ! isset( $row->original_id ) ) {
+				continue;
+			}
+
+			$result[ (int) $row->original_id ] = $row;
+		}
+
+		return $result;
+	}
+
+	private function get_dictionary_table_name( string $trp_locale ): ?string {
+		global $wpdb;
+
+		$settings       = get_option( 'trp_settings', array() );
+		$default_locale = isset( $settings['default-language'] ) ? (string) $settings['default-language'] : '';
+		if ( '' === $default_locale || ! isset( $wpdb ) || ! is_object( $wpdb ) || ! isset( $wpdb->prefix ) ) {
+			return null;
+		}
+
+		$normalize_locale = static function ( string $locale ): string {
+			return strtolower( str_replace( '-', '_', $locale ) );
+		};
+
+		return $wpdb->prefix . 'trp_dictionary_' . $normalize_locale( $default_locale ) . '_' . $normalize_locale( $trp_locale );
 	}
 }

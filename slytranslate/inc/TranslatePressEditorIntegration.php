@@ -90,6 +90,7 @@ class TranslatePressEditorIntegration {
 		return array(
 			'enabled'              => ! empty( $context['enabled'] ),
 			'disabledReason'       => isset( $context['disabled_reason'] ) ? (string) $context['disabled_reason'] : '',
+			'debugLogEnabled'      => self::is_debug_log_enabled(),
 			'restUrl'              => esc_url_raw( rest_url( Plugin::REST_NAMESPACE . '/' ) ),
 			'restNonce'            => wp_create_nonce( 'wp_rest' ),
 			'postId'               => isset( $context['post_id'] ) ? (int) $context['post_id'] : 0,
@@ -200,18 +201,15 @@ class TranslatePressEditorIntegration {
 	private static function get_editor_strings(): array {
 		return array(
 			'panelTitle'            => __( 'Translate with SlyTranslate', 'slytranslate' ),
-			'sourceLanguageLabel'   => __( 'Source language', 'slytranslate' ),
-			'targetLanguageLabel'   => __( 'Target language', 'slytranslate' ),
 			'modelLabel'            => __( 'AI model', 'slytranslate' ),
-			'refreshModelsButton'   => __( 'Refresh model list', 'slytranslate' ),
-			'overwriteLabel'        => __( 'Overwrite existing translation', 'slytranslate' ),
+			'refreshModelsButton'   => __( 'Neu laden', 'slytranslate' ),
 			'additionalPromptLabel' => __( 'Additional instructions (optional)', 'slytranslate' ),
 			'additionalPromptHelp'  => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
-			'startButton'           => __( 'Start translation', 'slytranslate' ),
-			'cancelButton'          => __( 'Cancel translation', 'slytranslate' ),
-			'reloadPreviewButton'   => __( 'Reload preview', 'slytranslate' ),
+			'startButton'           => __( 'Übersetzen', 'slytranslate' ),
+			'cancelButton'          => __( 'Übersetzung abbrechen', 'slytranslate' ),
 			'loadingModels'         => __( 'Loading available models...', 'slytranslate' ),
 			'noTargetLanguages'     => __( 'No target languages are available for this content item.', 'slytranslate' ),
+			'translatingLanguage'   => __( 'Translating {language}...', 'slytranslate' ),
 			'progressTitle'         => __( 'Translating title...', 'slytranslate' ),
 			'progressContent'       => __( 'Translating content...', 'slytranslate' ),
 			'progressContentFinishing' => __( 'Processing translated content...', 'slytranslate' ),
@@ -220,10 +218,15 @@ class TranslatePressEditorIntegration {
 			'progressSaving'        => __( 'Saving translation...', 'slytranslate' ),
 			'progressDone'          => __( 'Translation complete.', 'slytranslate' ),
 			'successNotice'         => __( 'Translation completed successfully.', 'slytranslate' ),
+			'cancelNotice'          => __( 'Translation cancelled.', 'slytranslate' ),
 			'errorPrefix'           => __( 'Translation failed:', 'slytranslate' ),
 			'unknownError'          => __( 'An unexpected error occurred.', 'slytranslate' ),
 			'unsupportedNotice'     => __( 'SlyTranslate is only available here for singular posts and pages you can edit.', 'slytranslate' ),
 		);
+	}
+
+	private static function is_debug_log_enabled(): bool {
+		return TimingLogger::is_enabled();
 	}
 
 	private static function is_supported_context(): bool {

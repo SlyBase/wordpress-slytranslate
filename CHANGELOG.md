@@ -18,6 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timing logs now include `content_string_batch_detail` with batch count, max encoded input length, and the batch char limit, and `job_end` includes `string_batch_item_retries`, `string_batch_validation_retries`, and `string_batch_split_retries` for direct diagnosis of retry costs.
 
 ### Fixes
+- TranslatePress frontend editor actions now use the shorter German button label "Übersetzen", keep the additional-instructions hint visually compact, keep the model reload button smaller and vertically aligned, reset stale progress text correctly, and refresh the visible target field immediately after a translation without requiring a full page reload.
+- TranslatePress frontend editor runs now overwrite the existing target-language entry automatically and treat REST error payloads as real failures, so repeat clicks no longer report false success while leaving the visible field empty.
+- TranslatePress frontend editor debugging can now write button-state and run-lifecycle events whenever WordPress debug logging is active, making unexpected button resets directly traceable.
+- TranslatePress frontend editor translations now keep the main button visually stable during short runs and only expose the cancel state once a translation has been running long enough to need it.
+- TranslatePress string-pair saves now resolve the real TranslatePress original-string IDs directly from the source table, so frontend-editor translations no longer disappear into dictionary rows that the editor cannot read back.
 - TranslatePress list-table language pickers now include the source language even when TranslatePress omits it from its target-language settings, so the language selection on post and page overview screens no longer appears empty.
 - TranslatePress now shows the Translate row action and bulk Translate option on post and page overview screens in single-entry mode.
 - TranslatePress no longer leaves segments untranslated when WordPress's wptexturize converts straight quotes to typographic HTML entities at render time; lookup keys now include the texturized and entity-encoded variants of each segment so that existing dictionary entries are matched and filled correctly.

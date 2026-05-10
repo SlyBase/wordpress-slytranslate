@@ -107,6 +107,13 @@ class ListTableTranslation {
 		// "swap source/target" experience and let the user override Polylang's
 		// detected source language if needed.
 		$all_languages = array();
+		if ( is_string( $source_lang ) && '' !== $source_lang && ! isset( $languages[ $source_lang ] ) ) {
+			$all_languages[] = array(
+				'code' => $source_lang,
+				'name' => strtoupper( $source_lang ),
+			);
+		}
+
 		foreach ( $languages as $code => $name ) {
 			$all_languages[] = array( 'code' => (string) $code, 'name' => (string) $name );
 		}
