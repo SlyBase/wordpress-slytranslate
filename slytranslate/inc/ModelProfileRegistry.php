@@ -29,6 +29,7 @@ final class ModelProfileRegistry {
 			'extra_request_body'         => array(),
 			'chunk_strategy'             => self::CHUNK_STRATEGY_DEFAULT,
 			'max_chunk_chars'            => 0,
+			'string_table_batch_char_limit' => 0,
 			'temperature'                => 0,
 			'retry_profile'              => array(
 				'retry_on_validation_failure' => true,
@@ -206,6 +207,7 @@ final class ModelProfileRegistry {
 					// chunks above ~650 chars (same class as Granite 3/4).
 					'chunk_strategy'  => self::CHUNK_STRATEGY_TOWER,
 					'max_chunk_chars' => 650,
+					'string_table_batch_char_limit' => 1000,
 					'retry_profile'   => array(
 						'retry_chunk_chars' => 1200,
 					),

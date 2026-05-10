@@ -199,6 +199,13 @@ class AI_Translate {
 				'callback'            => array( self::class, 'execute_get_available_models' ),
 				'permission_callback' => $translation_permission,
 			),
+			'/ai-translate/string-table-worker/run'   => array(
+				'callback'            => array( self::class, 'execute_string_table_worker' ),
+				'permission_callback' => static function ( $request ): bool {
+					$input = self::get_rest_route_input( $request );
+					return ConfigurationService::validate_string_table_probe_token( (string) ( $input['token'] ?? '' ) );
+				},
+			),
 			'/ai-translate/save-additional-prompt/run' => array(
 				'callback'            => array( self::class, 'execute_save_additional_prompt' ),
 				'permission_callback' => $translation_permission,
@@ -468,6 +475,11 @@ class AI_Translate {
 			'meta_keys_clear'                  => get_option( 'slytranslate_meta_clear', '' ),
 			'auto_translate_new'               => get_option( 'slytranslate_new_post', '0' ) === '1',
 			'context_window_tokens'            => absint( get_option( 'slytranslate_context_window_tokens', 0 ) ),
+			'string_table_concurrency'         => ConfigurationService::get_string_table_concurrency_setting(),
+			'string_table_concurrency_effective' => ConfigurationService::get_effective_string_table_concurrency()['effective'],
+			'string_table_concurrency_recommended' => ConfigurationService::get_effective_string_table_concurrency()['recommended'],
+			'string_table_concurrency_supported' => ConfigurationService::get_effective_string_table_concurrency()['supported'],
+			'string_table_concurrency_transport' => ConfigurationService::get_effective_string_table_concurrency()['transport'],
 			'model_slug'                       => get_option( 'slytranslate_model_slug', '' ),
 			'direct_api_url'                   => get_option( 'slytranslate_direct_api_url', '' ),
 			'force_direct_api'                 => get_option( 'slytranslate_force_direct_api', '0' ) === '1',
@@ -485,6 +497,74 @@ class AI_Translate {
 			'effective_context_window_tokens'  => TranslationRuntime::get_effective_context_window_tokens(),
 			'effective_chunk_chars'            => TranslationRuntime::get_chunk_char_limit(),
 			'last_transport_diagnostics'       => TranslationRuntime::get_last_diagnostics_snapshot(),
+		);
+	}
+
+	public static function execute_string_table_worker( $input ) {
+		$input = is_array( $input ) ? $input : array();
+		$token = isset( $input['token'] ) && is_string( $input['token'] ) ? $input['token'] : '';
+		if ( ! ConfigurationService::validate_string_table_probe_token( $token ) ) {
+			return new \WP_Error( 'invalid_probe_token', __( 'The string-table worker token is invalid or expired.', 'slytranslate' ) );
+		}
+
+		$action     = isset( $input['action'] ) && is_string( $input['action'] ) ? sanitize_key( $input['action'] ) : '';
+		$model_slug = isset( $input['model_slug'] ) && is_string( $input['model_slug'] ) ? $input['model_slug'] : '';
+
+		return TranslationRuntime::with_model_slug_override(
+			array( 'model_slug' => $model_slug ),
+			static function () use ( $input, $action ) {
+				$started = TimingLogger::start();
+
+				if ( 'probe' === $action ) {
+					$text            = isset( $input['text'] ) && is_string( $input['text'] ) ? $input['text'] : '';
+					$source_language = isset( $input['source_language'] ) && is_string( $input['source_language'] ) ? sanitize_key( $input['source_language'] ) : 'de';
+					$target_language = isset( $input['target_language'] ) && is_string( $input['target_language'] ) ? sanitize_key( $input['target_language'] ) : 'en';
+					$result          = TranslationRuntime::translate_text( $text, $target_language, $source_language, 'Return only the translation.' );
+
+					if ( is_wp_error( $result ) ) {
+						return array(
+							'ok'         => false,
+							'error_code' => $result->get_error_code(),
+							'message'    => $result->get_error_message(),
+							'duration_ms' => TimingLogger::stop( $started ),
+						);
+					}
+
+					return array(
+						'ok'          => true,
+						'duration_ms' => TimingLogger::stop( $started ),
+						'translated'  => (string) $result,
+					);
+				}
+
+				if ( 'translate_string_table_batch' === $action ) {
+					$batch             = isset( $input['batch'] ) && is_array( $input['batch'] ) ? $input['batch'] : array();
+					$target_language   = isset( $input['target_language'] ) && is_string( $input['target_language'] ) ? sanitize_key( $input['target_language'] ) : '';
+					$source_language   = isset( $input['source_language'] ) && is_string( $input['source_language'] ) ? sanitize_key( $input['source_language'] ) : '';
+					$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? sanitize_textarea_field( $input['additional_prompt'] ) : '';
+					$batch_index       = absint( $input['batch_index'] ?? 0 );
+					$result            = ContentTranslator::translate_string_table_batch_worker( $batch, $target_language, $source_language, $additional_prompt, $batch_index );
+
+					if ( is_wp_error( $result ) ) {
+						return array(
+							'ok'          => false,
+							'error_code'  => $result->get_error_code(),
+							'message'     => $result->get_error_message(),
+							'batch_index' => $batch_index,
+							'duration_ms' => TimingLogger::stop( $started ),
+						);
+					}
+
+					return array(
+						'ok'          => true,
+						'batch_index' => $batch_index,
+						'duration_ms' => TimingLogger::stop( $started ),
+						'result'      => $result,
+					);
+				}
+
+				return new \WP_Error( 'invalid_string_table_worker_action', __( 'Unknown string-table worker action.', 'slytranslate' ) );
+			}
 		);
 	}
 
@@ -606,6 +686,8 @@ class AI_Translate {
 			'slytranslate_direct_api_kwargs_last_probed_at',
 			'slytranslate_learned_context_window_tokens',
 			'slytranslate_last_kwarg_probe_result',
+			'slytranslate_string_table_concurrency',
+			'slytranslate_string_table_concurrency_recommendations',
 		);
 
 		foreach ( $options as $option ) {

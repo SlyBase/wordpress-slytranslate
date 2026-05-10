@@ -432,6 +432,7 @@ class TranslationRuntime {
 			),
 			'chunk_strategy'             => self::CHUNK_STRATEGY_DEFAULT,
 			'max_chunk_chars'            => 0,
+			'string_table_batch_char_limit' => 0,
 			'temperature'                => 0,
 			'retry_profile'              => array(
 				'retry_on_validation_failure' => true,
@@ -476,6 +477,7 @@ class TranslationRuntime {
 		$normalized['requires_strict_direct_api'] = ! empty( $normalized['requires_strict_direct_api'] );
 		$normalized['requires_chat_template_kwargs'] = ! empty( $normalized['requires_chat_template_kwargs'] );
 		$normalized['max_chunk_chars']            = absint( $normalized['max_chunk_chars'] ?? 0 );
+		$normalized['string_table_batch_char_limit'] = absint( $normalized['string_table_batch_char_limit'] ?? 0 );
 		$temperature                              = is_numeric( $normalized['temperature'] ?? null ) ? (float) $normalized['temperature'] : 0.0;
 		$normalized['temperature']                = max( 0.0, min( 2.0, $temperature ) );
 

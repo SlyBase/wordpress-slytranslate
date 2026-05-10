@@ -17,6 +17,9 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		parent::setUp();
 		// Reset cached chunk limit so each test starts with a clean state.
 		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'context', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_slug_override', null );
+		$this->setStaticProperty( TranslationRuntime::class, 'model_profile_cache', array() );
 	}
 
 	// -----------------------------------------------------------------------
@@ -98,6 +101,67 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 
 		$this->assertLessThanOrEqual( $runtime, $safe );
 		$this->assertSame( 1000, $safe );
+	}
+
+	public function test_string_table_char_limit_prefers_model_profile_limit(): void {
+		$this->stubWpFunction( 'get_option', static function ( $option, $default = false ) {
+			if ( 'slytranslate_model_slug' === $option ) {
+				return 'Ministral-8B-Instruct-2410-Q4_K_M';
+			}
+
+			return $default;
+		} );
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 1200 );
+
+		$context = ContentTranslator::get_string_table_batch_limit_context();
+
+		$this->assertSame( 1000, $context['limit'] );
+		$this->assertSame( 1000, $context['profile_limit'] );
+		$this->assertSame( 'ministral', $context['profile_id'] );
+		$this->assertSame( 'model_profile', $context['source'] );
+	}
+
+	public function test_string_table_char_limit_falls_back_to_runtime_when_profile_has_no_override(): void {
+		$this->stubWpFunction( 'get_option', static function ( $option, $default = false ) {
+			if ( 'slytranslate_model_slug' === $option ) {
+				return 'unknown-model';
+			}
+
+			return $default;
+		} );
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 1500 );
+
+		$context = ContentTranslator::get_string_table_batch_limit_context();
+
+		$this->assertSame( 1300, $context['limit'] );
+		$this->assertSame( 0, $context['profile_limit'] );
+		$this->assertSame( 'runtime_fallback', $context['source'] );
+	}
+
+	public function test_string_table_char_limit_filter_can_override_and_is_clamped(): void {
+		$this->stubWpFunction( 'get_option', static function ( $option, $default = false ) {
+			if ( 'slytranslate_model_slug' === $option ) {
+				return 'unknown-model';
+			}
+
+			return $default;
+		} );
+		$this->stubWpFunction( 'apply_filters', static function ( $hook_name, $value, ...$args ) {
+			if ( 'slytranslate_string_table_batch_char_limit' === $hook_name ) {
+				return 200;
+			}
+
+			return $value;
+		} );
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 1500 );
+
+		$context = ContentTranslator::get_string_table_batch_limit_context();
+
+		$this->assertSame( 400, $context['limit'] );
+		$this->assertSame( 'filter', $context['source'] );
 	}
 
 	// -----------------------------------------------------------------------
@@ -407,6 +471,70 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		// Runtime validation catches the non-JSON or the JSON decode step fails.
 		$this->assertNotEmpty( $result->get_error_code() );
+	}
+
+	public function test_string_batch_skips_copy_safe_units_without_sending_them_to_model(): void {
+		$units = array(
+			array(
+				'id'          => 'seg_0',
+				'source'      => 'model_slug',
+				'lookup_keys' => array( 'model_slug' ),
+			),
+			array(
+				'id'          => 'seg_1',
+				'source'      => 'wp_ai_client_prompt()',
+				'lookup_keys' => array( 'wp_ai_client_prompt()' ),
+			),
+			array(
+				'id'          => 'seg_2',
+				'source'      => 'ai-translate/configure',
+				'lookup_keys' => array( 'ai-translate/configure' ),
+			),
+			array(
+				'id'          => 'seg_3',
+				'source'      => 'Hallo Welt',
+				'lookup_keys' => array( 'Hallo Welt' ),
+			),
+		);
+
+		$call_inputs = array();
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
+		$this->stubWpFunction( 'wp_json_encode', static fn( $val, $flags = 0 ) => json_encode( $val, $flags ) );
+		$this->stubWpFunction(
+			'wp_ai_client_prompt',
+			static function ( string $input_text ) use ( &$call_inputs ) {
+				$call_inputs[] = $input_text;
+
+				return new class {
+					public function using_system_instruction( string $p ): static { return $this; }
+					public function using_temperature( float $t ): static { return $this; }
+					public function using_model_preference( string $m ): static { return $this; }
+					public function using_max_tokens( int $t ): static { return $this; }
+					public function generate_text(): string {
+						return '{"seg_3":"Hello world"}';
+					}
+				};
+			}
+		);
+
+		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
+
+		$this->assertIsArray( $result );
+		$this->assertSame( 'model_slug', $result['model_slug'] );
+		$this->assertSame( 'wp_ai_client_prompt()', $result['wp_ai_client_prompt()'] );
+		$this->assertSame( 'ai-translate/configure', $result['ai-translate/configure'] );
+		$this->assertSame( 'Hello world', $result['Hallo Welt'] );
+		$this->assertCount( 1, $call_inputs );
+		$this->assertStringNotContainsString( 'model_slug', $call_inputs[0] );
+		$this->assertStringNotContainsString( 'wp_ai_client_prompt()', $call_inputs[0] );
+		$this->assertStringNotContainsString( 'ai-translate/configure', $call_inputs[0] );
+		$this->assertSame( 3, (int) ( \SlyTranslate\TimingLogger::get_counters()['string_batch_skipped_units'] ?? 0 ) );
+	}
+
+	public function test_string_batch_does_not_skip_natural_language_segments_that_look_technical(): void {
+		$this->assertSame( '', $this->invokeStatic( ContentTranslator::class, 'get_string_table_copy_safe_reason', array( 'Einstellungen > Verbinder' ) ) );
+		$this->assertSame( '', $this->invokeStatic( ContentTranslator::class, 'get_string_table_copy_safe_reason', array( 'Installiere und aktiviere das Plugin.' ) ) );
 	}
 
 	// -----------------------------------------------------------------------

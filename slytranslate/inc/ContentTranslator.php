@@ -1849,59 +1849,246 @@ class ContentTranslator {
 			return array();
 		}
 
-		$pairs    = array();
-		$units    = self::enrich_units_with_context( $units );
-		$batches  = self::chunk_string_table_units( $units, self::STRING_TABLE_BATCH_MAX_ITEMS );
+		$pairs              = array();
+		$copy_safe_units    = array();
+		$translatable_units = array();
+
+		foreach ( $units as $unit ) {
+			$reason = self::get_string_table_copy_safe_reason( (string) ( $unit['source'] ?? '' ) );
+			if ( '' === $reason ) {
+				$translatable_units[] = $unit;
+				continue;
+			}
+
+			$copy_safe_units[] = $unit;
+			foreach ( $unit['lookup_keys'] as $lookup_key ) {
+				$pairs[ $lookup_key ] = (string) $unit['source'];
+			}
+
+			$source_chars = self::char_length( (string) $unit['source'] );
+			TimingLogger::increment( 'string_batch_skipped_units' );
+			TimingLogger::increment( 'string_batch_skipped_chars', $source_chars );
+			TimingLogger::log( 'content_string_batch_skip_nontranslatable', array(
+				'reason'         => $reason,
+				'source_chars'   => $source_chars,
+				'source_excerpt' => self::string_table_log_excerpt( (string) $unit['source'] ),
+			) );
+		}
+
+		if ( empty( $translatable_units ) ) {
+			return $pairs;
+		}
+
+		$units     = self::enrich_units_with_context( $translatable_units );
+		$batches   = self::chunk_string_table_units( $units, self::STRING_TABLE_BATCH_MAX_ITEMS );
 		$json_hint = self::string_table_batch_prompt();
 		$prompt    = '' !== trim( $additional_prompt )
 			? trim( $additional_prompt ) . "\n\n" . $json_hint
 			: $json_hint;
 
 		if ( TimingLogger::is_enabled() ) {
+			$batch_limit_context  = self::get_string_table_batch_limit_context();
 			$batch_encoded_lengths = array_map( static fn( $b ) => self::encoded_string_batch_length( $b ), $batches );
 			TimingLogger::log( 'content_string_batch_detail', array(
 				'batches'               => count( $batches ),
 				'max_batch_input_chars' => empty( $batch_encoded_lengths ) ? 0 : max( $batch_encoded_lengths ),
-				'batch_char_limit'      => self::get_string_table_batch_char_limit(),
+				'batch_char_limit'      => $batch_limit_context['limit'],
+				'runtime_chunk_char_limit' => $batch_limit_context['runtime_limit'],
+				'model_profile_id'      => $batch_limit_context['profile_id'],
+				'model_profile_max_chunk_chars' => $batch_limit_context['profile_max_chunk_chars'],
+				'profile_string_table_batch_char_limit' => $batch_limit_context['profile_limit'],
+				'batch_char_limit_source' => $batch_limit_context['source'],
+			) );
+		}
+
+		$concurrency_context = ConfigurationService::get_effective_string_table_concurrency( TranslationRuntime::get_requested_model_slug() );
+		if ( count( $batches ) > 1 && $concurrency_context['effective'] > 1 ) {
+			TimingLogger::log( 'content_string_batch_concurrency_enabled', array(
+				'model'       => TranslationRuntime::get_requested_model_slug(),
+				'concurrency' => $concurrency_context['effective'],
+				'transport'   => $concurrency_context['transport'],
+			) );
+
+			$parallel_pairs = self::translate_string_table_batches_in_parallel_windows(
+				$batches,
+				$pairs,
+				$to,
+				$from,
+				$additional_prompt,
+				(int) $concurrency_context['effective'],
+				(string) $concurrency_context['transport']
+			);
+			if ( ! is_wp_error( $parallel_pairs ) ) {
+				return $parallel_pairs;
+			}
+
+			TimingLogger::log( 'content_string_batch_concurrency_disabled', array(
+				'reason' => $parallel_pairs->get_error_code(),
+			) );
+		}
+
+		if ( count( $batches ) > 1 && $concurrency_context['effective'] <= 1 && $concurrency_context['configured'] > 1 ) {
+			TimingLogger::log( 'content_string_batch_concurrency_disabled', array(
+				'reason'      => $concurrency_context['supported'] ? 'probe_or_recommendation' : $concurrency_context['reason'],
+				'configured'  => $concurrency_context['configured'],
+				'recommended' => $concurrency_context['recommended'],
 			) );
 		}
 
 		foreach ( $batches as $batch_index => $batch ) {
-			$batch_started = TimingLogger::start();
-
-			$result = self::translate_string_table_batch_validated( $batch, $to, $from, $prompt, $batch_index );
-			if ( is_wp_error( $result ) ) {
-				TimingLogger::log( 'content_string_batch_error', array(
-					'batch'       => $batch_index,
-					'error'       => $result->get_error_code(),
-					'duration_ms' => TimingLogger::stop( $batch_started ),
-				) );
-				return $result;
+			$batch_result = self::translate_string_table_batch_and_merge( $batch, $to, $from, $additional_prompt, $batch_index, $pairs );
+			if ( is_wp_error( $batch_result ) ) {
+				return $batch_result;
 			}
-
-			$batch_chars = 0;
-			foreach ( $batch as $unit ) {
-				$batch_chars += self::char_length( $unit['source'] );
-			}
-
-			foreach ( $batch as $unit ) {
-				$id         = $unit['id'];
-				$translated = $result[ $id ];
-				foreach ( $unit['lookup_keys'] as $lookup_key ) {
-					$pairs[ $lookup_key ] = $translated;
-				}
-			}
-
-			TimingLogger::log( 'content_string_batch_done', array(
-				'batch'       => $batch_index,
-				'items'       => count( $batch ),
-				'chars'       => $batch_chars,
-				'duration_ms' => TimingLogger::stop( $batch_started ),
-				'ok'          => true,
-			) );
 		}
 
 		return $pairs;
+	}
+
+	/**
+	 * Execute one already prepared string-table batch inside the parallel worker.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 * @return array<string, string>|\WP_Error
+	 */
+	public static function translate_string_table_batch_worker(
+		array $batch,
+		string $to,
+		string $from,
+		string $additional_prompt = '',
+		int $batch_index = 0
+	): array|\WP_Error {
+		$json_hint = self::string_table_batch_prompt();
+		$prompt    = '' !== trim( $additional_prompt )
+			? trim( $additional_prompt ) . "\n\n" . $json_hint
+			: $json_hint;
+
+		return self::translate_string_table_batch_validated( $batch, $to, $from, $prompt, $batch_index );
+	}
+
+	private static function translate_string_table_batches_in_parallel_windows(
+		array $batches,
+		array $pairs,
+		string $to,
+		string $from,
+		string $additional_prompt,
+		int $concurrency,
+		string $transport
+	): array|\WP_Error {
+		$parallel_pairs = $pairs;
+		$model_slug     = TranslationRuntime::get_requested_model_slug();
+
+		foreach ( array_chunk( array_keys( $batches ), $concurrency ) as $window_indexes ) {
+			TimingLogger::increment( 'string_batch_parallel_windows' );
+			$jobs = array();
+			foreach ( $window_indexes as $batch_index ) {
+				$jobs[] = array(
+					'batch'             => $batches[ $batch_index ],
+					'to'                => $to,
+					'from'              => $from,
+					'additional_prompt' => $additional_prompt,
+					'batch_index'       => $batch_index,
+				);
+			}
+
+			$window_started = TimingLogger::start();
+			$results        = ConfigurationService::run_string_table_parallel_batches( $jobs, $model_slug );
+			if ( is_wp_error( $results ) ) {
+				TimingLogger::increment( 'string_batch_parallel_retries' );
+				foreach ( $window_indexes as $batch_index ) {
+					$batch_result = self::translate_string_table_batch_and_merge( $batches[ $batch_index ], $to, $from, $additional_prompt, $batch_index, $parallel_pairs );
+					if ( is_wp_error( $batch_result ) ) {
+						return $batch_result;
+					}
+				}
+
+				TimingLogger::log( 'content_string_batch_parallel_window', array(
+					'concurrency' => $concurrency,
+					'transport'   => $transport,
+					'duration_ms' => TimingLogger::stop( $window_started ),
+					'fallback'    => true,
+				) );
+				continue;
+			}
+
+			foreach ( $window_indexes as $batch_index ) {
+				$payload = $results[ $batch_index ] ?? null;
+				if ( ! is_array( $payload ) || ! is_array( $payload['result'] ?? null ) ) {
+					return new \WP_Error( 'string_table_parallel_missing_batch', __( 'Parallel batch response was incomplete.', 'slytranslate' ) );
+				}
+
+				self::merge_string_table_batch_pairs( $batches[ $batch_index ], $payload['result'], $parallel_pairs );
+				TimingLogger::log( 'content_string_batch_done', array(
+					'batch'       => $batch_index,
+					'items'       => count( $batches[ $batch_index ] ),
+					'chars'       => self::count_string_table_batch_chars( $batches[ $batch_index ] ),
+					'duration_ms' => absint( $payload['duration_ms'] ?? 0 ),
+					'ok'          => true,
+					'parallel'    => true,
+				) );
+			}
+
+			TimingLogger::log( 'content_string_batch_parallel_window', array(
+				'concurrency' => $concurrency,
+				'transport'   => $transport,
+				'duration_ms' => TimingLogger::stop( $window_started ),
+				'fallback'    => false,
+			) );
+		}
+
+		return $parallel_pairs;
+	}
+
+	private static function translate_string_table_batch_and_merge(
+		array $batch,
+		string $to,
+		string $from,
+		string $additional_prompt,
+		int $batch_index,
+		array &$pairs
+	): \WP_Error|null {
+		$batch_started = TimingLogger::start();
+		$result = self::translate_string_table_batch_worker( $batch, $to, $from, $additional_prompt, $batch_index );
+		if ( is_wp_error( $result ) ) {
+			TimingLogger::log( 'content_string_batch_error', array(
+				'batch'       => $batch_index,
+				'error'       => $result->get_error_code(),
+				'duration_ms' => TimingLogger::stop( $batch_started ),
+			) );
+			return $result;
+		}
+
+		$batch_chars = self::count_string_table_batch_chars( $batch );
+		self::merge_string_table_batch_pairs( $batch, $result, $pairs );
+
+		TimingLogger::log( 'content_string_batch_done', array(
+			'batch'       => $batch_index,
+			'items'       => count( $batch ),
+			'chars'       => $batch_chars,
+			'duration_ms' => TimingLogger::stop( $batch_started ),
+			'ok'          => true,
+		) );
+
+		return null;
+	}
+
+	private static function merge_string_table_batch_pairs( array $batch, array $result, array &$pairs ): void {
+		foreach ( $batch as $unit ) {
+			$id         = $unit['id'];
+			$translated = $result[ $id ];
+			foreach ( $unit['lookup_keys'] as $lookup_key ) {
+				$pairs[ $lookup_key ] = $translated;
+			}
+		}
+	}
+
+	private static function count_string_table_batch_chars( array $batch ): int {
+		$batch_chars = 0;
+		foreach ( $batch as $unit ) {
+			$batch_chars += self::char_length( $unit['source'] );
+		}
+
+		return $batch_chars;
 	}
 
 	/**
@@ -2358,8 +2545,67 @@ class ContentTranslator {
 	 * gets internally split by TranslationRuntime::translate_text().
 	 */
 	public static function get_string_table_batch_char_limit(): int {
+		$context = self::get_string_table_batch_limit_context();
+		return (int) $context['limit'];
+	}
+
+	/**
+	 * Return the resolved string-table batch limit plus its derivation context.
+	 *
+	 * @return array{limit:int,runtime_limit:int,fallback_limit:int,profile_limit:int,profile_id:string,profile_max_chunk_chars:int,model_slug:string,source:string}
+	 */
+	public static function get_string_table_batch_limit_context(): array {
+		$model_slug    = TranslationRuntime::get_requested_model_slug();
+		$profile       = TranslationRuntime::get_model_profile( $model_slug );
 		$runtime_limit = TranslationRuntime::get_chunk_char_limit();
-		return max( 400, $runtime_limit - self::STRING_TABLE_BATCH_SAFETY_CHARS );
+		$fallback_limit = max( 400, $runtime_limit - self::STRING_TABLE_BATCH_SAFETY_CHARS );
+		$profile_limit = absint( $profile['string_table_batch_char_limit'] ?? 0 );
+		$limit         = $profile_limit > 0 ? $profile_limit : $fallback_limit;
+		$filtered_limit = apply_filters(
+			'slytranslate_string_table_batch_char_limit',
+			$limit,
+			$model_slug,
+			$profile,
+			$fallback_limit
+		);
+		$clamped_limit = max( 400, min( 4000, absint( $filtered_limit ) ) );
+
+		$source = $profile_limit > 0 ? 'model_profile' : 'runtime_fallback';
+		if ( absint( $filtered_limit ) !== $limit ) {
+			$source = 'filter';
+		}
+
+		return array(
+			'limit'                   => $clamped_limit,
+			'runtime_limit'           => $runtime_limit,
+			'fallback_limit'          => $fallback_limit,
+			'profile_limit'           => $profile_limit,
+			'profile_id'              => (string) ( $profile['id'] ?? 'default' ),
+			'profile_max_chunk_chars' => absint( $profile['max_chunk_chars'] ?? 0 ),
+			'model_slug'              => $model_slug,
+			'source'                  => $source,
+		);
+	}
+
+	/**
+	 * Public for tests and callers that need to estimate whether a title or
+	 * similar pseudo-unit still fits into the current JSON batch budget.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
+	 */
+	public static function estimate_string_table_batch_input_chars( array $batch ): int {
+		return self::encoded_string_batch_length( $batch );
+	}
+
+	/**
+	 * Public batch builder for callers that need to test whether a pseudo-unit
+	 * can still fit into the first JSON batch without changing chunking rules.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $units
+	 * @return array<int, array<int, array{id: string, source: string, lookup_keys: string[]}>>
+	 */
+	public static function build_string_table_batches( array $units ): array {
+		return self::chunk_string_table_units( $units, self::STRING_TABLE_BATCH_MAX_ITEMS );
 	}
 
 	/**
@@ -2416,5 +2662,54 @@ class ContentTranslator {
 		}
 
 		return $chunks;
+	}
+
+	private static function get_string_table_copy_safe_reason( string $source ): string {
+		$trimmed = trim( $source );
+		if ( '' === $trimmed || preg_match( '/\s/u', $trimmed ) ) {
+			return '';
+		}
+
+		if ( self::is_valid_url_value( $trimmed ) ) {
+			return 'url';
+		}
+
+		if ( self::is_valid_email_value( $trimmed ) ) {
+			return 'email';
+		}
+
+		if ( 1 === preg_match( '/^[A-Za-z_][A-Za-z0-9_]*\(\)$/', $trimmed ) ) {
+			return 'function_name';
+		}
+
+		if ( in_array( $trimmed, array( 'SlyTranslate' ), true ) ) {
+			return 'brand';
+		}
+
+		if ( 1 === preg_match( '/^[A-Za-z][A-Za-z0-9]*(_[A-Za-z0-9]+)+$/', $trimmed ) ) {
+			return 'snake_case_identifier';
+		}
+
+		if ( 1 === preg_match( '/^[a-z0-9][a-z0-9_-]*\/[a-z0-9][a-z0-9_\/-]*$/', $trimmed ) ) {
+			return 'ability_or_rest_slug';
+		}
+
+		return '';
+	}
+
+	private static function is_valid_url_value( string $value ): bool {
+		if ( function_exists( 'wp_http_validate_url' ) ) {
+			return false !== \wp_http_validate_url( $value );
+		}
+
+		return false !== filter_var( $value, FILTER_VALIDATE_URL );
+	}
+
+	private static function is_valid_email_value( string $value ): bool {
+		if ( function_exists( 'is_email' ) ) {
+			return false !== \is_email( $value );
+		}
+
+		return false !== filter_var( $value, FILTER_VALIDATE_EMAIL );
 	}
 }

@@ -758,7 +758,7 @@ class AbilityRegistrationTest extends TestCase {
 				'execute_callback' => array( AI_Translate::class, 'execute_configure' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'prompt_template', 'prompt_addon', 'meta_keys_translate', 'meta_keys_clear', 'auto_translate_new', 'context_window_tokens', 'model_slug', 'direct_api_url', 'force_direct_api' ),
+					'property_keys' => array( 'prompt_template', 'prompt_addon', 'meta_keys_translate', 'meta_keys_clear', 'auto_translate_new', 'context_window_tokens', 'string_table_concurrency', 'model_slug', 'direct_api_url', 'force_direct_api' ),
 					'properties'    => array(
 						'prompt_template' => array(
 							'type'        => 'string',
@@ -786,6 +786,12 @@ class AbilityRegistrationTest extends TestCase {
 							'minimum'     => 0,
 							'maximum'     => 4000000,
 						),
+						'string_table_concurrency' => array(
+							'type'        => 'integer',
+							'description' => 'Opt-in maximum concurrency for TranslatePress-style string-table batches. Values above 1 only activate when a successful concurrency probe recommends parallel execution for the active model.',
+							'minimum'     => 1,
+							'maximum'     => 4,
+						),
 						'model_slug' => array(
 							'type'        => 'string',
 							'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.',
@@ -809,6 +815,11 @@ class AbilityRegistrationTest extends TestCase {
 						'meta_keys_clear',
 						'auto_translate_new',
 						'context_window_tokens',
+						'string_table_concurrency',
+						'string_table_concurrency_effective',
+						'string_table_concurrency_recommended',
+						'string_table_concurrency_supported',
+						'string_table_concurrency_transport',
 						'model_slug',
 						'direct_api_url',
 						'force_direct_api',
@@ -834,6 +845,11 @@ class AbilityRegistrationTest extends TestCase {
 						'meta_keys_clear'              => array( 'type' => 'string' ),
 						'auto_translate_new'           => array( 'type' => 'boolean' ),
 						'context_window_tokens'        => array( 'type' => 'integer' ),
+						'string_table_concurrency'     => array( 'type' => 'integer' ),
+						'string_table_concurrency_effective' => array( 'type' => 'integer' ),
+						'string_table_concurrency_recommended' => array( 'type' => 'integer' ),
+						'string_table_concurrency_supported' => array( 'type' => 'boolean' ),
+						'string_table_concurrency_transport' => array( 'type' => 'string' ),
 						'model_slug'                   => array( 'type' => 'string' ),
 						'direct_api_url'               => array( 'type' => 'string' ),
 						'force_direct_api'             => array( 'type' => 'boolean' ),

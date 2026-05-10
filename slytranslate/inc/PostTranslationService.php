@@ -144,13 +144,29 @@ class PostTranslationService {
 		TranslationProgressTracker::register_phase_units( 'saving', 1 );
 
 		try {
+			$string_table_units             = null;
+			$title_batched_with_string_table = false;
+			$title_string_table_unit        = null;
+
+			if ( $adapter instanceof StringTableContentAdapter && $adapter->supports_pretranslated_content_pairs() ) {
+				$string_table_units = $adapter->build_content_translation_units( $post->post_content );
+				if ( $translate_title ) {
+					$title_string_table_unit = self::build_string_table_title_unit( $post->post_title );
+					if ( null !== $title_string_table_unit && self::can_batch_title_with_string_table( $title_string_table_unit, $string_table_units ) ) {
+						array_unshift( $string_table_units, $title_string_table_unit );
+						$title_batched_with_string_table = true;
+					}
+				}
+			}
+
 			// Build extra candidates so title and excerpt can be folded into the
 			// meta batch when they are short enough — saving up to 2 API calls.
 			$batch_eligible_candidates = array();
 			$extra_candidates  = array();
 			$batch_title_key   = '_slytranslate_title';
 			$batch_excerpt_key = '_slytranslate_excerpt';
-			$title_batch_eligible = $translate_title
+			$title_batch_eligible = ! $title_batched_with_string_table
+				&& $translate_title
 				&& '' !== $post->post_title
 				&& self::char_length( $post->post_title ) <= 1000;
 			$excerpt_batch_eligible = '' !== trim( $post->post_excerpt )
@@ -188,7 +204,14 @@ class PostTranslationService {
 				TranslationProgressTracker::mark_phase( 'title' );
 				TimingLogger::log( 'phase_start', array( 'phase' => 'title', 'chars' => self::char_length( $post->post_title ) ) );
 				$phase_started = TimingLogger::start();
-				if ( $will_batch_title ) {
+				if ( $title_batched_with_string_table ) {
+					$title = null;
+					TimingLogger::log( 'title_string_batch_deferred', array(
+						'strategy'     => 'translatepress_content_string_table',
+						'source_chars' => self::char_length( $post->post_title ),
+					) );
+					TimingLogger::log( 'phase_end', array( 'phase' => 'title', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => true, 'batch' => true ) );
+				} elseif ( $will_batch_title ) {
 					// Title will be resolved from the meta batch — defer the
 					// actual translation call and complete_phase() until after
 					// the meta phase finishes.
@@ -228,7 +251,9 @@ class PostTranslationService {
 				// instead of the full block tree. This is correct for adapters like
 				// TranslatePress that store original→translated string pairs rather than
 				// translated post_content.
-				$units = $adapter->build_content_translation_units( $post->post_content );
+				$units = is_array( $string_table_units )
+					? $string_table_units
+					: $adapter->build_content_translation_units( $post->post_content );
 
 				TimingLogger::log( 'content_string_batch_plan', array(
 					'units' => count( $units ),
@@ -249,6 +274,23 @@ class PostTranslationService {
 
 				// TranslatePress keeps the source post_content unchanged.
 				$content = $post->post_content;
+
+				if ( $title_batched_with_string_table && null !== $title_string_table_unit ) {
+					$title_lookup_key = (string) $title_string_table_unit['lookup_keys'][0];
+					$title_from_pairs = $content_string_pairs[ $title_lookup_key ] ?? null;
+					if ( is_string( $title_from_pairs ) && $title_from_pairs !== $post->post_title ) {
+						$title = $title_from_pairs;
+					} else {
+						TimingLogger::increment( 'fallbacks' );
+						$title = self::translate_title_with_empty_output_retry( $post->post_title, $to, $from, $additional_prompt );
+						if ( is_wp_error( $title ) ) {
+							TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $title->get_error_code() ) );
+							self::log_job_end( $post_id, $job_started_at, false );
+							return $title;
+						}
+					}
+					TranslationProgressTracker::complete_phase( 'title' );
+				}
 			} else {
 				$content = ContentTranslator::translate_parsed_blocks( $parsed_blocks, $post->post_content, $to, $from, $additional_prompt );
 				if ( is_wp_error( $content ) ) {
@@ -442,6 +484,9 @@ class PostTranslationService {
 		$string_batch_item_retries       = (int) ( $counters['string_batch_item_retries'] ?? 0 );
 		$string_batch_validation_retries = (int) ( $counters['string_batch_validation_retries'] ?? 0 );
 		$string_batch_split_retries      = (int) ( $counters['string_batch_split_retries'] ?? 0 );
+		$string_batch_parallel_windows   = (int) ( $counters['string_batch_parallel_windows'] ?? 0 );
+		$string_batch_parallel_retries   = (int) ( $counters['string_batch_parallel_retries'] ?? 0 );
+		$string_batch_concurrency        = (int) ( ConfigurationService::get_effective_string_table_concurrency( TranslationRuntime::get_requested_model_slug() )['effective'] ?? 1 );
 
 		$tiny_call_ratio         = self::safe_ratio( $tiny_calls, $ai_calls );
 		$micro_batch_hit_rate    = self::safe_ratio( $micro_batch_hits, $micro_batch_candidates );
@@ -469,6 +514,9 @@ class PostTranslationService {
 			'string_batch_item_retries' => $string_batch_item_retries,
 			'string_batch_validation_retries' => $string_batch_validation_retries,
 			'string_batch_split_retries' => $string_batch_split_retries,
+			'string_batch_parallel_windows' => $string_batch_parallel_windows,
+			'string_batch_parallel_retries' => $string_batch_parallel_retries,
+			'string_batch_concurrency' => $string_batch_concurrency,
 			'tiny_call_ratio' => $tiny_call_ratio,
 			'micro_batch_hit_rate' => $micro_batch_hit_rate,
 			'avg_chars_per_ai_call' => $avg_chars_per_ai_call,
@@ -645,5 +693,30 @@ class PostTranslationService {
 		}
 
 		return 'draft';
+	}
+
+	private static function build_string_table_title_unit( string $title ): ?array {
+		if ( '' === trim( $title ) ) {
+			return null;
+		}
+
+		return array(
+			'id'          => '__slytranslate_title',
+			'source'      => $title,
+			'lookup_keys' => array( $title ),
+		);
+	}
+
+	private static function can_batch_title_with_string_table( array $title_unit, array $units ): bool {
+		$candidate_units = array_merge( array( $title_unit ), $units );
+		$batches         = ContentTranslator::build_string_table_batches( $candidate_units );
+
+		if ( empty( $batches ) ) {
+			return false;
+		}
+
+		$first_batch = $batches[0];
+		return count( $first_batch ) === count( $candidate_units )
+			&& ContentTranslator::estimate_string_table_batch_input_chars( $first_batch ) <= ContentTranslator::get_string_table_batch_char_limit();
 	}
 }
