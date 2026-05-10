@@ -564,7 +564,7 @@
 		var actionTop = topSel ? topSel.value : '';
 		var actionBot = botSel ? botSel.value : '';
 		var action = (actionTop && actionTop !== '-1') ? actionTop : actionBot;
-		if (action !== 'ai_translate_bulk') { return; }
+		if (action !== 'slytranslate_bulk') { return; }
 
 		var ids = getBulkSelectedPostIds();
 		if (!ids.length) {
