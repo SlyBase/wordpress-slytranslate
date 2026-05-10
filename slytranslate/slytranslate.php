@@ -101,6 +101,7 @@ class AI_Translate {
 		add_action( 'rest_api_init', array( self::class, 'register_editor_rest_routes' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
+		TranslatePressEditorIntegration::add_hooks();
 		ListTableTranslation::add_hooks();
 	}
 

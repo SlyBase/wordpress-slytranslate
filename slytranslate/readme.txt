@@ -19,6 +19,7 @@ SlyTranslate brings practical AI translation to WordPress. It is built for teams
 Use SlyTranslate when you need one consistent translation workflow for:
 
 * page/post translation in wp-admin
+* TranslatePress visual-editor translation on the current page
 * inline selected-text translation in Gutenberg
 * Gutenberg block translation
 * bulk translation from list-table actions
@@ -33,6 +34,7 @@ Use SlyTranslate when you need one consistent translation workflow for:
 * Optional `direct_api_url` supports OpenAI-compatible endpoints for model-specific payload needs.
 * In WP Multilang mode, translation state is detected from language-specific content so placeholder titles do not count as completed translations.
 * List-table translation now includes an explicit overwrite option with a confirmation step.
+* TranslatePress editor pages get a SlyTranslate sidebar panel that can translate the current singular page with model selection, overwrite, progress, and cancel controls.
 
 **Abilities:**
 
@@ -119,6 +121,10 @@ In WordPress Settings > Connectors, not inside SlyTranslate.
 = Can I use bulk translation from post/page lists? =
 
 Yes. Use `translate-content-bulk` through abilities or the wp-admin list-table translation UI.
+
+= Does this work inside the TranslatePress visual editor? =
+
+Yes. On singular pages opened with `?trp-edit-translation=true`, SlyTranslate adds a sidebar panel in the TranslatePress editor so you can translate the current page with the same model, overwrite, progress, and cancel controls used elsewhere in the plugin.
 
 = How does overwriting existing translations work? =
 

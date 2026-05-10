@@ -169,6 +169,18 @@ function wp_enqueue_style( ...$args ): void {
 	} );
 }
 
+function wp_register_script( ...$args ): void {
+	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return null;
+	} );
+}
+
+function wp_register_style( ...$args ): void {
+	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return null;
+	} );
+}
+
 function wp_localize_script( ...$args ): bool {
 	return (bool) slytranslate_test_call_override( __FUNCTION__, $args, static function () {
 		return true;
@@ -259,6 +271,36 @@ function add_query_arg( ...$args ): string {
 		}
 
 		return '';
+	} );
+}
+
+function remove_query_arg( ...$args ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, $args, static function ( $keys, $url = '' ) {
+		return (string) $url;
+	} );
+}
+
+function home_url( string $path = '', ?string $scheme = null ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( string $path = '' ) {
+		return 'https://example.test' . $path;
+	} );
+}
+
+function url_to_postid( string $url ): int {
+	return (int) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 0;
+	} );
+}
+
+function is_singular( $post_types = '' ): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return false;
+	} );
+}
+
+function get_queried_object_id(): int {
+	return (int) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 0;
 	} );
 }
 

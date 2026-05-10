@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.8.0]
+### Features
+- TranslatePress frontend editor pages now include a SlyTranslate sidebar panel with target-language, model, overwrite, progress, and cancel controls for translating the current page without leaving the visual editor.
+
 ### Changes
 - TranslatePress string-table batches now use explicit model-profile limits, can batch the post title into the first JSON request, and skip copy-safe identifiers before sending content to the model.
 - String-table translation now supports opt-in parallel windows with saved per-model probe recommendations, a protected worker transport, and automatic serial fallback when parallel execution is unavailable or fails.
@@ -15,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timing logs now include `content_string_batch_detail` with batch count, max encoded input length, and the batch char limit, and `job_end` includes `string_batch_item_retries`, `string_batch_validation_retries`, and `string_batch_split_retries` for direct diagnosis of retry costs.
 
 ### Fixes
+- TranslatePress list-table language pickers now include the source language even when TranslatePress omits it from its target-language settings, so the language selection on post and page overview screens no longer appears empty.
 - TranslatePress now shows the Translate row action and bulk Translate option on post and page overview screens in single-entry mode.
 - TranslatePress no longer leaves segments untranslated when WordPress's wptexturize converts straight quotes to typographic HTML entities at render time; lookup keys now include the texturized and entity-encoded variants of each segment so that existing dictionary entries are matched and filled correctly.
 
