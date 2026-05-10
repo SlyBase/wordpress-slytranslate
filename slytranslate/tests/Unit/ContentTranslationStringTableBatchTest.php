@@ -201,11 +201,12 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 			),
 		);
 
+		// New flow: 1 initial batch + 1 targeted retry of [seg_1] (fails) +
+		// 1 depth-1 retry of [seg_1] alone (succeeds).
 		$responses = array(
-			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => '' ) ),
-			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => '' ) ),
-			(string) json_encode( array( 'seg_0' => 'Hello world' ) ),
-			(string) json_encode( array( 'seg_1' => 'saved connector.' ) ),
+			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => '' ) ),  // initial batch
+			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => '' ) ),  // targeted retry — seg_1 still empty
+			(string) json_encode( array( 'seg_1' => 'saved connector.' ) ),             // depth-1 retry for [seg_1]
 		);
 		$call_count = 0;
 
@@ -218,10 +219,10 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		$this->assertIsArray( $result );
 		$this->assertSame( 'Hello world', $result['Hallo Welt'] );
 		$this->assertSame( 'saved connector.', $result['gespeicherten Connector.'] );
-		$this->assertSame( 4, $call_count );
+		$this->assertSame( 3, $call_count );
 	}
 
-	public function test_string_batch_keeps_single_item_in_source_after_empty_retries(): void {
+	public function test_string_batch_empty_item_unresolved_after_all_retries(): void {
 		$units = array(
 			array(
 				'id'          => 'seg_0',
@@ -237,7 +238,9 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
 
 		$this->assertIsArray( $result );
-		$this->assertSame( 'gespeicherten Connector.', $result['gespeicherten Connector.'] );
+		// Empty translation must NOT be replaced with source; an empty value is
+		// stored so the adapter's language-fallback mechanism can handle display.
+		$this->assertSame( '', $result['gespeicherten Connector.'] );
 	}
 
 	// -----------------------------------------------------------------------
@@ -335,7 +338,7 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 			),
 		);
 
-		// Batch returns JSON with seg_0 but misses seg_1.
+		// Batch returns JSON with seg_0 but misses seg_1 every time.
 		$response_json = json_encode( array( 'seg_0' => 'Hello' ) );
 
 		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
@@ -346,7 +349,44 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 
 		$this->assertIsArray( $result );
 		$this->assertSame( 'Hello', $result['Hallo'] );
+		// string_batch_missing_key still uses source as fallback.
 		$this->assertSame( 'Welt', $result['Welt'] );
+	}
+
+	public function test_string_batch_targeted_retry_resolves_bad_item_without_split(): void {
+		$units = array(
+			array(
+				'id'          => 'seg_0',
+				'source'      => 'Hallo Welt',
+				'lookup_keys' => array( 'Hallo Welt' ),
+			),
+			array(
+				'id'          => 'seg_1',
+				'source'      => 'gespeicherten Connector.',
+				'lookup_keys' => array( 'gespeicherten Connector.' ),
+			),
+		);
+
+		// Call 1: initial batch — seg_1 empty.
+		// Call 2: targeted retry of [seg_1] only — succeeds.
+		// Good item seg_0 is never re-translated.
+		$responses = array(
+			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => '' ) ),
+			(string) json_encode( array( 'seg_0' => 'Hello world', 'seg_1' => 'saved connector.' ) ),
+		);
+		$call_count = 0;
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
+		$this->stubWpFunction( 'wp_json_encode', static fn( $val, $flags = 0 ) => json_encode( $val, $flags ) );
+		$this->stubWpAiClientWithResponseSequence( $responses, $call_count );
+
+		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
+
+		$this->assertIsArray( $result );
+		$this->assertSame( 'Hello world', $result['Hallo Welt'] );
+		$this->assertSame( 'saved connector.', $result['gespeicherten Connector.'] );
+		// Exactly 2 calls: initial + targeted item retry. No split needed.
+		$this->assertSame( 2, $call_count );
 	}
 
 	public function test_string_batch_returns_error_on_invalid_json(): void {
@@ -367,6 +407,41 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		// Runtime validation catches the non-JSON or the JSON decode step fails.
 		$this->assertNotEmpty( $result->get_error_code() );
+	}
+
+	// -----------------------------------------------------------------------
+	// Context enrichment for short units
+	// -----------------------------------------------------------------------
+
+	public function test_enrich_units_with_context_adds_context_to_short_units(): void {
+		$units = array(
+			array( 'id' => 'seg_0', 'source' => 'Longer source text that exceeds forty characters by a bit.', 'lookup_keys' => array( 'x' ) ),
+			array( 'id' => 'seg_1', 'source' => 'short',     'lookup_keys' => array( 'short' ) ),
+			array( 'id' => 'seg_2', 'source' => 'also short', 'lookup_keys' => array( 'also short' ) ),
+			array( 'id' => 'seg_3', 'source' => 'Another longer source that will exceed forty characters here.', 'lookup_keys' => array( 'y' ) ),
+		);
+
+		$enriched = $this->invokeStatic( ContentTranslator::class, 'enrich_units_with_context', array( $units ) );
+
+		// Long unit gets no context.
+		$this->assertArrayNotHasKey( 'context_before', $enriched[0] );
+		$this->assertArrayNotHasKey( 'context_after',  $enriched[0] );
+
+		// Short unit (seg_1) gets context_after (seg_0 is too long to use as before? no — seg_0 IS its before).
+		$this->assertArrayHasKey( 'context_before', $enriched[1] );
+		$this->assertSame( $units[0]['source'], $enriched[1]['context_before'] );
+		$this->assertArrayHasKey( 'context_after', $enriched[1] );
+		$this->assertSame( $units[2]['source'], $enriched[1]['context_after'] );
+
+		// Short unit (seg_2) gets both before and after.
+		$this->assertArrayHasKey( 'context_before', $enriched[2] );
+		$this->assertSame( $units[1]['source'], $enriched[2]['context_before'] );
+		$this->assertArrayHasKey( 'context_after', $enriched[2] );
+		$this->assertSame( $units[3]['source'], $enriched[2]['context_after'] );
+
+		// Long unit gets no context.
+		$this->assertArrayNotHasKey( 'context_before', $enriched[3] );
+		$this->assertArrayNotHasKey( 'context_after',  $enriched[3] );
 	}
 
 	// -----------------------------------------------------------------------

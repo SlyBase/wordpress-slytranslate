@@ -430,15 +430,18 @@ class PostTranslationService {
 	}
 
 	private static function log_job_end( int $post_id, float $job_started_at, bool $ok, string $reason = '' ): void {
-		$counters                   = TimingLogger::get_counters();
-		$ai_calls                   = (int) ( $counters['ai_calls'] ?? 0 );
-		$ai_input_chars             = (int) ( $counters['ai_input_chars'] ?? 0 );
-		$ai_output_chars            = (int) ( $counters['ai_output_chars'] ?? 0 );
-		$tiny_calls                 = (int) ( $counters['tiny_calls'] ?? 0 );
-		$micro_batch_candidates     = (int) ( $counters['micro_batch_candidates'] ?? 0 );
-		$micro_batch_hits           = (int) ( $counters['micro_batch_hits'] ?? 0 );
-		$content_groups_total       = (int) ( $counters['content_groups_total'] ?? 0 );
-		$content_single_block_group = (int) ( $counters['content_single_block_groups'] ?? 0 );
+		$counters                        = TimingLogger::get_counters();
+		$ai_calls                        = (int) ( $counters['ai_calls'] ?? 0 );
+		$ai_input_chars                  = (int) ( $counters['ai_input_chars'] ?? 0 );
+		$ai_output_chars                 = (int) ( $counters['ai_output_chars'] ?? 0 );
+		$tiny_calls                      = (int) ( $counters['tiny_calls'] ?? 0 );
+		$micro_batch_candidates          = (int) ( $counters['micro_batch_candidates'] ?? 0 );
+		$micro_batch_hits                = (int) ( $counters['micro_batch_hits'] ?? 0 );
+		$content_groups_total            = (int) ( $counters['content_groups_total'] ?? 0 );
+		$content_single_block_group      = (int) ( $counters['content_single_block_groups'] ?? 0 );
+		$string_batch_item_retries       = (int) ( $counters['string_batch_item_retries'] ?? 0 );
+		$string_batch_validation_retries = (int) ( $counters['string_batch_validation_retries'] ?? 0 );
+		$string_batch_split_retries      = (int) ( $counters['string_batch_split_retries'] ?? 0 );
 
 		$tiny_call_ratio         = self::safe_ratio( $tiny_calls, $ai_calls );
 		$micro_batch_hit_rate    = self::safe_ratio( $micro_batch_hits, $micro_batch_candidates );
@@ -463,6 +466,9 @@ class PostTranslationService {
 			'list_batch_hits' => $counters['list_batch_hits'] ?? 0,
 			'content_groups_total' => $content_groups_total,
 			'content_single_block_groups' => $content_single_block_group,
+			'string_batch_item_retries' => $string_batch_item_retries,
+			'string_batch_validation_retries' => $string_batch_validation_retries,
+			'string_batch_split_retries' => $string_batch_split_retries,
 			'tiny_call_ratio' => $tiny_call_ratio,
 			'micro_batch_hit_rate' => $micro_batch_hit_rate,
 			'avg_chars_per_ai_call' => $avg_chars_per_ai_call,

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.8.0]
+### Changes
+- String-table validation retries now target only the specific failing segments instead of retranslating the entire batch; correctly translated items are kept and never resent to the model.
+- Short segments (≤ 40 characters) now receive adjacent-segment context hints in the translation prompt, reducing empty-translation failures for sentence fragments split around inline HTML elements.
+- Empty translation results (`invalid_translation_empty`) are no longer stored as source-language fallback text; the segment is left empty so the adapter's language-fallback mechanism handles display rather than silently inserting untranslated content.
+- Timing logs now include `content_string_batch_detail` with batch count, max encoded input length, and the batch char limit, and `job_end` includes `string_batch_item_retries`, `string_batch_validation_retries`, and `string_batch_split_retries` for direct diagnosis of retry costs.
+
 ### Fixes
 - TranslatePress no longer leaves segments untranslated when WordPress's wptexturize converts straight quotes to typographic HTML entities at render time; lookup keys now include the texturized and entity-encoded variants of each segment so that existing dictionary entries are matched and filled correctly.
 

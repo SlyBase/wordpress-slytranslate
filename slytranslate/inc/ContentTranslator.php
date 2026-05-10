@@ -1850,11 +1850,21 @@ class ContentTranslator {
 		}
 
 		$pairs    = array();
+		$units    = self::enrich_units_with_context( $units );
 		$batches  = self::chunk_string_table_units( $units, self::STRING_TABLE_BATCH_MAX_ITEMS );
 		$json_hint = self::string_table_batch_prompt();
 		$prompt    = '' !== trim( $additional_prompt )
 			? trim( $additional_prompt ) . "\n\n" . $json_hint
 			: $json_hint;
+
+		if ( TimingLogger::is_enabled() ) {
+			$batch_encoded_lengths = array_map( static fn( $b ) => self::encoded_string_batch_length( $b ), $batches );
+			TimingLogger::log( 'content_string_batch_detail', array(
+				'batches'               => count( $batches ),
+				'max_batch_input_chars' => empty( $batch_encoded_lengths ) ? 0 : max( $batch_encoded_lengths ),
+				'batch_char_limit'      => self::get_string_table_batch_char_limit(),
+			) );
+		}
 
 		foreach ( $batches as $batch_index => $batch ) {
 			$batch_started = TimingLogger::start();
@@ -1897,6 +1907,13 @@ class ContentTranslator {
 	/**
 	 * Translate a batch and recover from per-item validation failures.
 	 *
+	 * Strategy:
+	 * - depth 0: Targeted item retry — only bad items are retried with a strict
+	 *   prompt; good items are kept and never re-translated. If the targeted
+	 *   retry still fails, the bad items are recursed into at depth 1.
+	 * - depth 1+: Split into halves until STRING_TABLE_VALIDATION_MAX_DEPTH,
+	 *   then recover.
+	 *
 	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $batch
 	 * @return array<string, string>|\WP_Error
 	 */
@@ -1921,26 +1938,59 @@ class ContentTranslator {
 		self::log_string_table_batch_validation_issues( $issues, $batch_index, $depth );
 
 		if ( 0 === $depth ) {
+			// --- Targeted item retry: only re-translate bad items, keep good items ---
+			$issue_ids  = array_flip( array_column( $issues, 'id' ) );
+			$bad_batch  = array_values( array_filter( $batch, static fn( $u ) => isset( $issue_ids[ (string) $u['id'] ] ) ) );
+			$good_batch = array_values( array_filter( $batch, static fn( $u ) => ! isset( $issue_ids[ (string) $u['id'] ] ) ) );
+
+			$good_result = array();
+			foreach ( $good_batch as $unit ) {
+				$good_result[ (string) $unit['id'] ] = (string) $result[ (string) $unit['id'] ];
+			}
+
+			$retry_input_chars = (int) array_sum(
+				array_map( static fn( $u ) => self::char_length( (string) $u['source'] ), $bad_batch )
+			);
+
 			TimingLogger::increment( 'retries' );
-			TimingLogger::increment( 'string_batch_validation_retries' );
+			TimingLogger::increment( 'string_batch_item_retries' );
 			TimingLogger::log( 'content_string_batch_validation_retry', array(
-				'batch'    => $batch_index,
-				'items'    => count( $batch ),
-				'issues'   => count( $issues ),
-				'depth'    => $depth,
-				'strategy' => 'strict_batch',
+				'batch'             => $batch_index,
+				'items'             => count( $batch ),
+				'issues'            => count( $issues ),
+				'depth'             => $depth,
+				'strategy'          => 'targeted_item_retry',
+				'retried_items'     => count( $bad_batch ),
+				'kept_good_items'   => count( $good_batch ),
+				'retry_input_chars' => $retry_input_chars,
 			) );
 
-			return self::translate_string_table_batch_validated(
-				$batch,
-				$to,
-				$from,
-				self::string_table_strict_retry_prompt( $prompt ),
-				$batch_index,
-				$depth + 1
+			$strict_prompt     = self::string_table_strict_retry_prompt( $prompt );
+			$item_retry_result = self::translate_string_table_batch_with_retry(
+				$bad_batch, $to, $from, $strict_prompt, $batch_index
 			);
+
+			if ( ! is_wp_error( $item_retry_result ) ) {
+				$item_retry_issues = self::find_string_table_batch_issues( $bad_batch, $item_retry_result, $to );
+				if ( empty( $item_retry_issues ) ) {
+					// Targeted retry resolved all bad items.
+					$normalized_retried = self::normalize_string_table_batch_result( $bad_batch, $item_retry_result );
+					return array_merge( $good_result, $normalized_retried );
+				}
+				self::log_string_table_batch_validation_issues( $item_retry_issues, $batch_index, $depth );
+			}
+
+			// Targeted retry failed or still has issues — recurse on bad items only.
+			$bad_recurse = self::translate_string_table_batch_validated(
+				$bad_batch, $to, $from, $prompt, $batch_index, 1
+			);
+			if ( is_wp_error( $bad_recurse ) ) {
+				return $bad_recurse;
+			}
+			return array_merge( $good_result, $bad_recurse );
 		}
 
+		// --- Depth >= 1: split or recover ---
 		if ( count( $batch ) > 1 && $depth < self::STRING_TABLE_VALIDATION_MAX_DEPTH ) {
 			TimingLogger::increment( 'retries' );
 			TimingLogger::increment( 'string_batch_validation_split_retries' );
@@ -1961,7 +2011,6 @@ class ContentTranslator {
 				}
 				$merged = array_merge( $merged, $partial );
 			}
-
 			return $merged;
 		}
 
@@ -2057,6 +2106,24 @@ class ContentTranslator {
 			}
 
 			$issue = $issue_by_id[ $id ];
+
+			// For empty translations, do not store source as fallback.
+			// An empty value lets the adapter's language-fallback mechanism
+			// display the source-language text instead of a misleading
+			// "translated" copy that is actually still in the source language.
+			if ( 'invalid_translation_empty' === $issue['error'] ) {
+				TimingLogger::increment( 'string_batch_items_unresolved' );
+				TimingLogger::log( 'content_string_batch_item_unresolved', array(
+					'batch'          => $batch_index,
+					'id'             => $id,
+					'depth'          => $depth,
+					'reason'         => $issue['error'],
+					'source_excerpt' => self::string_table_log_excerpt( $issue['source'] ),
+				) );
+				$recovered[ $id ] = '';
+				continue;
+			}
+
 			TimingLogger::increment( 'fallbacks' );
 			TimingLogger::increment( 'string_batch_items_kept_in_source' );
 			TimingLogger::log( 'content_string_batch_item_kept_in_source', array(
@@ -2067,7 +2134,6 @@ class ContentTranslator {
 				'source_excerpt' => self::string_table_log_excerpt( $issue['source'] ),
 				'output_excerpt' => self::string_table_log_excerpt( $issue['translated'] ),
 			) );
-
 			$recovered[ $id ] = (string) $unit['source'];
 		}
 
@@ -2145,7 +2211,13 @@ class ContentTranslator {
 			) );
 		}
 
-		$result = TranslationRuntime::translate_text( $json_input, $to, $from, $prompt );
+		$effective_prompt = $prompt;
+		$context_hints    = self::build_string_table_context_hints( $batch );
+		if ( '' !== $context_hints ) {
+			$effective_prompt .= "\n\n" . $context_hints;
+		}
+
+		$result = TranslationRuntime::translate_text( $json_input, $to, $from, $effective_prompt );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -2193,6 +2265,62 @@ class ContentTranslator {
 		return $prompt . "\n\nCRITICAL STRING-TABLE RETRY: Every input key with non-empty source text MUST have a non-empty value in the output. Do not combine neighboring keys. Do not move words from one key into another key. Keep code-like values unchanged. Return one valid JSON object only.";
 	}
 
+	/**
+	 * Annotate units with context_before / context_after for short sources.
+	 *
+	 * Adjacent source texts are included in the translation prompt as read-only
+	 * context. They are never stored as dictionary keys.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[]}> $units
+	 * @return array<int, array{id: string, source: string, lookup_keys: string[], context_before?: string, context_after?: string}>
+	 */
+	private static function enrich_units_with_context( array $units ): array {
+		$count = count( $units );
+		foreach ( $units as $i => &$unit ) {
+			if ( self::char_length( (string) $unit['source'] ) > self::STRING_TABLE_CONTEXT_MAX_SOURCE_CHARS ) {
+				continue;
+			}
+			if ( $i > 0 && '' !== trim( (string) $units[ $i - 1 ]['source'] ) ) {
+				$unit['context_before'] = (string) $units[ $i - 1 ]['source'];
+			}
+			if ( $i < $count - 1 && '' !== trim( (string) $units[ $i + 1 ]['source'] ) ) {
+				$unit['context_after'] = (string) $units[ $i + 1 ]['source'];
+			}
+		}
+		unset( $unit );
+		return $units;
+	}
+
+	/**
+	 * Build a context annotation string for units that carry context_before /
+	 * context_after hints. Returns empty string when no hints are present.
+	 *
+	 * @param array<int, array{id: string, source: string, lookup_keys: string[], context_before?: string, context_after?: string}> $batch
+	 */
+	private static function build_string_table_context_hints( array $batch ): string {
+		$hints = array();
+		foreach ( $batch as $unit ) {
+			$before = isset( $unit['context_before'] ) ? (string) $unit['context_before'] : '';
+			$after  = isset( $unit['context_after'] ) ? (string) $unit['context_after'] : '';
+			if ( '' === $before && '' === $after ) {
+				continue;
+			}
+			$hint = (string) $unit['id'];
+			if ( '' !== $before ) {
+				$hint .= ' [before: …' . self::string_table_log_excerpt( $before ) . '…]';
+			}
+			if ( '' !== $after ) {
+				$hint .= ' [after: …' . self::string_table_log_excerpt( $after ) . '…]';
+			}
+			$hints[] = $hint;
+		}
+		if ( empty( $hints ) ) {
+			return '';
+		}
+		return 'Context for short segments (aids translation only — do not include in output):'
+			. "\n" . implode( "\n", $hints );
+	}
+
 	private static function string_table_log_excerpt( string $value ): string {
 		$compact = preg_replace( '/\s+/u', ' ', $value );
 		$compact = is_string( $compact ) ? trim( $compact ) : trim( $value );
@@ -2206,6 +2334,12 @@ class ContentTranslator {
 	 * Maximum batch size per item count.
 	 */
 	private const STRING_TABLE_BATCH_MAX_ITEMS = 24;
+
+	/**
+	 * Sources at or below this length (in chars) receive context hints in the
+	 * translation prompt to help the model handle sentence fragments.
+	 */
+	private const STRING_TABLE_CONTEXT_MAX_SOURCE_CHARS = 40;
 
 	/**
 	 * Safety margin subtracted from the runtime chunk limit for batch sizing.
