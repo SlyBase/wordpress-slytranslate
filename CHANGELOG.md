@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.8.0]
+### Fixes
+- TranslatePress no longer leaves segments untranslated when WordPress's wptexturize converts straight quotes to typographic HTML entities at render time; lookup keys now include the texturized and entity-encoded variants of each segment so that existing dictionary entries are matched and filled correctly.
+
 ### Changes
 - TranslatePress string-table batches are now sized by their encoded JSON length instead of raw source characters, preventing the runtime chunk splitter from cutting a batch into two invalid JSON fragments.
 - When a string-table batch returns malformed JSON (e.g. two concatenated objects), the batch is automatically halved and each half is retried up to four levels deep, recovering from transient model errors without failing the whole translation job.

@@ -102,6 +102,14 @@ function sanitize_text_field( $str ): string {
 return trim( (string) $str );
 }
 
+function wptexturize( string $text ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( string $text ) {
+		// No-op in the test environment; override via stubWpFunctionReturn() to
+		// simulate specific typography conversions.
+		return $text;
+	} );
+}
+
 function sanitize_textarea_field( $str ): string {
 return trim( (string) $str );
 }

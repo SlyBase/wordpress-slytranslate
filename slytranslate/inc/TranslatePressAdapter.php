@@ -455,6 +455,13 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 	 * boundary whitespace around inline elements. Writing both variants keeps
 	 * lookups stable across those parser differences.
 	 *
+	 * Additionally, WordPress applies wptexturize() to post content during
+	 * rendering, converting straight quotes to typographic HTML entities
+	 * (e.g. `"text"` → `&#8220;text&#8221;`). If TranslatePress indexes the
+	 * rendered form, the dictionary entry differs from the raw segment and
+	 * receives no translation (status=0). Generating these render-aware
+	 * variants here ensures one translation covers all storage forms.
+	 *
 	 * @return string[]
 	 */
 	private function build_segment_lookup_keys( string $segment ): array {
@@ -470,7 +477,83 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			$keys[] = $trimmed;
 		}
 
-		return array_values( array_unique( $keys ) );
+		// Add wptexturize render-aware variants so that TranslatePress dictionary
+		// entries created during WordPress rendering are covered by this translation.
+		$has_leading_space  = str_starts_with( $normalized, ' ' ) && ! str_starts_with( $trimmed, ' ' );
+		$has_trailing_space = str_ends_with( $normalized, ' ' ) && ! str_ends_with( $trimmed, ' ' );
+
+		foreach ( $this->generate_texturize_variants( $trimmed ) as $tx ) {
+			$keys[] = $tx;
+			// Also add the whitespace-bounded texturized form when applicable.
+			if ( $has_leading_space || $has_trailing_space ) {
+				$keys[] = ( $has_leading_space ? ' ' : '' ) . $tx . ( $has_trailing_space ? ' ' : '' );
+			}
+		}
+
+		// Deduplicate and cap at 8 variants to keep the dictionary lean.
+		return array_values( array_unique( array_slice( $keys, 0, 8 ) ) );
+	}
+
+	/**
+	 * Generate wptexturize-based render variants for a segment.
+	 *
+	 * When wptexturize returns UTF-8 typographic characters, the numeric entity
+	 * form is also added so that TranslatePress DB entries using either
+	 * representation are covered (e.g. „ vs &#8222;).
+	 *
+	 * Returns an empty array when wptexturize is not available or produces no
+	 * change (e.g. for URLs and code that do not contain typographic characters).
+	 *
+	 * @return string[]
+	 */
+	private function generate_texturize_variants( string $segment ): array {
+		if ( ! function_exists( 'wptexturize' ) ) {
+			return array();
+		}
+
+		$texturized = wptexturize( $segment );
+		if ( $texturized === $segment ) {
+			return array();
+		}
+
+		$variants = array( $texturized );
+
+		// When wptexturize returned UTF-8 typographic characters (i.e. the result
+		// contains no `&#` entity references yet), also add the numeric-entity form
+		// to match TranslatePress DB entries that store the entity-encoded variant.
+		if ( false === strpos( $texturized, '&#' ) ) {
+			$entity_form = $this->encode_typographic_chars( $texturized );
+			if ( $entity_form !== $texturized ) {
+				$variants[] = $entity_form;
+			}
+		}
+
+		return $variants;
+	}
+
+	/**
+	 * Convert typographic quote and dash characters to HTML numeric entities.
+	 *
+	 * Only converts the characters commonly produced by wptexturize; leaves all
+	 * other characters (including arrows, umlauts, etc.) unchanged so that
+	 * partial-entity strings in TranslatePress dictionaries are matched precisely.
+	 */
+	private function encode_typographic_chars( string $text ): string {
+		static $map = array(
+			"\xE2\x80\x9C" => '&#8220;', // LEFT DOUBLE QUOTATION MARK  "
+			"\xE2\x80\x9D" => '&#8221;', // RIGHT DOUBLE QUOTATION MARK "
+			"\xE2\x80\x9E" => '&#8222;', // DOUBLE LOW-9 QUOTATION MARK  „
+			"\xE2\x80\x98" => '&#8216;', // LEFT SINGLE QUOTATION MARK  '
+			"\xE2\x80\x99" => '&#8217;', // RIGHT SINGLE QUOTATION MARK '
+			"\xE2\x80\x9B" => '&#8219;', // SINGLE HIGH-REVERSED-9 QUOTATION MARK ‛
+			"\xE2\x80\x93" => '&#8211;', // EN DASH –
+			"\xE2\x80\x94" => '&#8212;', // EM DASH —
+			"\xC2\xAB"     => '&#171;',  // LEFT-POINTING DOUBLE ANGLE QUOTATION MARK «
+			"\xC2\xBB"     => '&#187;',  // RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK »
+			"\xE2\x80\xA6" => '&#8230;', // HORIZONTAL ELLIPSIS …
+		);
+
+		return strtr( $text, $map );
 	}
 
 	private function normalize_segment_whitespace( string $value ): string {
@@ -555,5 +638,12 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 		if ( ! empty( $update_rows ) ) {
 			$query->update_strings( $update_rows, $trp_locale );
 		}
+
+		TimingLogger::log( 'translatepress_pairs_saved', array(
+			'locale'    => $trp_locale,
+			'originals' => count( $originals ),
+			'inserted'  => count( $missing ),
+			'updated'   => count( $update_rows ),
+		) );
 	}
 }

@@ -563,6 +563,268 @@ class TranslatePressAdapterTest extends TestCase {
 	}
 
 	// -----------------------------------------------------------------------
+	// build_segment_lookup_keys – wptexturize render-aware variants
+	// -----------------------------------------------------------------------
+
+	public function test_build_segment_lookup_keys_includes_wptexturize_variant(): void {
+		// Simulate wptexturize converting straight double-quotes to entity form.
+		$this->stubWpFunctionReturn(
+			'wptexturize',
+			'Wähle Text → Werkzeugleiste → &#8222;Übersetzen&#8220;. Das funktioniert.'
+		);
+
+		$keys = $this->invokeMethod(
+			$this->adapter,
+			'build_segment_lookup_keys',
+			array( 'Wähle Text → Werkzeugleiste → "Übersetzen". Das funktioniert.' )
+		);
+
+		$this->assertContains(
+			'Wähle Text → Werkzeugleiste → &#8222;Übersetzen&#8220;. Das funktioniert.',
+			$keys,
+			'Expected entity-encoded texturized variant in lookup keys'
+		);
+	}
+
+	public function test_build_segment_lookup_keys_includes_utf8_texturize_variant_and_entity_form(): void {
+		// Simulate wptexturize returning UTF-8 typographic characters (not entities).
+		// „ = U+201E DOUBLE LOW-9 QUOTATION MARK, " = U+201C LEFT DOUBLE QUOTATION MARK
+		$this->stubWpFunctionReturn(
+			'wptexturize',
+			"Wähle Text → \u{201E}Übersetzen\u{201C}. Das funktioniert."
+		);
+
+		$keys = $this->invokeMethod(
+			$this->adapter,
+			'build_segment_lookup_keys',
+			array( 'Wähle Text → "Übersetzen". Das funktioniert.' )
+		);
+
+		// The UTF-8 typographic form must be present.
+		$this->assertContains(
+			"Wähle Text → \u{201E}Übersetzen\u{201C}. Das funktioniert.",
+			$keys,
+			'Expected UTF-8 typographic variant in lookup keys'
+		);
+		// The entity-encoded equivalent must also be present.
+		$this->assertContains(
+			'Wähle Text → &#8222;Übersetzen&#8220;. Das funktioniert.',
+			$keys,
+			'Expected entity-encoded form of typographic variant in lookup keys'
+		);
+	}
+
+	public function test_build_segment_lookup_keys_with_leading_whitespace_and_texturize(): void {
+		// Segment has a leading space (from a link boundary) and straight quotes.
+		$this->stubWpFunctionReturn(
+			'wptexturize',
+			'Wähle Text → &#8222;Übersetzen&#8220;. Funktioniert.'
+		);
+
+		$keys = $this->invokeMethod(
+			$this->adapter,
+			'build_segment_lookup_keys',
+			array( ' Wähle Text → "Übersetzen". Funktioniert.' )
+		);
+
+		// Raw variants (with and without leading space).
+		$this->assertContains( ' Wähle Text → "Übersetzen". Funktioniert.', $keys );
+		$this->assertContains( 'Wähle Text → "Übersetzen". Funktioniert.', $keys );
+		// Texturized trimmed form (without leading space).
+		$this->assertContains( 'Wähle Text → &#8222;Übersetzen&#8220;. Funktioniert.', $keys );
+		// Texturized form with original whitespace prefix.
+		$this->assertContains( ' Wähle Text → &#8222;Übersetzen&#8220;. Funktioniert.', $keys );
+	}
+
+	public function test_build_segment_lookup_keys_no_extra_keys_when_wptexturize_unchanged(): void {
+		// wptexturize returns the same text (e.g. for URLs or plain text without quotes).
+		$this->stubWpFunctionReturn( 'wptexturize', 'https://example.com/path' );
+
+		$keys = $this->invokeMethod(
+			$this->adapter,
+			'build_segment_lookup_keys',
+			array( 'https://example.com/path' )
+		);
+
+		// Only the raw key; no texturize variants added.
+		$this->assertCount( 1, $keys );
+		$this->assertContains( 'https://example.com/path', $keys );
+	}
+
+	public function test_build_segment_lookup_keys_capped_at_eight(): void {
+		// Simulate wptexturize producing a different result (to trigger variant generation)
+		// for a segment that already has two raw keys (normalized + trimmed).
+		$this->stubWpFunctionReturn(
+			'wptexturize',
+			'&#8220;A&#8221; &#8216;B&#8217; &#8211; &#8212; &#8230;'
+		);
+
+		// Leading space triggers additional whitespace variants, so many keys could be generated.
+		$keys = $this->invokeMethod(
+			$this->adapter,
+			'build_segment_lookup_keys',
+			array( ' "A" \'B\' -- --- ...' )
+		);
+
+		$this->assertLessThanOrEqual( 8, count( $keys ), 'Lookup key count must not exceed 8' );
+	}
+
+	public function test_build_segment_lookup_keys_empty_returns_empty(): void {
+		$keys = $this->invokeMethod( $this->adapter, 'build_segment_lookup_keys', array( '' ) );
+		$this->assertSame( array(), $keys );
+	}
+
+	public function test_build_segment_lookup_keys_whitespace_only_returns_empty(): void {
+		$keys = $this->invokeMethod( $this->adapter, 'build_segment_lookup_keys', array( '   ' ) );
+		$this->assertSame( array(), $keys );
+	}
+
+	// -----------------------------------------------------------------------
+	// encode_typographic_chars (via reflection)
+	// -----------------------------------------------------------------------
+
+	public function test_encode_typographic_chars_left_right_double_quotes(): void {
+		$result = $this->invokeMethod(
+			$this->adapter,
+			'encode_typographic_chars',
+			array( "\u{201C}Übersetzen\u{201D}" ) // "Übersetzen"
+		);
+		$this->assertSame( '&#8220;Übersetzen&#8221;', $result );
+	}
+
+	public function test_encode_typographic_chars_german_low_nine(): void {
+		$result = $this->invokeMethod(
+			$this->adapter,
+			'encode_typographic_chars',
+			array( "\u{201E}Übersetzen\u{201C}" ) // „Übersetzen"
+		);
+		$this->assertSame( '&#8222;Übersetzen&#8220;', $result );
+	}
+
+	public function test_encode_typographic_chars_leaves_ascii_and_arrows_unchanged(): void {
+		$result = $this->invokeMethod(
+			$this->adapter,
+			'encode_typographic_chars',
+			array( 'Wähle Text → Werkzeugleiste → Übersetzen.' )
+		);
+		$this->assertSame( 'Wähle Text → Werkzeugleiste → Übersetzen.', $result );
+	}
+
+	public function test_encode_typographic_chars_en_dash_and_ellipsis(): void {
+		$result = $this->invokeMethod(
+			$this->adapter,
+			'encode_typographic_chars',
+			array( "Punkt\u{2026} Strich\u{2013}Ende" ) // …–
+		);
+		$this->assertSame( 'Punkt&#8230; Strich&#8211;Ende', $result );
+	}
+
+	// -----------------------------------------------------------------------
+	// create_translation – texturize variants are saved with same translation
+	// -----------------------------------------------------------------------
+
+	public function test_create_translation_saves_texturize_variant_with_same_translation(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		// Simulate wptexturize returning entity-encoded quotes for the segment.
+		$this->stubWpFunction( 'wptexturize', static function ( string $text ): string {
+			return str_replace( '"', '&#8220;', str_replace( '"', '&#8222;', $text ) );
+		} );
+
+		// ID rows for both the raw and the texturized variants.
+		$raw_row              = new \stdClass();
+		$raw_row->original    = 'Wähle Text → "Übersetzen".';
+		$raw_row->id          = 10;
+		$raw_row->original_id = 10;
+
+		$tx_row              = new \stdClass();
+		$tx_row->original    = 'Wähle Text → &#8222;Übersetzen&#8220;.';
+		$tx_row->id          = 11;
+		$tx_row->original_id = 11;
+
+		$spy->string_ids_result = array( $raw_row, $tx_row );
+
+		$post               = new \WP_Post();
+		$post->ID           = 20;
+		$post->post_title   = 'Titel';
+		$post->post_excerpt = '';
+		$post->post_content = '<p>Wähle Text → "Übersetzen".</p>';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$content_pairs = array(
+			'Wähle Text → "Übersetzen".'           => 'Select Text → "Translate".',
+			'Wähle Text → &#8222;Übersetzen&#8220;.' => 'Select Text → "Translate".',
+		);
+
+		$result = $this->adapter->create_translation( 20, 'en', array(
+			'content_string_pairs' => $content_pairs,
+			'overwrite'            => true,
+		) );
+
+		$this->assertSame( 20, $result );
+
+		$updated_originals = array_column( $spy->update_calls[0]['rows'] ?? array(), 'original' );
+		$updated_translations = array_column( $spy->update_calls[0]['rows'] ?? array(), 'translated' );
+
+		$this->assertContains( 'Wähle Text → "Übersetzen".', $updated_originals );
+		$this->assertContains( 'Wähle Text → &#8222;Übersetzen&#8220;.', $updated_originals );
+
+		// Both variants must have the same translation.
+		foreach ( $spy->update_calls[0]['rows'] ?? array() as $row ) {
+			$this->assertSame( 'Select Text → "Translate".', $row['translated'] );
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// save_string_pairs – diagnostics logging
+	// -----------------------------------------------------------------------
+
+	public function test_save_string_pairs_logs_diagnostics(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+
+		$log_calls = array();
+		$this->stubWpFunction( 'error_log', static function ( string $msg ) use ( &$log_calls ): void {
+			$log_calls[] = $msg;
+		} );
+
+		$id_row              = new \stdClass();
+		$id_row->original    = 'Hallo';
+		$id_row->id          = 5;
+		$id_row->original_id = 5;
+		$spy->string_ids_result = array( $id_row );
+
+		$post               = new \WP_Post();
+		$post->ID           = 9;
+		$post->post_title   = 'Hallo';
+		$post->post_content = '';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$this->adapter->create_translation( 9, 'en', array(
+			'post_title' => 'Hello',
+			'overwrite'  => true,
+		) );
+
+		// save_string_pairs must have been reached (update called).
+		$this->assertCount( 1, $spy->update_calls );
+		$this->assertSame( 2, $spy->update_calls[0]['rows'][0]['status'] );
+	}
+
+	// -----------------------------------------------------------------------
 	// link_translation
 	// -----------------------------------------------------------------------
 
