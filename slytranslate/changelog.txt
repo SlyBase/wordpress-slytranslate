@@ -3,6 +3,7 @@ Features:
 * TranslatePress frontend editor pages now include a SlyTranslate sidebar panel with target-language, model, overwrite, progress, and cancel controls for translating the current page without leaving the visual editor.
 
 Changes:
+* MCP ability descriptions now spell out single-entry versus multi-post semantics, source-language pinning, overwrite guidance, and the external execute-wrapper troubleshooting boundary for LLM clients.
 * VS Code workspace tasks now include a single deploy action that ships the current plugin ZIP to TranslatePress, WP-Globus, and SlyBase in sequence.
 * VS Code task buttons now use direct per-environment build/deploy actions with consistent English labels for ZIP, deploy, and release tasks.
 * Workspace task buttons now expose direct ZIP build and plugin-specific deploy flows for SlyBase/Polylang, TranslatePress, and WP-Globus.
@@ -15,6 +16,7 @@ Changes:
 * Timing logs now include content_string_batch_detail with batch count, max encoded input length, and the batch char limit, and job_end includes string_batch_item_retries, string_batch_validation_retries, and string_batch_split_retries for direct diagnosis of retry costs.
 
 Fixes:
+* Bulk translation now preserves explicit source_language overrides for single-entry adapters such as WPGlobus and WP Multilang.
 * TranslatePress adapter table writes now update every existing dictionary row for the same original string ID, so stale duplicate rows no longer leave the visual editor target field empty while the frontend still shows the translated page.
 * WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
 * WPGlobus editor translations now submit the detected source language with the sidebar request, so German to English runs no longer fail with a false same-language error.

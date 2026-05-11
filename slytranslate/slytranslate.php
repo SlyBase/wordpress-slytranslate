@@ -533,8 +533,8 @@ class AI_Translate {
 				$succeeded = 0;
 				$failed    = 0;
 				$skipped   = 0;
-				$overwrite = ! empty( $input['overwrite'] );
-				$source_language = self::get_optional_sanitized_key_input( $input, 'source_language' );
+				$overwrite                 = ! empty( $input['overwrite'] );
+				$requested_source_language = self::get_optional_sanitized_key_input( $input, 'source_language' );
 				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
 				if ( ! current_user_can( 'edit_others_posts' ) ) {
 					$additional_prompt = '';
@@ -548,6 +548,10 @@ class AI_Translate {
 					}
 
 					$source_language = $adapter->get_post_language( $post_id ) ?? '';
+					if ( '' !== $requested_source_language && ( $adapter instanceof WpMultilangAdapter || $adapter instanceof WpglobusAdapter ) ) {
+						$source_language = $requested_source_language;
+					}
+
 					if ( '' !== $source_language && $source_language === $target_language ) {
 						$skipped++;
 						$results[] = array( 'source_post_id' => $post_id, 'translated_post_id' => 0, 'status' => 'skipped', 'error' => __( 'The source content is already in the requested target language.', 'slytranslate' ), 'edit_link' => '' );

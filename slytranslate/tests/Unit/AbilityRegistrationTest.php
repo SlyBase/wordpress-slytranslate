@@ -61,6 +61,9 @@ class AbilityRegistrationTest extends TestCase {
 			$ability_definition = $registered_abilities[ $slug ];
 
 			$this->assertSame( 'ai-translation', $ability_definition['category'] );
+			if ( isset( $expected_contract['description'] ) ) {
+				$this->assertSame( $expected_contract['description'], $ability_definition['description'] );
+			}
 			$this->assertSame( $expected_contract['execute_callback'], $ability_definition['execute_callback'] );
 			$this->assertIsCallable( $ability_definition['permission_callback'] );
 			$this->assertSchemaContract( $ability_definition['input_schema'], $expected_contract['input_schema'] );
@@ -324,6 +327,7 @@ class AbilityRegistrationTest extends TestCase {
 				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
 			),
 			'ai-translate/get-translation-status' => array(
+				'description'      => 'Inspect one content item before translating. Returns source_language, single_entry_mode, and per-language existence data. In single-entry mode a later translate-content call can keep source_post_id and translated_post_id identical; in multi-post mode target languages use sibling post IDs.',
 				'execute_callback' => array( AI_Translate::class, 'execute_get_translation_status' ),
 				'input_schema'     => array(
 					'type'          => 'object',
@@ -340,23 +344,23 @@ class AbilityRegistrationTest extends TestCase {
 					'type'          => 'object',
 					'property_keys' => array( 'source_post_id', 'source_post_type', 'source_title', 'source_language', 'single_entry_mode', 'translations' ),
 					'properties'    => array(
-						'source_post_id'   => array( 'type' => 'integer' ),
-						'source_post_type' => array( 'type' => 'string' ),
-						'source_title'     => array( 'type' => 'string' ),
-						'source_language'  => array( 'type' => 'string' ),
-						'single_entry_mode' => array( 'type' => 'boolean', 'description' => 'True when the active language plugin stores all language variants in one post (WP Multilang).' ),
+						'source_post_id'   => array( 'type' => 'integer', 'description' => 'Source WordPress post ID. In single-entry mode this is also the post that stores translated variants.' ),
+						'source_post_type' => array( 'type' => 'string', 'description' => 'Source WordPress post type.' ),
+						'source_title'     => array( 'type' => 'string', 'description' => 'Source title for the resolved source_language.' ),
+						'source_language'  => array( 'type' => 'string', 'description' => 'Canonical source language resolved by the active adapter. Reuse this as translate-content.source_language when you intentionally pin the source variant.' ),
+						'single_entry_mode' => array( 'type' => 'boolean', 'description' => 'True when translated variants stay on the same WordPress post ID (WP Multilang, WPGlobus, TranslatePress). False when each target language uses a sibling post, for example Polylang.' ),
 						'translations'     => array(
 							'type'  => 'array',
 							'items' => array(
 								'type'          => 'object',
 								'property_keys' => array( 'lang', 'post_id', 'exists', 'title', 'post_status', 'edit_link' ),
 								'properties'    => array(
-									'lang'        => array( 'type' => 'string' ),
-									'post_id'     => array( 'type' => 'integer' ),
-									'exists'      => array( 'type' => 'boolean' ),
-									'title'       => array( 'type' => 'string' ),
-									'post_status' => array( 'type' => 'string' ),
-									'edit_link'   => array( 'type' => 'string' ),
+									'lang'        => array( 'type' => 'string', 'description' => 'Target language code.' ),
+									'post_id'     => array( 'type' => 'integer', 'description' => 'Translated sibling post ID in multi-post mode. 0 in single-entry mode status responses, even when the target variant already exists on the source post.' ),
+									'exists'      => array( 'type' => 'boolean', 'description' => 'Whether the requested language already exists for this content item.' ),
+									'title'       => array( 'type' => 'string', 'description' => 'Translated post title when a separate translated post exists and is accessible.' ),
+									'post_status' => array( 'type' => 'string', 'description' => 'Translated post status when a separate translated post exists and is accessible.' ),
+									'edit_link'   => array( 'type' => 'string', 'description' => 'Admin edit URL for the translated sibling post. Empty in single-entry mode.' ),
 								),
 							),
 						),
@@ -365,6 +369,7 @@ class AbilityRegistrationTest extends TestCase {
 				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
 			),
 				'ai-translate/set-post-language' => array(
+					'description'      => 'Changes the language assignment of an existing content item without running translation. Exposed only when the active adapter supports post-language mutation, currently multi-post adapters such as Polylang. Use relink=true only when translation relations must be rewritten, and force=true only to replace an existing target-language assignment.',
 					'execute_callback' => array( AI_Translate::class, 'execute_set_post_language' ),
 					'input_schema'     => array(
 						'type'          => 'object',
@@ -377,15 +382,15 @@ class AbilityRegistrationTest extends TestCase {
 							),
 							'target_language' => array(
 								'type'        => 'string',
-								'description' => 'Target language code to assign to the content item.',
+								'description' => 'Language code to assign to the existing content item.',
 							),
 							'relink' => array(
 								'type'        => 'boolean',
-								'description' => 'When true, the translation relation map is rewritten so the current post is linked under target_language.',
+								'description' => 'When true, also rewrites the translation relation map so this post occupies target_language in the group.',
 							),
 							'force' => array(
 								'type'        => 'boolean',
-								'description' => 'When true, allows overriding an existing target-language conflict.',
+								'description' => 'When true, allows taking over a target language that is already assigned elsewhere in the translation group.',
 								'default'     => false,
 							),
 						),
@@ -409,6 +414,7 @@ class AbilityRegistrationTest extends TestCase {
 					'meta'             => $this->expected_public_mcp_meta(),
 				),
 			'ai-translate/get-untranslated' => array(
+				'description'      => 'Lists candidate source items that are still missing the requested target language according to the active adapter. In single-entry mode the target variant is missing on the same post; in multi-post mode no sibling translation post exists. Use this before translate-content-bulk.',
 				'execute_callback' => array( AI_Translate::class, 'execute_get_untranslated' ),
 				'input_schema'     => array(
 					'type'          => 'object',
@@ -530,6 +536,7 @@ class AbilityRegistrationTest extends TestCase {
 				'meta'             => $this->expected_public_mcp_meta( array( 'idempotent' => true ) ),
 			),
 			'ai-translate/translate-content' => array(
+				'description'      => 'Translates one content item into one target language. Single-entry adapters update the same post ID, while multi-post adapters create or update a sibling translated post. Call get-translation-status first, omit source_language unless you intentionally pin a source variant, and set overwrite=true only when the target language already exists.',
 				'execute_callback' => array( AI_Translate::class, 'execute_translate_content' ),
 				'input_schema'     => array(
 					'type'          => 'object',
@@ -542,7 +549,7 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'source_language' => array(
 							'type'        => 'string',
-							'description' => 'Optional source language code. Omit when unsure. In single_entry_mode, pass only get-translation-status.source_language or another explicit variant from get-languages.',
+							'description' => 'Optional source language to pin. Omit unless you intentionally select a specific source variant. For single-entry adapters, reuse get-translation-status.source_language or a confirmed language code from get-languages.',
 						),
 						'target_language' => array(
 							'type'        => 'string',
@@ -559,7 +566,7 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'overwrite' => array(
 							'type'        => 'boolean',
-							'description' => 'Overwrite existing translation.',
+							'description' => 'When true, update an existing target translation instead of returning translation_exists.',
 							'default'     => false,
 						),
 						'additional_prompt' => array(
@@ -578,8 +585,8 @@ class AbilityRegistrationTest extends TestCase {
 					'property_keys' => array( 'translated_post_id', 'source_post_id', 'target_language', 'title', 'translated_post_type', 'post_status', 'edit_link' ),
 					'required'      => array( 'translated_post_id', 'source_post_id' ),
 					'properties'    => array(
-						'translated_post_id'   => array( 'type' => 'integer' ),
-						'source_post_id'       => array( 'type' => 'integer' ),
+						'translated_post_id'   => array( 'type' => 'integer', 'description' => 'Translated WordPress post ID. May equal source_post_id in single-entry mode; otherwise it is the sibling target post ID.' ),
+						'source_post_id'       => array( 'type' => 'integer', 'description' => 'Source WordPress post ID.' ),
 						'target_language'      => array( 'type' => 'string' ),
 						'title'                => array( 'type' => 'string' ),
 						'translated_post_type' => array( 'type' => 'string' ),
@@ -590,6 +597,7 @@ class AbilityRegistrationTest extends TestCase {
 				'meta'             => $this->expected_public_mcp_meta(),
 			),
 			'ai-translate/translate-content-bulk' => array(
+				'description'      => 'Translates multiple content items into one target language. Choose exactly one source selector: post_ids for explicit items, or post_type with optional limit for discovery. Single-entry adapters can return the same source_post_id and translated_post_id; multi-post adapters return sibling target post IDs. Pass source_language only when you intentionally pin the same source variant for every item, and set overwrite=true only when existing translations should be updated instead of skipped.',
 				'execute_callback' => array( AI_Translate::class, 'execute_translate_posts' ),
 				'input_schema'     => array(
 					'type'          => 'object',
@@ -598,25 +606,25 @@ class AbilityRegistrationTest extends TestCase {
 					'properties'    => array(
 						'post_ids' => array(
 							'type'        => 'array',
-							'description' => 'Array of post IDs to translate. Use this when the exact source posts are already known.',
+							'description' => 'Explicit source post IDs to translate. When present, these take precedence over post_type and limit.',
 							'minItems'    => 1,
 							'maxItems'    => 50,
 							'items'       => array( 'type' => 'integer' ),
 						),
 						'post_type' => array(
 							'type'        => 'string',
-							'description' => 'Optional post type used to discover source posts when post_ids are not provided.',
+							'description' => 'Post type used to discover source items only when post_ids are omitted.',
 						),
 						'limit' => array(
 							'type'        => 'integer',
-							'description' => 'Maximum number of items to fetch when post_type is used.',
+							'description' => 'Maximum number of discovered items when post_type is used.',
 							'default'     => 20,
 							'minimum'     => 1,
 							'maximum'     => 50,
 						),
 						'source_language' => array(
 							'type'        => 'string',
-							'description' => 'Optional source language code applied to each item. For WP Multilang this selects which language variant is used as source.',
+							'description' => 'Optional source language override applied only for adapters that support picking a source variant inside one post, such as WP Multilang or WPGlobus.',
 						),
 						'target_language' => array(
 							'type'        => 'string',
@@ -633,7 +641,7 @@ class AbilityRegistrationTest extends TestCase {
 						),
 						'overwrite' => array(
 							'type'        => 'boolean',
-							'description' => 'Overwrite existing translations.',
+							'description' => 'When true, update existing target translations instead of returning them as skipped.',
 							'default'     => false,
 						),
 						'additional_prompt' => array(
@@ -658,7 +666,7 @@ class AbilityRegistrationTest extends TestCase {
 								'property_keys' => array( 'source_post_id', 'translated_post_id', 'status', 'error', 'edit_link' ),
 								'properties'    => array(
 									'source_post_id'     => array( 'type' => 'integer' ),
-									'translated_post_id' => array( 'type' => 'integer' ),
+									'translated_post_id' => array( 'type' => 'integer', 'description' => 'Translated WordPress post ID for this item. May equal source_post_id in single-entry mode. 0 when status is failed.' ),
 									'status'             => array( 'type' => 'string' ),
 									'error'              => array( 'type' => 'string' ),
 									'edit_link'          => array( 'type' => 'string' ),
@@ -755,6 +763,7 @@ class AbilityRegistrationTest extends TestCase {
 				'meta'             => $this->expected_public_mcp_meta( array( 'idempotent' => true ) ),
 			),
 			'ai-translate/configure' => array(
+				'description'      => 'Reads or updates persistent site-wide AI Translate settings. Call with an empty object to inspect current values. Input properties are persistent settings only; runtime diagnostics such as effective concurrency, SEO detection, and transport status are returned in output as inspect-only fields.',
 				'execute_callback' => array( AI_Translate::class, 'execute_configure' ),
 				'input_schema'     => array(
 					'type'          => 'object',
@@ -762,47 +771,47 @@ class AbilityRegistrationTest extends TestCase {
 					'properties'    => array(
 						'prompt_template' => array(
 							'type'        => 'string',
-							'description' => 'Translation prompt template. Use {FROM_CODE} and {TO_CODE} as placeholders.',
+							'description' => 'Persistent setting: translation prompt template. Use {FROM_CODE} and {TO_CODE} as placeholders.',
 						),
 						'prompt_addon' => array(
 							'type'        => 'string',
-							'description' => 'Optional site-wide addition always appended after the prompt template. Applied to every translation request.',
+							'description' => 'Persistent setting: optional site-wide instructions appended after the prompt template for every translation request.',
 						),
 						'meta_keys_translate' => array(
 							'type'        => 'string',
-							'description' => 'Whitespace-separated list of meta keys to translate. Use a plain string, not an array.',
+							'description' => 'Persistent setting: whitespace-separated list of meta keys to translate. Use a plain string, not an array.',
 						),
 						'meta_keys_clear' => array(
 							'type'        => 'string',
-							'description' => 'Whitespace-separated list of meta keys to clear. Use a plain string, not an array.',
+							'description' => 'Persistent setting: whitespace-separated list of meta keys to clear. Use a plain string, not an array.',
 						),
 						'auto_translate_new' => array(
 							'type'        => 'boolean',
-							'description' => 'Auto-translate new translation posts in the active language plugin.',
+							'description' => 'Persistent setting: auto-translate new translation posts created by the active language plugin.',
 						),
 						'context_window_tokens' => array(
 							'type'        => 'integer',
-							'description' => 'Optional override for the model context window in tokens. Use 0 to fall back to auto-detection and learned values.',
+							'description' => 'Persistent setting: manual model context-window override in tokens. Use 0 to fall back to auto-detection and learned values.',
 							'minimum'     => 0,
 							'maximum'     => 4000000,
 						),
 						'string_table_concurrency' => array(
 							'type'        => 'integer',
-							'description' => 'Opt-in maximum concurrency for TranslatePress-style string-table batches. Values above 1 only activate when a successful concurrency probe recommends parallel execution for the active model.',
+							'description' => 'Persistent setting: opt-in maximum concurrency for TranslatePress-style string-table batches. Values above 1 only activate when a successful concurrency probe recommends parallel execution for the active model.',
 							'minimum'     => 1,
 							'maximum'     => 4,
 						),
 						'model_slug' => array(
 							'type'        => 'string',
-							'description' => 'Model slug/identifier to pass to the AI connector (e.g. gemma3:27b). Leave empty to use the connector default.',
+							'description' => 'Persistent setting: site-wide default model slug/identifier passed to the AI connector. Leave empty to use the connector default.',
 						),
 						'direct_api_url' => array(
 							'type'        => 'string',
-							'description' => 'Base URL of an OpenAI-compatible API server (e.g. http://192.168.178.42:8080). Normal translations use the WordPress AI Client transport; this endpoint is used for model profiles that explicitly require direct API handling (for example TranslateGemma). When saving, the plugin probes whether the endpoint supports chat_template_kwargs.',
+							'description' => 'Persistent setting: base URL of an optional OpenAI-compatible API server (e.g. http://192.168.178.42:8080). Normal translations use the WordPress AI Client transport; this endpoint is used only for model profiles that explicitly require direct API handling, for example TranslateGemma. When saving, the plugin probes whether the endpoint supports chat_template_kwargs.',
 						),
 						'force_direct_api' => array(
 							'type'        => 'boolean',
-							'description' => 'Deprecated compatibility flag. Normal translations use the WordPress AI Client transport. Direct API remains reserved for models that explicitly require it (for example TranslateGemma).',
+							'description' => 'Persistent setting, deprecated: compatibility flag. Normal translations use the WordPress AI Client transport. Direct API remains reserved for models that explicitly require it, for example TranslateGemma.',
 						),
 					),
 				),

@@ -106,6 +106,13 @@ Current source-language resolution order must match the existing adapter behavio
 
 Do not reduce this to `wpglobus_current_language()` only. That misses the active builder tab and breaks status or translation actions in admin editing flows.
 
+### 5.1 Ability Call Hints
+
+- Use `ai-translate/get-languages` when the target language code is unknown. Otherwise call `ai-translate/get-translation-status` before `ai-translate/translate-content` so the agent can inspect `source_language`, `single_entry_mode`, and existing target-language presence.
+- Expect `single_entry_mode` to be `true`, and expect `translated_post_id` to potentially equal `source_post_id` because WPGlobus stores all language variants in the same post.
+- Omit `source_language` unless you intentionally pin a visible source variant. When pinning, reuse `get-translation-status.source_language` or another confirmed enabled language code.
+- Use `overwrite=true` only when replacing an existing inline target-language variant. Without overwrite, existing target-language content should short-circuit instead of being rewritten.
+
 ## 6. Current SlyTranslate Integration Surface
 
 These integration points already exist in the current codebase and must be documented as current state, not as future work.

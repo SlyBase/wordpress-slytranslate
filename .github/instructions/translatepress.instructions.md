@@ -123,6 +123,13 @@ Also note the current PostTranslationService behavior.
 - The optional caller-provided `source_language` override is currently honored for `WpMultilangAdapter` and `WpglobusAdapter`, but not for `TranslatePressAdapter`.
 - `get_language_variant()` is intentionally a passthrough, because the source post already contains the canonical source-language text.
 
+### 5.1 Ability Call Hints
+
+- Use `ai-translate/get-languages` when the target language code is unknown. Otherwise call `ai-translate/get-translation-status` before `ai-translate/translate-content` so the agent can inspect `source_language`, `single_entry_mode`, and existing target-language presence.
+- Expect `single_entry_mode` to be `true`, and expect `translated_post_id` to potentially equal `source_post_id`.
+- Omit `source_language` unless reusing the exact `get-translation-status.source_language`; TranslatePress derives the default-language source itself and ignores caller overrides otherwise.
+- Use `overwrite=true` only when status lookup or prior workflow context already shows that the target language exists and the agent explicitly intends to replace the current dictionary rows.
+
 ## 6. Current SlyTranslate Integration Surface
 
 These integration points already exist in the current codebase and must be documented as current state, not as future work.

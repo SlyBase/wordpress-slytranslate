@@ -95,4 +95,37 @@ class TranslationQueryServiceTest extends TestCase {
 		$this->assertSame( 'Hallo', $result['source_title'] );
 		$this->assertArrayNotHasKey( 'wpglobus_language', $_REQUEST );
 	}
+
+	public function test_execute_get_translation_status_marks_translatepress_as_single_entry_mode(): void {
+		$adapter = new SpyTranslatePressLookupAdapter();
+
+		$this->setStaticProperty( AI_Translate::class, 'adapter', $adapter );
+		$this->stubWpFunctionReturn(
+			'get_post',
+			(object) array(
+				'ID'           => 7,
+				'post_type'    => 'post',
+				'post_title'   => 'Titel',
+				'post_content' => 'Inhalt',
+				'post_excerpt' => '',
+			)
+		);
+		$this->stubWpFunctionReturn( 'current_user_can', true );
+		$this->stubWpFunctionReturn( 'post_type_exists', true );
+		$this->stubWpFunctionReturn( 'is_post_type_viewable', true );
+		$this->stubWpFunctionReturn( 'post_type_supports', true );
+		$this->stubWpFunctionReturn( 'get_post_stati', array( 'publish' ) );
+		$this->stubWpFunctionReturn( 'get_post_status', 'publish' );
+
+		$result = TranslationQueryService::execute_get_translation_status(
+			array(
+				'post_id' => 7,
+			)
+		);
+
+		$this->assertIsArray( $result );
+		$this->assertTrue( $result['single_entry_mode'] );
+		$this->assertTrue( $result['translations'][0]['exists'] );
+		$this->assertSame( 0, $result['translations'][0]['post_id'] );
+	}
 }

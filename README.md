@@ -64,6 +64,16 @@ Use SlyTranslate when you need one consistent translation workflow for:
 | `ai-translate/save-additional-prompt` | Save per-user additional instructions |
 | `ai-translate/configure` | Read or update persistent plugin settings |
 
+## MCP Call Flow
+
+For LLM and MCP clients, the most reliable sequence is:
+
+- Call `ai-translate/get-languages` first when the correct target language code is unknown.
+- Call `ai-translate/get-translation-status` before `ai-translate/translate-content` to inspect `source_language`, `single_entry_mode`, and whether the target language already exists.
+- Omit `source_language` unless you intentionally pin a source variant. In single-entry adapters, reuse `get-translation-status.source_language` when you do pin it.
+- Set `overwrite=true` only when status or prior context shows that the target language already exists.
+- Expect `translated_post_id` to equal `source_post_id` in single-entry adapters such as WP Multilang, WPGlobus, and TranslatePress. In multi-post adapters such as Polylang, the translated item uses a sibling post ID.
+
 ## Requirements
 
 - WordPress 6.9+
@@ -155,6 +165,10 @@ Yes, when the active language plugin supports language mutation (currently Polyl
 ### How do I control prompts and style?
 
 Use `ai-translate/configure` for persistent defaults and `additional_prompt` on `translate-*` abilities for per-request instructions.
+
+### Why can MCP execute-ability still fail after discovery looks correct?
+
+Some external WordPress MCP adapter wrappers expose a flatter `execute-ability` signature than they actually accept. If `discover-abilities` or `get-ability-info` shows the correct SlyTranslate schema but `execute-ability` still errors about a missing `parameters` wrapper, investigate the external adapter layer first. SlyTranslate controls the registered ability names, descriptions, and schemas, not that wrapper surface.
 
 ### Which model-specific profiles are supported?
 

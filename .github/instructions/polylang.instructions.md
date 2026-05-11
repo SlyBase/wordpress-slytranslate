@@ -134,6 +134,13 @@ Also note the current `PostTranslationService` behavior.
 - The optional caller-provided `source_language` override is currently honored for `WpMultilangAdapter` and `WpglobusAdapter`, but not for `PolylangAdapter`.
 - Polylang translations are therefore always derived from the source post selected by ID, not from an alternate language segment inside that post.
 
+### 5.1 Ability Call Hints
+
+- Use `ai-translate/get-languages` when the target language code is unknown. Otherwise call `ai-translate/get-translation-status` before `ai-translate/translate-content` so the agent can inspect `source_language`, `single_entry_mode`, and existing target-language presence.
+- Expect `single_entry_mode` to be `false`, and expect `translated_post_id` to differ from `source_post_id` because Polylang stores target languages in sibling posts.
+- Omit `source_language`; Polylang uses the language already assigned to the source post and does not let the ability pick a different inline source variant.
+- Use `overwrite=true` only when updating an existing sibling translation. Use `ai-translate/set-post-language` only for language mutation and relation repair, not for creating translated content.
+
 ## 6. Current SlyTranslate Integration Surface
 
 These integration points already exist in the current codebase and must be documented as current state, not as future work.
