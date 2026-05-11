@@ -205,7 +205,7 @@ For WPGlobus work, a deploy and translation smoke test remain mandatory before r
 - After deploy, run a test translation for post `1109` through the WordPress MCP tools.
 - If needed, use `mcp_wordpress-sly_mcp-adapter-discover-abilities` first to confirm the translation ability name.
 - Execute the translation through `mcp_wordpress-sly_mcp-adapter-execute-ability`.
-- Always use the model `Ministral-8B-Instruct-2410-Q4_K_M`.
+- Always use the model `Ministral-3-3B-Instruct-2512-Q4_K_M`.
 - The additional instruction must contain exactly: `Anreden mit "du" statt "Sie". junger aber professioneller ton.`
 - Do not report the WPGlobus task as complete until this smoke test succeeds.
 

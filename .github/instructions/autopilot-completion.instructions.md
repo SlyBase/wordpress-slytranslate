@@ -55,7 +55,7 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 
 - Translation direction: `de` -> `en`
 - `overwrite`: `true`
-- Model: `Ministral-8B-Instruct-2410-Q4_K_M`
+- Model: `Ministral-3-3B-Instruct-2512-Q4_K_M`
 
 
 ## 5) Failure handling

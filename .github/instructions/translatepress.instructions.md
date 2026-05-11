@@ -239,7 +239,7 @@ For TranslatePress work, a deploy and translation smoke test remain mandatory be
 - Deploy to the TranslatePress WordPress pod.
 - After deploy, run a test translation for post `11` through the WordPress MCP tools.
 - Use the mutating ability `ai-translate/translate-content`.
-- Always use the model `Ministral-8B-Instruct-2410-Q4_K_M`.
+- Always use the model `Ministral-3-3B-Instruct-2512-Q4_K_M`.
 - The additional instruction must contain exactly: `Anreden mit "du" statt "Sie". junger aber professioneller ton.`
 - Use `overwrite: true` so the smoke test exercises the current persistence path instead of short-circuiting on an existing translation.
 - Do not report the TranslatePress task as complete until this smoke test succeeds.
