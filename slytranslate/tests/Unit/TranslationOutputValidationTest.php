@@ -287,6 +287,30 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertSame( 'Bitte oeffne dein Dashboard und fahre mit dem naechsten Schritt fort.', $result );
 	}
 
+	public function test_finalize_translated_chunk_unwraps_full_markdown_bold_wrapper_for_plain_text_output(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'finalize_translated_chunk',
+			array( 'Test Blog Post', '**Test-Blogbeitrag**', 'Ministral-8B-Instruct-2410-Q4_K_M', 'Prompt', 0 )
+		);
+
+		$this->assertSame( 'Test-Blogbeitrag', $result );
+	}
+
+	public function test_finalize_translated_chunk_preserves_markdown_wrapper_when_source_already_has_it(): void {
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'de' );
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'finalize_translated_chunk',
+			array( '**Test Blog Post**', '**Test-Blogbeitrag**', 'Ministral-8B-Instruct-2410-Q4_K_M', 'Prompt', 0 )
+		);
+
+		$this->assertSame( '**Test-Blogbeitrag**', $result );
+	}
+
 	public function test_normalizes_leading_german_label_leakage_for_de_target(): void {
 		$source_text = 'This sentence should be translated to German without any role labels in the output.';
 		$translated  = "German:\nDies ist eine saubere deutsche Uebersetzung.";

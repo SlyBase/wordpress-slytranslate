@@ -1287,6 +1287,38 @@ class TranslationRuntime {
 		return str_replace( '-', ' ', $match[1] );
 	}
 
+	private static function unwrap_full_markdown_emphasis_translation( string $source_text, string $translated_text ): string {
+		$trimmed = trim( $translated_text );
+		if ( '' === $trimmed || false !== strpos( $trimmed, "\n" ) ) {
+			return $translated_text;
+		}
+
+		$source_trimmed = trim( $source_text );
+		foreach ( array( '**', '__', '*', '_' ) as $marker ) {
+			$marker_length = strlen( $marker );
+			if ( strlen( $trimmed ) <= ( $marker_length * 2 ) ) {
+				continue;
+			}
+
+			if ( 0 !== strpos( $trimmed, $marker ) || ! str_ends_with( $trimmed, $marker ) ) {
+				continue;
+			}
+
+			if ( 0 === strpos( $source_trimmed, $marker ) && str_ends_with( $source_trimmed, $marker ) ) {
+				return $translated_text;
+			}
+
+			$inner = substr( $trimmed, $marker_length, -$marker_length );
+			if ( ! is_string( $inner ) || '' === trim( $inner ) || false !== strpos( $inner, "\n" ) ) {
+				continue;
+			}
+
+			return trim( $inner );
+		}
+
+		return $translated_text;
+	}
+
 	private static function finalize_translated_chunk(
 		string $source_text,
 		string $translated_text,
@@ -1299,6 +1331,7 @@ class TranslationRuntime {
 		}
 
 		$translated_text  = self::unwrap_pseudo_tag_translation( $source_text, $translated_text );
+		$translated_text  = self::unwrap_full_markdown_emphasis_translation( $source_text, $translated_text );
 		$translated_text  = TranslationValidator::normalize_symbol_notation( $source_text, $translated_text );
 		$validation_error = TranslationValidator::validate( $source_text, $translated_text, self::$target_lang );
 
