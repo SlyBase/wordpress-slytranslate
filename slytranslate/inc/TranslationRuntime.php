@@ -847,10 +847,6 @@ class TranslationRuntime {
 	 * @return array Possibly mutated args.
 	 */
 	public static function inject_extra_request_body_into_http_args( array $args, string $url, array $injections ): array {
-		if ( empty( $injections ) ) {
-			return $args;
-		}
-
 		$method = strtoupper( (string) ( $args['method'] ?? 'POST' ) );
 		if ( 'POST' !== $method ) {
 			return $args;
@@ -870,9 +866,28 @@ class TranslationRuntime {
 			return $args;
 		}
 
+		$strip_chat_template_kwargs = self::should_strip_chat_template_kwargs_for_mistral_request( $url, $decoded );
+
+		if ( $strip_chat_template_kwargs ) {
+			unset( $decoded['chat_template_kwargs'] );
+		}
+
+		if ( empty( $injections ) ) {
+			$encoded = wp_json_encode( $decoded );
+			if ( is_string( $encoded ) ) {
+				$args['body'] = $encoded;
+			}
+
+			return $args;
+		}
+
 		foreach ( $injections as $key => $value ) {
 			$key = (string) $key;
 			if ( in_array( $key, array( 'messages', 'model' ), true ) ) {
+				continue;
+			}
+
+			if ( 'chat_template_kwargs' === $key && $strip_chat_template_kwargs ) {
 				continue;
 			}
 
@@ -894,6 +909,33 @@ class TranslationRuntime {
 		}
 
 		return $args;
+	}
+
+	/**
+	 * Mistral's hosted chat/completions API rejects chat_template_kwargs.
+	 * Strip the field entirely for those requests so connector-based model
+	 * profiles can still use the shared injection path for other providers.
+	 *
+	 * @param string $url     Outgoing request URL.
+	 * @param array  $decoded Decoded request body.
+	 * @return bool True when chat_template_kwargs must be removed.
+	 */
+	private static function should_strip_chat_template_kwargs_for_mistral_request( string $url, array $decoded ): bool {
+		if ( false === strpos( $url, '/chat/completions' ) || false === strpos( $url, 'api.mistral.ai' ) ) {
+			return false;
+		}
+
+		if ( ! array_key_exists( 'chat_template_kwargs', $decoded ) ) {
+			return false;
+		}
+
+		$model = $decoded['model'] ?? '';
+		if ( ! is_string( $model ) || '' === $model ) {
+			return false;
+		}
+
+		return false !== stripos( $model, 'mistral' )
+			|| false !== stripos( $model, 'ministral' );
 	}
 
 	/**

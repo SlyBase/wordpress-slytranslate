@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timing logs now include `content_string_batch_detail` with batch count, max encoded input length, and the batch char limit, and `job_end` includes `string_batch_item_retries`, `string_batch_validation_retries`, and `string_batch_split_retries` for direct diagnosis of retry costs.
 
 ### Fixes
+- Mistral-hosted chat/completions requests now strip unsupported `chat_template_kwargs`, so Ministral and other Mistral models no longer fail when the shared connector injection path is active.
 - TranslatePress adapter lookup queries now keep their dynamic IN placeholder lists on the exact prepared SQL line so WordPress.org coding-standard scans no longer report false unprepared-query violations.
 - WordPress.org coding-standard checks now recognise the cached TranslatePress dictionary lookups and direct table writes as intentional prepared queries instead of flagging false positives.
 - WordPress.org plugin checks no longer flag a forbidden updater header, mismatched stable tag metadata, or unsafe TranslatePress lookup queries and editor URL parsing.

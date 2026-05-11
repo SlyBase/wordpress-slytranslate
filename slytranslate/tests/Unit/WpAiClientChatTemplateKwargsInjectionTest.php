@@ -63,6 +63,52 @@ class WpAiClientChatTemplateKwargsInjectionTest extends TestCase {
 		$this->assertSame( false, $decoded['chat_template_kwargs']['enable_thinking'] );
 	}
 
+	public function test_strips_chat_template_kwargs_for_mistral_api_requests(): void {
+		$args = array(
+			'method' => 'POST',
+			'body'   => wp_json_encode( array(
+				'model'                => 'ministral-8b-latest',
+				'messages'             => array( array( 'role' => 'user', 'content' => 'x' ) ),
+				'chat_template_kwargs' => array( 'existing' => true ),
+			) ),
+		);
+
+		$result = TranslationRuntime::inject_extra_request_body_into_http_args(
+			$args,
+			'https://api.mistral.ai/v1/chat/completions',
+			array( 'chat_template_kwargs' => array( 'enable_thinking' => false ) )
+		);
+
+		$decoded = json_decode( (string) $result['body'], true );
+		$this->assertIsArray( $decoded );
+		$this->assertArrayNotHasKey( 'chat_template_kwargs', $decoded );
+	}
+
+	public function test_keeps_non_kwargs_injections_for_mistral_api_requests(): void {
+		$args = array(
+			'method' => 'POST',
+			'body'   => wp_json_encode( array(
+				'model'                => 'ministral-8b-latest',
+				'messages'             => array( array( 'role' => 'user', 'content' => 'x' ) ),
+				'chat_template_kwargs' => array( 'existing' => true ),
+			) ),
+		);
+
+		$result = TranslationRuntime::inject_extra_request_body_into_http_args(
+			$args,
+			'https://api.mistral.ai/v1/chat/completions',
+			array(
+				'chat_template_kwargs' => array( 'enable_thinking' => false ),
+				'provider'             => array( 'require_parameters' => true ),
+			)
+		);
+
+		$decoded = json_decode( (string) $result['body'], true );
+		$this->assertIsArray( $decoded );
+		$this->assertArrayNotHasKey( 'chat_template_kwargs', $decoded );
+		$this->assertSame( true, $decoded['provider']['require_parameters'] );
+	}
+
 	public function test_does_not_mutate_non_chat_completions_endpoints(): void {
 		$body = wp_json_encode( array( 'model' => 'm', 'prompt' => 'p' ) );
 		$args = array( 'method' => 'POST', 'body' => $body );
