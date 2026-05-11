@@ -937,6 +937,7 @@
 
             runAbility('ai-translate/translate-content', {
                 post_id: postId,
+                source_language: sourceLanguage || undefined,
                 target_language: targetLanguage,
                 post_status: postContext.postStatus || 'draft',
                 overwrite: overwrite,

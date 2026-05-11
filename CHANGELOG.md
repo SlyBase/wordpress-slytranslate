@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixes
 - TranslatePress adapter table writes now update every existing dictionary row for the same original string ID, so stale duplicate rows no longer leave the visual editor target field empty while the frontend still shows the translated page.
 - WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
+- WPGlobus editor translations now submit the detected source language with the sidebar request, so German to English runs no longer fail with a false same-language error.
 - TranslatePress string-table JSON batches now accept valid JSON wrapped in SlyTranslate output tags, so bilingual-frame model responses no longer fail batch decoding.
 - WPGlobus status and translation actions now respect the currently selected edit language instead of always treating the post as the default source language.
 - TranslatePress string-table JSON batches now accept model responses wrapped in Markdown code fences, so fenced valid JSON no longer fails early as structure drift before batch decoding.
