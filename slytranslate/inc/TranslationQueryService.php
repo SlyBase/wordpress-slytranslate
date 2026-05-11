@@ -103,40 +103,7 @@ class TranslationQueryService {
 			return $callback();
 		}
 
-		$hint_keys = array( 'wpglobus_language', 'wpglobus-language', 'language' );
-		$overrides = array();
-
-		foreach ( $hint_keys as $hint_key ) {
-			$hint_value = sanitize_key( (string) ( $input[ $hint_key ] ?? '' ) );
-			if ( '' !== $hint_value ) {
-				$overrides[ $hint_key ] = $hint_value;
-			}
-		}
-
-		if ( empty( $overrides ) ) {
-			return $callback();
-		}
-
-		$original_request = array();
-		foreach ( $overrides as $hint_key => $hint_value ) {
-			$original_request[ $hint_key ] = array_key_exists( $hint_key, $_REQUEST )
-				? $_REQUEST[ $hint_key ]
-				: null;
-			$_REQUEST[ $hint_key ]         = $hint_value;
-		}
-
-		try {
-			return $callback();
-		} finally {
-			foreach ( $original_request as $hint_key => $original_value ) {
-				if ( null === $original_value ) {
-					unset( $_REQUEST[ $hint_key ] );
-					continue;
-				}
-
-				$_REQUEST[ $hint_key ] = $original_value;
-			}
-		}
+		return $adapter->with_request_language_overrides( $input, $callback );
 	}
 
 	public static function execute_get_untranslated( $input ): mixed {

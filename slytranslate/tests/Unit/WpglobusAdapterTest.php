@@ -91,6 +91,20 @@ class WpglobusAdapterTest extends TestCase {
 		$this->assertSame( 'de', $this->adapter->get_post_language( 123 ) );
 	}
 
+	public function test_with_request_language_overrides_prefers_override_without_mutating_request(): void {
+		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
+		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
+		$_REQUEST['language'] = 'en';
+
+		$result = $this->adapter->with_request_language_overrides(
+			array( 'wpglobus_language' => 'de' ),
+			fn() => $this->adapter->get_post_language( 123 )
+		);
+
+		$this->assertSame( 'de', $result );
+		$this->assertSame( 'en', $_REQUEST['language'] );
+	}
+
 	public function test_get_post_language_falls_back_to_default_language(): void {
 		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
 		$this->stubWpFunctionReturn( 'get_query_var', 'fr' );

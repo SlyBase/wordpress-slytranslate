@@ -6,6 +6,11 @@ defined( 'ABSPATH' ) || exit;
 
 class WpglobusAdapter implements TranslationPluginAdapter {
 
+	/**
+	 * @var array<string, string>
+	 */
+	private array $request_language_overrides = array();
+
 	public function is_available(): bool {
 		return class_exists( 'WPGlobus', false ) || function_exists( 'wpglobus_current_language' );
 	}
@@ -36,6 +41,22 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 
 		$default_language = $this->get_default_language_code();
 		return '' !== $default_language ? $default_language : null;
+	}
+
+	public function with_request_language_overrides( array $input, callable $callback ): mixed {
+		$overrides = $this->normalize_request_language_overrides( $input );
+		if ( empty( $overrides ) ) {
+			return $callback();
+		}
+
+		$previous_overrides               = $this->request_language_overrides;
+		$this->request_language_overrides = array_replace( $this->request_language_overrides, $overrides );
+
+		try {
+			return $callback();
+		} finally {
+			$this->request_language_overrides = $previous_overrides;
+		}
 	}
 
 	public function get_language_variant( string $value, string $language_code ): string {
@@ -289,18 +310,25 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 	 * @param array<string, string> $languages
 	 */
 	private function get_request_language_code( int $post_id, array $languages ): string {
-		$request_keys = array( 'language', 'wpglobus-language', 'wpglobus_language' );
-
-		if ( class_exists( 'WPGlobus', false ) && method_exists( '\WPGlobus', 'get_language_meta_key' ) ) {
-			$request_keys[] = (string) \WPGlobus::get_language_meta_key();
-		}
+		$request_keys = $this->get_request_language_keys();
 
 		foreach ( $request_keys as $request_key ) {
-			if ( ! is_string( $request_key ) || '' === $request_key || ! isset( $_REQUEST[ $request_key ] ) ) {
+			if ( ! is_string( $request_key ) || '' === $request_key ) {
 				continue;
 			}
 
-			$current = sanitize_key( (string) wp_unslash( $_REQUEST[ $request_key ] ) );
+			$current = $this->request_language_overrides[ $request_key ] ?? '';
+			if ( '' !== $current && isset( $languages[ $current ] ) ) {
+				return $current;
+			}
+		}
+
+		foreach ( $request_keys as $request_key ) {
+			if ( ! is_string( $request_key ) || '' === $request_key ) {
+				continue;
+			}
+
+			$current = $this->get_request_language_input( $request_key );
 			if ( '' !== $current && isset( $languages[ $current ] ) ) {
 				return $current;
 			}
@@ -317,8 +345,8 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			}
 		}
 
-		if ( isset( $_COOKIE[ $cookie_name ] ) ) {
-			$cookie_value = (string) wp_unslash( $_COOKIE[ $cookie_name ] );
+		$cookie_value = $this->get_cookie_input( $cookie_name );
+		if ( '' !== $cookie_value ) {
 			$parts        = explode( '+', $cookie_value, 2 );
 			$current      = sanitize_key( $parts[0] ?? '' );
 
@@ -335,6 +363,57 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 		}
 
 		return '';
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function get_request_language_keys(): array {
+		$request_keys = array( 'language', 'wpglobus-language', 'wpglobus_language' );
+
+		if ( class_exists( 'WPGlobus', false ) && method_exists( '\WPGlobus', 'get_language_meta_key' ) ) {
+			$request_keys[] = (string) \WPGlobus::get_language_meta_key();
+		}
+
+		return array_values( array_unique( array_filter( $request_keys, 'is_string' ) ) );
+	}
+
+	private function get_request_language_input( string $request_key ): string {
+		if ( '' === $request_key || ! isset( $_REQUEST[ $request_key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only editor language detection must honor WPGlobus request hints and does not mutate state.
+			return '';
+		}
+
+		return sanitize_key( (string) wp_unslash( $_REQUEST[ $request_key ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only editor language detection must honor WPGlobus request hints and does not mutate state.
+	}
+
+	private function get_cookie_input( string $cookie_name ): string {
+		if ( '' === $cookie_name || ! isset( $_COOKIE[ $cookie_name ] ) ) {
+			return '';
+		}
+
+		return sanitize_text_field( (string) wp_unslash( $_COOKIE[ $cookie_name ] ) );
+	}
+
+	/**
+	 * @param array<string, mixed> $input
+	 *
+	 * @return array<string, string>
+	 */
+	private function normalize_request_language_overrides( array $input ): array {
+		$overrides = array();
+
+		foreach ( $this->get_request_language_keys() as $request_key ) {
+			if ( ! array_key_exists( $request_key, $input ) ) {
+				continue;
+			}
+
+			$override = sanitize_key( (string) $input[ $request_key ] );
+			if ( '' !== $override ) {
+				$overrides[ $request_key ] = $override;
+			}
+		}
+
+		return $overrides;
 	}
 
 	/**
