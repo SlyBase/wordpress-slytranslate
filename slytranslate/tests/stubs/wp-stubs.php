@@ -304,6 +304,12 @@ function get_queried_object_id(): int {
 	} );
 }
 
+function get_query_var( string $query_var, mixed $default_value = '' ): mixed {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( string $query_var, mixed $default_value = '' ) {
+		return $default_value;
+	} );
+}
+
 function admin_url( $path = '', $scheme = 'admin' ): string {
 	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $path = '' ) {
 		return 'https://example.test/wp-admin/' . ltrim( (string) $path, '/' );

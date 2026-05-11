@@ -41,6 +41,26 @@ class WpglobusAdapterTest extends TestCase {
 	}
 
 	// -----------------------------------------------------------------------
+	// get_post_language
+	// -----------------------------------------------------------------------
+
+	public function test_get_post_language_returns_current_wpglobus_language_when_available(): void {
+		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
+		$this->stubWpFunctionReturn( 'get_query_var', 'de' );
+		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
+
+		$this->assertSame( 'de', $this->adapter->get_post_language( 123 ) );
+	}
+
+	public function test_get_post_language_falls_back_to_default_language(): void {
+		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
+		$this->stubWpFunctionReturn( 'get_query_var', 'fr' );
+		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
+
+		$this->assertSame( 'en', $this->adapter->get_post_language( 123 ) );
+	}
+
+	// -----------------------------------------------------------------------
 	// get_language_variant – plain value (no markup)
 	// -----------------------------------------------------------------------
 

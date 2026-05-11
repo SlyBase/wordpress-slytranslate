@@ -29,6 +29,11 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 	}
 
 	public function get_post_language( int $post_id ): ?string {
+		$current_language = $this->get_current_language_code();
+		if ( '' !== $current_language ) {
+			return $current_language;
+		}
+
 		$default_language = $this->get_default_language_code();
 		return '' !== $default_language ? $default_language : null;
 	}
@@ -222,6 +227,42 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			$default = sanitize_key( (string) \WPGlobus::Config()->default_language );
 			if ( '' !== $default ) {
 				return $default;
+			}
+		}
+
+		return '';
+	}
+
+	private function get_current_language_code(): string {
+		$languages = $this->get_languages();
+		if ( empty( $languages ) ) {
+			return '';
+		}
+
+		if ( function_exists( 'wpglobus_current_language' ) ) {
+			$current = sanitize_key( (string) wpglobus_current_language() );
+			if ( '' !== $current && isset( $languages[ $current ] ) ) {
+				return $current;
+			}
+		}
+
+		if ( class_exists( 'WPGlobus', false ) ) {
+			$config = \WPGlobus::Config();
+
+			foreach ( array( 'language', 'current_language' ) as $prop ) {
+				if ( isset( $config->$prop ) ) {
+					$current = sanitize_key( (string) $config->$prop );
+					if ( '' !== $current && isset( $languages[ $current ] ) ) {
+						return $current;
+					}
+				}
+			}
+		}
+
+		if ( function_exists( 'get_query_var' ) ) {
+			$current = sanitize_key( (string) get_query_var( 'lang', '' ) );
+			if ( '' !== $current && isset( $languages[ $current ] ) ) {
+				return $current;
 			}
 		}
 
