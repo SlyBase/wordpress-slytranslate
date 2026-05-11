@@ -228,6 +228,29 @@ class WpAiClientChatTemplateKwargsInjectionTest extends TestCase {
 		$this->assertSame( array(), TranslationRuntime::extract_wp_ai_client_request_body_injections( $profile ) );
 	}
 
+	public function test_hosted_mistral_medium_profile_omits_chat_template_kwargs_injections(): void {
+		$profile = TranslationRuntime::get_model_profile( 'mistral-medium' );
+
+		$injections = TranslationRuntime::extract_wp_ai_client_request_body_injections(
+			$profile,
+			true,
+			'mistral-medium'
+		);
+
+		$this->assertSame( array(), $injections );
+	}
+
+	public function test_hosted_mistral_medium_build_payload_omits_chat_template_kwargs(): void {
+		$profile = TranslationRuntime::get_model_profile( 'mistral-medium' );
+		$method  = new \ReflectionMethod( TranslationRuntime::class, 'build_profile_extra_request_body' );
+		$method->setAccessible( true );
+
+		$this->assertSame(
+			array(),
+			$method->invoke( null, $profile, 'mistral-medium', true )
+		);
+	}
+
 	public function test_unknown_model_profile_includes_enable_thinking_false_by_default(): void {
 		$profile = TranslationRuntime::get_model_profile( 'totally-unknown-model-xyz' );
 

@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Plain-text translations now unwrap accidental full-title Markdown emphasis like **...** when the source had no formatting, so translated post titles no longer keep stray bold markers.
 - Mistral-hosted chat/completions requests now strip unsupported `chat_template_kwargs`, so Ministral and other Mistral models no longer fail when the shared connector injection path is active.
 - Hosted Mistral connector requests now apply the final request-body mutation at a later hook priority, so models like `mistral-medium` no longer reintroduce unsupported `chat_template_kwargs` after SlyTranslate strips them.
+- Hosted Mistral API model IDs now disable SlyTranslate's default `enable_thinking=false` kwargs at profile-build time as well, fixing `mistral-medium` requests that were still sending unsupported kwargs through the connector's native payload path.
 - Admin translation UIs now discard stale browser-stored model slugs when those models are no longer available, so sidebar and list-table runs fall back to the current configured default instead of retrying dead endpoints.
 - TranslatePress adapter lookup queries now keep their dynamic IN placeholder lists on the exact prepared SQL line so WordPress.org coding-standard scans no longer report false unprepared-query violations.
 - WordPress.org coding-standard checks now recognise the cached TranslatePress dictionary lookups and direct table writes as intentional prepared queries instead of flagging false positives.

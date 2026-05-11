@@ -686,6 +686,10 @@ class TranslationRuntime {
 		$extra = self::apply_model_specific_extra_request_body_overrides( $extra, $model_slug );
 
 		$inject = array();
+		if ( self::should_disable_chat_template_kwargs_for_model( $model_slug ) ) {
+			$allow_chat_template_kwargs = false;
+		}
+
 		if ( $allow_chat_template_kwargs
 			&& isset( $extra['chat_template_kwargs'] )
 			&& is_array( $extra['chat_template_kwargs'] )
@@ -704,6 +708,39 @@ class TranslationRuntime {
 		}
 
 		return $inject;
+	}
+
+	private static function should_disable_chat_template_kwargs_for_model( string $model_slug ): bool {
+		$normalized = strtolower( trim( $model_slug ) );
+		if ( '' === $normalized ) {
+			return false;
+		}
+
+		// Hosted Mistral model IDs are lowercase API catalog slugs such as
+		// mistral-medium, mistral-large-latest, or ministral-8b-latest.
+		// Local quantized models use names like Ministral-8B-Instruct-2410-Q4_K_M
+		// and still need enable_thinking=false for stable output.
+		if ( false !== strpos( $normalized, '_' ) || false !== strpos( $normalized, 'q4' ) || false !== strpos( $normalized, 'q5' ) || false !== strpos( $normalized, 'q6' ) || false !== strpos( $normalized, 'q8' ) ) {
+			return false;
+		}
+
+		foreach ( array(
+			'mistral-',
+			'open-mistral-',
+			'ministral-',
+			'codestral',
+			'devstral',
+			'magistral',
+			'pixtral',
+			'voxtral',
+			'labs-leanstral',
+		) as $prefix ) {
+			if ( 0 === strpos( $normalized, $prefix ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static function get_model_slug_cache_key( string $model_slug ): string {
@@ -1073,6 +1110,10 @@ class TranslationRuntime {
 
 		$extra = self::replace_profile_placeholders( $extra );
 		$extra = self::apply_model_specific_extra_request_body_overrides( $extra, $model_slug );
+
+		if ( self::should_disable_chat_template_kwargs_for_model( $model_slug ) ) {
+			unset( $extra['chat_template_kwargs'] );
+		}
 
 		if ( isset( $extra['chat_template_kwargs'] ) ) {
 			$has_languages = is_string( self::$source_lang ) && '' !== self::$source_lang
