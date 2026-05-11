@@ -275,6 +275,69 @@
         try { console.log.apply(console, args); } catch (e) { }
     }
 
+    function getCurrentWpglobusLanguageHint() {
+        var candidates = [];
+
+        try {
+            if (typeof window !== 'undefined' && window.location && window.location.search) {
+                var params = new window.URLSearchParams(window.location.search);
+                ['wpglobus_language', 'wpglobus-language', 'language', 'lang'].forEach(function (key) {
+                    var value = params.get(key);
+                    if (value) {
+                        candidates.push(value);
+                    }
+                });
+            }
+        } catch (e) { }
+
+        try {
+            if (typeof document !== 'undefined' && document.querySelector) {
+                [
+                    'input[name="wpglobus_language"]',
+                    'input[name="wpglobus-language"]',
+                    'input[name="language"]',
+                    'select[name="wpglobus_language"]',
+                    'select[name="wpglobus-language"]',
+                    'select[name="language"]'
+                ].forEach(function (selector) {
+                    var field = document.querySelector(selector);
+                    if (field && field.value) {
+                        candidates.push(field.value);
+                    }
+                });
+            }
+        } catch (e) { }
+
+        try {
+            if (typeof document !== 'undefined' && typeof document.cookie === 'string') {
+                var match = document.cookie.match(/(?:^|; )wpglobus-builder-language=([^;]+)/);
+                if (match && match[1]) {
+                    candidates.push(decodeURIComponent(match[1]).split('+', 1)[0]);
+                }
+            }
+        } catch (e) { }
+
+        for (var index = 0; index < candidates.length; index++) {
+            var normalized = String(candidates[index] || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+            if (normalized) {
+                return normalized;
+            }
+        }
+
+        return '';
+    }
+
+    function buildTranslationStatusInput(postId) {
+        var input = { post_id: postId };
+        var wpglobusLanguage = getCurrentWpglobusLanguageHint();
+
+        if (wpglobusLanguage) {
+            input.wpglobus_language = wpglobusLanguage;
+        }
+
+        return input;
+    }
+
     function runAbility(abilityName, input, signal) {
         const request = {
             path: getRunAbilityPath(abilityName),
@@ -479,7 +542,7 @@
         if (Object.prototype.hasOwnProperty.call(_postSourceLanguageCache, postId)) {
             return Promise.resolve(_postSourceLanguageCache[postId]);
         }
-        return runAbility('ai-translate/get-translation-status', { post_id: postId })
+        return runAbility('ai-translate/get-translation-status', buildTranslationStatusInput(postId))
             .then(function (response) {
                 const sourceLanguage = response && response.source_language ? String(response.source_language) : '';
                 _postSourceLanguageCache[postId] = sourceLanguage;
@@ -727,7 +790,7 @@
 
             Promise.allSettled([
                 runAbility('ai-translate/get-languages', {}),
-                runAbility('ai-translate/get-translation-status', { post_id: postId }),
+                runAbility('ai-translate/get-translation-status', buildTranslationStatusInput(postId)),
             ])
                 .then(function (results) {
                     const nextMessages = [];

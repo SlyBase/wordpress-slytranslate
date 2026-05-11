@@ -33,6 +33,8 @@ class TranslationQueryService {
 			return new \WP_Error( 'no_translation_plugin', __( 'No supported translation plugin is active.', 'slytranslate' ) );
 		}
 
+		$input = is_array( $input ) ? $input : array();
+
 		$post_id = absint( $input['post_id'] ?? 0 );
 		$post    = get_post( $post_id );
 		if ( ! $post ) {
@@ -47,47 +49,94 @@ class TranslationQueryService {
 			return $post_type_check;
 		}
 
-		$source_lang  = $adapter->get_post_language( $post_id );
-		$translations = $adapter->get_post_translations( $post_id );
-		$languages    = $adapter->get_languages();
-		$is_single_entry_mode = $adapter instanceof WpMultilangAdapter
-			|| $adapter instanceof WpglobusAdapter
-			|| $adapter instanceof TranslatePressAdapter;
-		$source_title         = $post->post_title;
+		return self::with_language_request_hints(
+			$adapter,
+			$input,
+			static function () use ( $adapter, $post, $post_id ) {
+				$source_lang          = $adapter->get_post_language( $post_id );
+				$translations         = $adapter->get_post_translations( $post_id );
+				$languages            = $adapter->get_languages();
+				$is_single_entry_mode = $adapter instanceof WpMultilangAdapter
+					|| $adapter instanceof WpglobusAdapter
+					|| $adapter instanceof TranslatePressAdapter;
+				$source_title         = $post->post_title;
 
-		if ( $is_single_entry_mode ) {
-			$source_title = $adapter->get_language_variant( (string) $post->post_title, (string) $source_lang );
-		}
+				if ( $is_single_entry_mode ) {
+					$source_title = $adapter->get_language_variant( (string) $post->post_title, (string) $source_lang );
+				}
 
-		$status = array();
-		foreach ( $languages as $code => $name ) {
-			if ( $code === $source_lang ) {
-				continue;
-			}
+				$status = array();
+				foreach ( $languages as $code => $name ) {
+					if ( $code === $source_lang ) {
+						continue;
+					}
 
-			if ( $is_single_entry_mode ) {
-				$status[] = array(
-					'lang'        => (string) $code,
-					'post_id'     => 0,
-					'exists'      => isset( $translations[ $code ] ) && absint( $translations[ $code ] ) > 0,
-					'title'       => '',
-					'post_status' => '',
-					'edit_link'   => '',
+					if ( $is_single_entry_mode ) {
+						$status[] = array(
+							'lang'        => (string) $code,
+							'post_id'     => 0,
+							'exists'      => isset( $translations[ $code ] ) && absint( $translations[ $code ] ) > 0,
+							'title'       => '',
+							'post_status' => '',
+							'edit_link'   => '',
+						);
+						continue;
+					}
+
+					$status[] = self::build_translation_status_entry( $code, isset( $translations[ $code ] ) ? absint( $translations[ $code ] ) : 0 );
+				}
+
+				return array(
+					'source_post_id'    => $post_id,
+					'source_post_type'  => $post->post_type,
+					'source_title'      => $source_title,
+					'source_language'   => $source_lang ?? '',
+					'translations'      => $status,
+					'single_entry_mode' => $is_single_entry_mode,
 				);
-				continue;
 			}
+		);
+	}
 
-			$status[] = self::build_translation_status_entry( $code, isset( $translations[ $code ] ) ? absint( $translations[ $code ] ) : 0 );
+	private static function with_language_request_hints( ?TranslationPluginAdapter $adapter, array $input, callable $callback ): mixed {
+		if ( ! $adapter instanceof WpglobusAdapter ) {
+			return $callback();
 		}
 
-		return array(
-			'source_post_id'   => $post_id,
-			'source_post_type' => $post->post_type,
-			'source_title'     => $source_title,
-			'source_language'  => $source_lang ?? '',
-			'translations'     => $status,
-			'single_entry_mode' => $is_single_entry_mode,
-		);
+		$hint_keys = array( 'wpglobus_language', 'wpglobus-language', 'language' );
+		$overrides = array();
+
+		foreach ( $hint_keys as $hint_key ) {
+			$hint_value = sanitize_key( (string) ( $input[ $hint_key ] ?? '' ) );
+			if ( '' !== $hint_value ) {
+				$overrides[ $hint_key ] = $hint_value;
+			}
+		}
+
+		if ( empty( $overrides ) ) {
+			return $callback();
+		}
+
+		$original_request = array();
+		foreach ( $overrides as $hint_key => $hint_value ) {
+			$original_request[ $hint_key ] = array_key_exists( $hint_key, $_REQUEST )
+				? $_REQUEST[ $hint_key ]
+				: null;
+			$_REQUEST[ $hint_key ]         = $hint_value;
+		}
+
+		try {
+			return $callback();
+		} finally {
+			foreach ( $original_request as $hint_key => $original_value ) {
+				if ( null === $original_value ) {
+					unset( $_REQUEST[ $hint_key ] );
+					continue;
+				}
+
+				$_REQUEST[ $hint_key ] = $original_value;
+			}
+		}
 	}
 
 	public static function execute_get_untranslated( $input ): mixed {
