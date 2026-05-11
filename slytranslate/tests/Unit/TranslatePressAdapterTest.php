@@ -599,6 +599,51 @@ class TranslatePressAdapterTest extends TestCase {
 		$this->assertSame( 10, $wpdb->update_calls[0]['data']['original_id'] );
 	}
 
+	public function test_create_translation_updates_all_existing_dictionary_duplicates_for_same_original_string_id(): void {
+		$this->adapter->force_available = true;
+		$spy                            = new SpyTrpQuery();
+		$this->adapter->mock_query      = $spy;
+		$wpdb                           = new FakeWpdb();
+		$GLOBALS['wpdb']                = $wpdb;
+
+		$id_row           = new \stdClass();
+		$id_row->original = 'Titel';
+		$id_row->id       = 42;
+		$spy->string_ids_result = array( $id_row );
+
+		$original_row           = new \stdClass();
+		$original_row->id       = 10;
+		$original_row->original = 'Titel';
+		$wpdb->original_rows    = array( $original_row );
+
+		$dictionary_row_a              = new \stdClass();
+		$dictionary_row_a->id          = 99;
+		$dictionary_row_a->original_id = 10;
+		$dictionary_row_b              = new \stdClass();
+		$dictionary_row_b->id          = 100;
+		$dictionary_row_b->original_id = 10;
+		$wpdb->dictionary_rows         = array( $dictionary_row_a, $dictionary_row_b );
+
+		$post               = new \WP_Post();
+		$post->ID           = 7;
+		$post->post_title   = 'Titel';
+		$post->post_content = '';
+		$post->post_excerpt = '';
+
+		$this->stubWpFunctionReturn( 'get_post', $post );
+		$this->stubWpFunctionReturn( 'get_option', array(
+			'default-language'      => 'de_DE',
+			'translation-languages' => array( 'de_DE', 'en_US' ),
+		) );
+
+		$this->adapter->create_translation( 7, 'en', array( 'post_title' => 'Title', 'overwrite' => true ) );
+
+		$this->assertCount( 2, $wpdb->update_calls );
+		$this->assertSame( array( 'id' => 99 ), $wpdb->update_calls[0]['where'] );
+		$this->assertSame( array( 'id' => 100 ), $wpdb->update_calls[1]['where'] );
+		$this->assertCount( 0, $wpdb->insert_calls );
+	}
+
 	public function test_create_translation_inserts_new_dictionary_row_with_real_original_string_id(): void {
 		$this->adapter->force_available = true;
 		$spy                            = new SpyTrpQuery();

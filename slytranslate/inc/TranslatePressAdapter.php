@@ -751,10 +751,17 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 				'original_id' => $original_id,
 			);
 
-			if ( isset( $dictionary_rows[ $original_id ] ) && isset( $dictionary_rows[ $original_id ]->id ) ) {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- TranslatePress stores these values in its own dictionary table and this method clears the affected cache entries after writes.
-				$wpdb->update( $dictionary_table, $data, array( 'id' => (int) $dictionary_rows[ $original_id ]->id ) );
-				$updated++;
+			if ( isset( $dictionary_rows[ $original_id ] ) && is_array( $dictionary_rows[ $original_id ] ) ) {
+				foreach ( $dictionary_rows[ $original_id ] as $dictionary_row ) {
+					if ( ! isset( $dictionary_row->id ) ) {
+						continue;
+					}
+
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- TranslatePress stores these values in its own dictionary table and this method clears the affected cache entries after writes.
+					$wpdb->update( $dictionary_table, $data, array( 'id' => (int) $dictionary_row->id ) );
+					$updated++;
+				}
+
 				continue;
 			}
 
@@ -829,7 +836,7 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 
 	/**
 	 * @param int[] $original_ids
-	 * @return array<int, object>
+	 * @return array<int, array<int, object>>
 	 */
 	private function get_dictionary_rows_by_original_id( string $dictionary_table, array $original_ids ): array {
 		global $wpdb;
@@ -868,7 +875,12 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 				continue;
 			}
 
-			$result[ (int) $row->original_id ] = $row;
+			$original_id = (int) $row->original_id;
+			if ( ! isset( $result[ $original_id ] ) ) {
+				$result[ $original_id ] = array();
+			}
+
+			$result[ $original_id ][] = $row;
 		}
 
 		$this->set_cached_lookup_result( $cache_key, $result );
