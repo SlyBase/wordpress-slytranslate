@@ -99,7 +99,7 @@
             "problemMatcher": []
         },
         {
-            "label": "WP Plugin: Deploy Plugin ZIP to WordPress Pod",
+            "label": "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
             "type": "shell",
             "command": "bash",
             "args": [
@@ -110,7 +110,37 @@
                 "cwd": "${workspaceFolder}",
                 "env": {
                     "DEPLOY_NAMESPACE": "default",
-                    "DEPLOY_POD_SELECTOR": "app.kubernetes.io/instance=wp-test,app.kubernetes.io/name=wordpress",
+                    "DEPLOY_POD_SELECTOR": "app.kubernetes.io/instance=wp-test-translatepress,app.kubernetes.io/name=wordpress",
+                    "DEPLOY_CONTAINER": "wordpress",
+                    "KUBECTL_BIN": "/opt/homebrew/bin/kubectl"
+                }
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "WP Plugin: Verify Plugin ZIP"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true,
+                "close": true,
+                "showReuseMessage": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source .github/scripts/plugin-config.sh && bash .github/scripts/deploy-plugin-to-wordpress-pod.sh \"${workspaceFolder}/${plugin_slug}.zip\""
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "DEPLOY_NAMESPACE": "default",
+                    "DEPLOY_POD_SELECTOR": "app.kubernetes.io/instance=wp-test-wpglobus,app.kubernetes.io/name=wordpress",
                     "DEPLOY_CONTAINER": "wordpress",
                     "KUBECTL_BIN": "/opt/homebrew/bin/kubectl"
                 }

@@ -6,45 +6,40 @@
             "alignment": "left",
             "tooltip": "Run WP Plugin workspace tasks",
             "tasks": [
-                {
-                    "label": "$(package) Build plugin ZIP",
-                    "task": "WP Plugin: Build Plugin ZIP",
-                    "description": "Create Plugin.zip in the workspace root"
-                },
-                {
-                    "label": "$(verified) Verify plugin ZIP",
-                    "task": "WP Plugin: Verify Plugin ZIP",
-                    "description": "Run the archive checks against Plugin.zip"
-                },
+                // {
+                //     "label": "$(package) Build plugin ZIP",
+                //     "task": "WP Plugin: Build Plugin ZIP",
+                //     "description": "Create Plugin.zip in the workspace root"
+                // },
+                // {
+                //     "label": "$(verified) Verify plugin ZIP",
+                //     "task": "WP Plugin: Verify Plugin ZIP",
+                //     "description": "Run the archive checks against Plugin.zip"
+                // },
                 {
                     "label": "$(combine) Build and verify plugin ZIP",
                     "task": "WP Plugin: Build and Verify Plugin ZIP",
                     "description": "Build Plugin.zip and verify the archive contents"
                 },
                 {
-                    "label": "$(file-symlink-file) Prepare release files",
-                    "task": "WP Plugin: Prepare Release Files",
-                    "description": "Generate language files and sync changelog.txt from CHANGELOG.md"
+                    "label": "$(cloud-upload) Deploy (TranslatePress)",
+                    "task": "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
+                    "description": "Upload Plugin.zip into the TranslatePress WordPress pod in namespace default"
                 },
                 {
-                    "label": "$(cloud-upload) Deploy plugin ZIP (test pod)",
-                    "task": "WP Plugin: Deploy Plugin ZIP to WordPress Pod",
-                    "description": "Upload Plugin.zip into the test pod WordPress pod in namespace default"
+                    "label": "$(cloud-upload) Deploy (WP-Globus)",
+                    "task": "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod",
+                    "description": "Upload Plugin.zip into the WP-Globus WordPress pod in namespace default"
                 },
                 {
-                    "label": "$(rocket) Build and deploy plugin ZIP (test pod)",
-                    "task": "WP Plugin: Build and Deploy Plugin ZIP",
-                    "description": "Build, verify, and deploy Plugin.zip to the test pod WordPress pod"
-                },
-                {
-                    "label": "$(cloud-upload) Deploy plugin ZIP (SlyBase pod)",
+                    "label": "$(cloud-upload) Deploy (SlyBase)",
                     "task": "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod",
                     "description": "Upload Plugin.zip into the SlyBase WordPress pod in namespace websites"
                 },
                 {
-                    "label": "$(rocket) Build and deploy plugin ZIP (SlyBase pod)",
-                    "task": "WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
-                    "description": "Build, verify, and deploy Plugin.zip to the SlyBase WordPress pod"
+                    "label": "$(file-symlink-file) Prepare release files",
+                    "task": "WP Plugin: Prepare Release Files",
+                    "description": "Generate language files and sync changelog.txt from CHANGELOG.md"
                 }
             ]
         },
