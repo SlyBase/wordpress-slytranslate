@@ -546,16 +546,26 @@
 
     function initSelectedModelSlug() {
         var stored = readStoredModelSlug();
-        if (stored && _availableModels.some(function (m) { return m.value === stored; })) {
-            _selectedModelSlug = stored;
-            return stored;
+        var resolved = resolveAvailableModelSlug(stored);
+
+        if (resolved !== stored) {
+            storeModelSlug(resolved);
         }
+
+        _selectedModelSlug = resolved;
+        return resolved;
+    }
+
+    function resolveAvailableModelSlug(preferredSlug) {
+        if (preferredSlug && _availableModels.some(function (m) { return m.value === preferredSlug; })) {
+            return preferredSlug;
+        }
+
         var defaultSlug = settings && settings.defaultModelSlug ? settings.defaultModelSlug : '';
         if (defaultSlug && _availableModels.some(function (m) { return m.value === defaultSlug; })) {
-            _selectedModelSlug = defaultSlug;
             return defaultSlug;
         }
-        _selectedModelSlug = '';
+
         return '';
     }
 
@@ -783,7 +793,9 @@
             return subscribeToModelList(function (nextModels) {
                 setAvailableModels(nextModels.slice());
                 if (modelSlug && !nextModels.some(function (m) { return m.value === modelSlug; })) {
-                    setModelSlug('');
+                    var nextModelSlug = resolveAvailableModelSlug('');
+                    setModelSlug(nextModelSlug);
+                    storeModelSlug(nextModelSlug);
                 }
             });
         }, [modelSlug]);

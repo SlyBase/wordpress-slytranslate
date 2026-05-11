@@ -373,7 +373,12 @@
 
 	function fillPickerSelect(models, defaultSlug) {
 		pickerSelect.innerHTML = '';
-		var preselected = pickerLastSlug || defaultSlug || '';
+		var preselected = '';
+		if (pickerLastSlug && Array.isArray(models) && models.some(function (m) { return m && m.value === pickerLastSlug; })) {
+			preselected = pickerLastSlug;
+		} else if (defaultSlug && Array.isArray(models) && models.some(function (m) { return m && m.value === defaultSlug; })) {
+			preselected = defaultSlug;
+		}
 		var hasPreselected = false;
 		if (Array.isArray(models)) {
 			models.forEach(function (m) {
@@ -471,6 +476,7 @@
 		try {
 			if (window.localStorage) {
 				if (slug) { window.localStorage.setItem('aiTranslateModelSlug', slug); }
+				else { window.localStorage.removeItem('aiTranslateModelSlug'); }
 			}
 		} catch (e) { }
 		pickerLastSlug = slug;

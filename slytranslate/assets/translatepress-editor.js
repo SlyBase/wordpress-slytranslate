@@ -14,7 +14,7 @@
     var cancelRevealDelayMs = 1200;
     var lastObservedHref = window.location.href || '';
     var state = {
-        modelSlug: readStoredModelSlug() || cfg.defaultModelSlug || '',
+        modelSlug: getInitialModelSlug(),
         additionalPrompt: typeof cfg.lastAdditionalPrompt === 'string' ? cfg.lastAdditionalPrompt : '',
     };
 
@@ -50,6 +50,35 @@
         } catch (error) {
             return '';
         }
+    }
+
+    function hasAvailableModelSlug(slug, models) {
+        return !!slug && Array.isArray(models) && models.some(function (entry) {
+            return entry && entry.value === slug;
+        });
+    }
+
+    function resolveModelSlug(preferredSlug, models, defaultSlug) {
+        if (hasAvailableModelSlug(preferredSlug, models)) {
+            return preferredSlug;
+        }
+
+        if (hasAvailableModelSlug(defaultSlug, models)) {
+            return defaultSlug;
+        }
+
+        return '';
+    }
+
+    function getInitialModelSlug() {
+        var storedSlug = readStoredModelSlug();
+        var resolvedSlug = resolveModelSlug(storedSlug, cfg.models || [], cfg.defaultModelSlug || '');
+
+        if (resolvedSlug !== storedSlug) {
+            storeModelSlug(resolvedSlug);
+        }
+
+        return resolvedSlug;
     }
 
     function storeModelSlug(slug) {
@@ -1044,6 +1073,9 @@
             refreshModels.disabled = true;
             apiPost('ai-translate/get-available-models/run', { input: { refresh: true } }).then(function (response) {
                 cfg.models = response && Array.isArray(response.models) ? response.models : [];
+                cfg.defaultModelSlug = response && response.defaultModelSlug ? response.defaultModelSlug : '';
+                state.modelSlug = resolveModelSlug(state.modelSlug, cfg.models, cfg.defaultModelSlug);
+                storeModelSlug(state.modelSlug);
                 populateSelect(model, [{ value: '', label: '— Auto —' }].concat((cfg.models || []).map(function (entry) {
                     return { value: entry.value, label: entry.label };
                 })), state.modelSlug, '');
