@@ -12,6 +12,8 @@ class WpglobusAdapterTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		$_REQUEST = array();
+		$_COOKIE  = array();
 		if ( class_exists( '\\WPGlobus', false ) ) {
 			\WPGlobus::$config = (object) array();
 		}
@@ -69,6 +71,22 @@ class WpglobusAdapterTest extends TestCase {
 		);
 
 		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
+
+		$this->assertSame( 'de', $this->adapter->get_post_language( 123 ) );
+	}
+
+	public function test_get_post_language_uses_request_language_when_present(): void {
+		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
+		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
+		$_REQUEST['language'] = 'de';
+
+		$this->assertSame( 'de', $this->adapter->get_post_language( 123 ) );
+	}
+
+	public function test_get_post_language_uses_builder_cookie_for_matching_post(): void {
+		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
+		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
+		$_COOKIE['wpglobus-builder-language'] = 'de+123';
 
 		$this->assertSame( 'de', $this->adapter->get_post_language( 123 ) );
 	}

@@ -239,6 +239,11 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			return '';
 		}
 
+		$request_language = $this->get_request_language_code( $post_id, $languages );
+		if ( '' !== $request_language ) {
+			return $request_language;
+		}
+
 		if ( class_exists( 'WPGlobus', false ) ) {
 			$config = \WPGlobus::Config();
 
@@ -274,6 +279,58 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			$current = sanitize_key( (string) get_query_var( 'lang', '' ) );
 			if ( '' !== $current && isset( $languages[ $current ] ) ) {
 				return $current;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * @param array<string, string> $languages
+	 */
+	private function get_request_language_code( int $post_id, array $languages ): string {
+		$request_keys = array( 'language', 'wpglobus-language', 'wpglobus_language' );
+
+		if ( class_exists( 'WPGlobus', false ) && method_exists( '\WPGlobus', 'get_language_meta_key' ) ) {
+			$request_keys[] = (string) \WPGlobus::get_language_meta_key();
+		}
+
+		foreach ( $request_keys as $request_key ) {
+			if ( ! is_string( $request_key ) || '' === $request_key || ! isset( $_REQUEST[ $request_key ] ) ) {
+				continue;
+			}
+
+			$current = sanitize_key( (string) wp_unslash( $_REQUEST[ $request_key ] ) );
+			if ( '' !== $current && isset( $languages[ $current ] ) ) {
+				return $current;
+			}
+		}
+
+		$cookie_name = 'wpglobus-builder-language';
+		if ( class_exists( 'WPGlobus', false ) ) {
+			$config = \WPGlobus::Config();
+			if ( isset( $config->builder ) && is_object( $config->builder ) && method_exists( $config->builder, 'get_cookie_name' ) ) {
+				$resolved_cookie_name = (string) $config->builder->get_cookie_name();
+				if ( '' !== $resolved_cookie_name ) {
+					$cookie_name = $resolved_cookie_name;
+				}
+			}
+		}
+
+		if ( isset( $_COOKIE[ $cookie_name ] ) ) {
+			$cookie_value = (string) wp_unslash( $_COOKIE[ $cookie_name ] );
+			$parts        = explode( '+', $cookie_value, 2 );
+			$current      = sanitize_key( $parts[0] ?? '' );
+
+			if ( '' !== $current && isset( $languages[ $current ] ) ) {
+				if ( $post_id < 1 ) {
+					return $current;
+				}
+
+				$cookie_post_id = isset( $parts[1] ) ? absint( $parts[1] ) : 0;
+				if ( 0 === $cookie_post_id || $cookie_post_id === $post_id ) {
+					return $current;
+				}
 			}
 		}
 
