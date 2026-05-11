@@ -94,6 +94,11 @@ class TranslatePressEditorIntegrationTest extends TestCase {
 		$this->assertSame( 'de', $localized[0]['data']['sourceLanguage'] );
 		$this->assertSame( 'test-rest-nonce', $localized[0]['data']['restNonce'] );
 		$this->assertSame( 'Locker, direkt, freundlich.', $localized[0]['data']['lastAdditionalPrompt'] );
+		$this->assertSame( 'Translate with SlyTranslate', $localized[0]['data']['i18n']['panelTitle'] );
+		$this->assertSame( 'AI model', $localized[0]['data']['i18n']['modelLabel'] );
+		$this->assertSame( 'Refresh', $localized[0]['data']['i18n']['refreshModelsButton'] );
+		$this->assertSame( 'Additional instructions (optional)', $localized[0]['data']['i18n']['additionalPromptLabel'] );
+		$this->assertSame( 'Translate', $localized[0]['data']['i18n']['startButton'] );
 		$this->assertSame(
 			array(
 				array( 'code' => 'de', 'name' => 'DE' ),

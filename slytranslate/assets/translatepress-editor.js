@@ -122,7 +122,7 @@
 
     function getErrorMessage(error) {
         if (error && error.code === 'invalid_translation_language_passthrough') {
-            return text('languagePassthroughError', 'Ein übersetzter Abschnitt scheint noch in der Ausgangssprache statt auf Englisch vorzuliegen.');
+            return text('languagePassthroughError', 'A translated segment still appears to be in the source language instead of English.');
         }
 
         if (error && error.message) {
@@ -245,7 +245,7 @@
         panel.refreshModels.disabled = disabled;
         panel.prompt.disabled = disabled;
         panel.start.disabled = getTargetLanguages().length < 1 || (isRunning && !canCancel);
-        panel.start.textContent = canCancel ? text('cancelButton', 'Übersetzung abbrechen') : text('startButton', 'Übersetzen');
+        panel.start.textContent = canCancel ? text('cancelButton', 'Cancel translation') : text('startButton', 'Translate');
         panel.start.classList.toggle('slytranslate-trp-start-cancel', canCancel);
         panel.progress.hidden = !isRunning;
         panel.progressLabel.hidden = !isRunning;
@@ -758,7 +758,7 @@
                 has_source_field: !!(fields && fields.sourceField),
                 has_target_field: !!(fields && fields.targetField),
             });
-            return Promise.reject(new Error(text('fieldMissingError', 'Das sichtbare TranslatePress-Feld konnte nicht erkannt werden.')));
+            return Promise.reject(new Error(text('fieldMissingError', 'The visible TranslatePress field could not be detected.')));
         }
 
         if (!sourceText) {
@@ -767,7 +767,7 @@
                 source_length: 0,
                 source_origin: sourceResolution.origin,
             });
-            return Promise.reject(new Error(text('fieldMissingError', 'Das sichtbare TranslatePress-Feld konnte nicht erkannt werden.')));
+            return Promise.reject(new Error(text('fieldMissingError', 'The visible TranslatePress field could not be detected.')));
         }
 
         if (!targetLanguage) {
@@ -985,7 +985,7 @@
         var start = document.createElement('button');
         start.type = 'button';
         start.className = 'button button-primary slytranslate-trp-start';
-        start.textContent = text('startButton', 'Übersetzen');
+        start.textContent = text('startButton', 'Translate');
         actionsTop.appendChild(start);
 
         var modelRow = document.createElement('div');
@@ -995,9 +995,9 @@
         var refreshModels = document.createElement('button');
         refreshModels.type = 'button';
         refreshModels.className = 'button button-secondary slytranslate-trp-refresh-button';
-        refreshModels.setAttribute('aria-label', text('refreshModelsButton', 'Neu laden'));
-        refreshModels.title = text('refreshModelsButton', 'Neu laden');
-        refreshModels.textContent = text('refreshModelsButton', 'Neu laden');
+        refreshModels.setAttribute('aria-label', text('refreshModelsButton', 'Refresh'));
+        refreshModels.title = text('refreshModelsButton', 'Refresh');
+        refreshModels.textContent = text('refreshModelsButton', 'Refresh');
         modelRow.appendChild(model);
         modelRow.appendChild(refreshModels);
         fields.appendChild(createField(text('modelLabel', 'AI model'), modelRow));
@@ -1155,7 +1155,7 @@
             resetProgress(panelApi);
             panelApi.progress.hidden = false;
             panelApi.progressLabel.hidden = false;
-            panelApi.progressLabel.textContent = text('startButton', 'Übersetzen');
+            panelApi.progressLabel.textContent = text('startButton', 'Translate');
             updateFormState(panelApi);
             scheduleCancelReveal(panelApi);
 

@@ -80,6 +80,10 @@ msgstr "Zusätzliche Anweisungen (optional)"
 msgid "An unexpected error occurred."
 msgstr "Es ist ein unerwarteter Fehler aufgetreten."
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:262
+msgid "A translated segment still appears to be in the source language instead of English."
+msgstr "Ein übersetzter Abschnitt scheint noch in der Ausgangssprache statt auf Englisch vorzuliegen."
+
 #: slytranslate/inc/EditorBootstrap.php:72
 msgid "Available"
 msgstr "Vorhanden"
@@ -292,6 +296,10 @@ msgstr ""
 msgid "Refresh model list"
 msgstr "Modellliste aktualisieren"
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:246
+msgid "Refresh"
+msgstr "Neu laden"
+
 #: slytranslate/inc/EditorBootstrap.php:67
 msgid "Refresh translation status"
 msgstr "Übersetzungsstatus aktualisieren"
@@ -402,14 +410,15 @@ msgstr "Quellinhalt nicht gefunden."
 msgid "Start translation"
 msgstr "Übersetzung starten"
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:248
 #: slytranslate/inc/EditorBootstrap.php:56
 #: slytranslate/inc/ListTableTranslation.php:357
 msgid ""
 "Supplements the site-wide translation instructions. Example: Use informal "
 "language."
 msgstr ""
-"Ergänzt die siteweiten Übersetzungsanweisungen. Beispiel: Verwende eine "
-"informelle Sprache."
+"Ergänzt die websiteweiten Übersetzungsanweisungen. Beispiel: Verwende einen "
+"lockeren Ton."
 
 #: slytranslate/inc/EditorBootstrap.php:52
 #: slytranslate/inc/ListTableTranslation.php:355
@@ -526,6 +535,10 @@ msgstr ""
 #: slytranslate/inc/ListTableTranslation.php:349
 msgid "Translate"
 msgstr "Übersetzen"
+
+#: slytranslate/inc/TranslatePressEditorIntegration.php:244
+msgid "Translate with SlyTranslate"
+msgstr "Mit SlyTranslate übersetzen"
 
 #. translators: %d: number of selected items
 #: slytranslate/inc/ListTableTranslation.php:351
@@ -679,6 +692,10 @@ msgstr "Wird nach %s übersetzt ..."
 msgid "Translating..."
 msgstr "Wird übersetzt ..."
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:253
+msgid "Translating {language}..."
+msgstr "{language} wird übersetzt..."
+
 #: slytranslate/inc/ListTableTranslation.php:339
 #: slytranslate/inc/ListTableTranslation.php:1089
 msgid "Translation cancelled."
@@ -713,6 +730,14 @@ msgstr "Übersetzung fehlgeschlagen."
 #, php-format
 msgid "Translation failed: %s"
 msgstr "Übersetzung fehlgeschlagen: %s"
+
+#: slytranslate/inc/TranslatePressEditorIntegration.php:264
+msgid "Translation failed:"
+msgstr "Übersetzung fehlgeschlagen:"
+
+#: slytranslate/inc/TranslatePressEditorIntegration.php:261
+msgid "The visible TranslatePress field could not be detected."
+msgstr "Das sichtbare TranslatePress-Feld konnte nicht erkannt werden."
 
 #: slytranslate/inc/EditorBootstrap.php:71
 msgid "Translation status"

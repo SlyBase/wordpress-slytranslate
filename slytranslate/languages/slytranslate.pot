@@ -74,8 +74,16 @@ msgstr ""
 msgid "Additional instructions (optional)"
 msgstr ""
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:248
+msgid "Supplements the site-wide translation instructions. Example: Use informal language."
+msgstr ""
+
 #: slytranslate/inc/EditorBootstrap.php:87
 msgid "An unexpected error occurred."
+msgstr ""
+
+#: slytranslate/inc/TranslatePressEditorIntegration.php:262
+msgid "A translated segment still appears to be in the source language instead of English."
 msgstr ""
 
 #: slytranslate/inc/EditorBootstrap.php:72
@@ -275,6 +283,10 @@ msgstr ""
 msgid "Refresh model list"
 msgstr ""
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:246
+msgid "Refresh"
+msgstr ""
+
 #: slytranslate/inc/EditorBootstrap.php:67
 msgid "Refresh translation status"
 msgstr ""
@@ -472,6 +484,10 @@ msgstr ""
 msgid "Translate"
 msgstr ""
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:244
+msgid "Translate with SlyTranslate"
+msgstr ""
+
 #. translators: %d: number of selected items
 #: slytranslate/inc/ListTableTranslation.php:351
 #, php-format
@@ -600,6 +616,10 @@ msgstr ""
 msgid "Translating..."
 msgstr ""
 
+#: slytranslate/inc/TranslatePressEditorIntegration.php:253
+msgid "Translating {language}..."
+msgstr ""
+
 #: slytranslate/inc/ListTableTranslation.php:339
 #: slytranslate/inc/ListTableTranslation.php:1089
 msgid "Translation cancelled."
@@ -632,6 +652,14 @@ msgstr ""
 #: slytranslate/inc/ListTableTranslation.php:338
 #, php-format
 msgid "Translation failed: %s"
+msgstr ""
+
+#: slytranslate/inc/TranslatePressEditorIntegration.php:264
+msgid "Translation failed:"
+msgstr ""
+
+#: slytranslate/inc/TranslatePressEditorIntegration.php:261
+msgid "The visible TranslatePress field could not be detected."
 msgstr ""
 
 #: slytranslate/inc/EditorBootstrap.php:71
