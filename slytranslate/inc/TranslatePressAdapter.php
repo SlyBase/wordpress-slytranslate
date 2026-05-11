@@ -752,13 +752,13 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			);
 
 			if ( isset( $dictionary_rows[ $original_id ] ) && isset( $dictionary_rows[ $original_id ]->id ) ) {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress stores these values in its own dictionary table.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- TranslatePress stores these values in its own dictionary table and this method clears the affected cache entries after writes.
 				$wpdb->update( $dictionary_table, $data, array( 'id' => (int) $dictionary_rows[ $original_id ]->id ) );
 				$updated++;
 				continue;
 			}
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress stores these values in its own dictionary table.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- TranslatePress stores these values in its own dictionary table and this method clears the affected cache entries after writes.
 			$wpdb->insert( $dictionary_table, $data );
 			$inserted++;
 		}
@@ -801,10 +801,11 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 		$placeholders = implode( ', ', array_fill( 0, count( $originals ), '%s' ) );
 		$table        = $wpdb->prefix . 'trp_original_strings';
 		$sql          = $wpdb->prepare(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- The placeholder list is generated from the sanitized originals array size before being passed into $wpdb->prepare().
 			'SELECT id, original FROM %i WHERE original IN (' . $placeholders . ')',
 			...array_merge( array( $table ), $originals )
 		);
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress exposes these rows only through its custom tables.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- TranslatePress exposes these rows only through its custom tables and this lookup already uses request-local object-cache entries.
 		$rows         = $wpdb->get_results( $sql );
 
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
@@ -849,10 +850,11 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 
 		$placeholders = implode( ', ', array_fill( 0, count( $original_ids ), '%d' ) );
 		$sql          = $wpdb->prepare(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- The placeholder list is generated from the sanitized original ID array size before being passed into $wpdb->prepare().
 			'SELECT id, original_id FROM %i WHERE original_id IN (' . $placeholders . ')',
 			...array_merge( array( $dictionary_table ), $original_ids )
 		);
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress exposes these rows only through its custom tables.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- TranslatePress exposes these rows only through its custom tables and this lookup already uses request-local object-cache entries.
 		$rows         = $wpdb->get_results( $sql );
 
 		if ( ! is_array( $rows ) || empty( $rows ) ) {

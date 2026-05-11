@@ -644,6 +644,7 @@ class TranslationRuntime {
 			array(
 				'reasoning' => array(
 					'effort'  => 'none',
+					// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- External API payload uses "exclude" as a reasoning flag, not as a WP_Query parameter.
 					'exclude' => true,
 				),
 				'provider'  => array(
