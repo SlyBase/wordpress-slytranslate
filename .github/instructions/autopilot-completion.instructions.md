@@ -1,6 +1,6 @@
 ---
 applyTo: '**'
-description: 'Completion workflow for Autopilot work: local tests must pass, then create a normal commit via the git-commit skill, run Build and Deploy Plugin ZIP, and perform an MCP test translation for post 1109 with Ministral-8B-Instruct-2410-Q4_K_M.'
+description: 'Completion workflow for Autopilot work: local tests must pass, then create a normal commit via the git-commit skill, run the plugin-specific build and deploy task, and perform the matching MCP smoke test.'
 ---
 
 # Autopilot Completion Workflow
@@ -18,23 +18,45 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 - After successful local validation, exactly one commit must be created for each completed task.
 - Use the `git-commit` skill to analyze the diff and create a conventional commit message that matches the actual change.
 - Do not force a beta suffix or version-based commit title.
-- Before creating the commit, run `SlyTranslate: Build Plugin ZIP` (or `.github/scripts/build-plugin-zip.sh`) once so generated language files are refreshed.
+- Before creating the commit, run `WP Plugin: Build and Verify Plugin ZIP` once so generated language files are refreshed.
 - If that refresh updates tracked `.mo` files, stage them and include them in the same commit.
 - Do not create the commit while any tracked generated language file changes are still unstaged or uncommitted.
 
 ## 3) Build and deploy after the commit
 
-- Immediately after the commit, the VS Code task `SlyTranslate: Build and Deploy Plugin ZIP` must complete successfully.
+- Immediately after the commit, the matching VS Code build-and-deploy task must complete successfully.
+- Use exactly one of these tasks depending on the affected plugin environment:
+	- `WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod` for Polylang / SlyBase work
+	- `WP Plugin: Build and Deploy Plugin ZIP to TranslatePress WordPress Pod` for TranslatePress work
+	- `WP Plugin: Build and Deploy Plugin ZIP to WP-Globus WordPress Pod` for WPGlobus work
 - A task is not finished unless the build succeeds and the plugin ZIP is uploaded successfully to WordPress.
 
-## 4) WordPress MCP smoke test is mandatory
+## 4) MCP Smoke Test
+- After deployment, perform a quick MCP smoke test of the affected area to verify the change is live and working as expected.
+- If the change only affects one specific language plugin, only the matching plugin smoke test is required.
+- If the change affects shared code or multiple language plugins, run smoke tests for each affected plugin environment.
 
-- After a successful deploy, run a test translation for post `1109` through the WordPress MCP tools.
-- If needed, first use `mcp_wordpress-sly_mcp-adapter-discover-abilities` to confirm the available translation ability.
-- For the actual run, execute the appropriate translation ability through `mcp_wordpress-sly_mcp-adapter-execute-ability`.
-- Always use the model `Ministral-8B-Instruct-2410-Q4_K_M`.
-- The additional instruction must contain this exact text: `Anreden mit "du" statt "Sie". junger aber professioneller ton.`
-- Until this smoke test succeeds, the work must not be reported as complete.
+### Polylang smoke test
+
+- MCP: `wordpress-slybase`
+- Post ID: `1468`
+
+### TranslatePress smoke test
+
+- MCP: `wordpress-translatepress`
+- Post ID: `8`
+
+### WPGlobus smoke test
+
+- MCP: `wordpress-wpglobus`
+- Post ID: `8`
+
+### Shared smoke test parameters
+
+- Translation direction: `de` -> `en`
+- `overwrite`: `true`
+- Model: `Ministral-8B-Instruct-2410-Q4_K_M`
+
 
 ## 5) Failure handling
 
