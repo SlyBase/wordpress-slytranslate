@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - TranslatePress frontend editor pages now include a SlyTranslate sidebar panel with target-language, model, overwrite, progress, and cancel controls for translating the current page without leaving the visual editor.
 
 ### Changes
+- Workspace task buttons now expose direct ZIP build and plugin-specific deploy flows for SlyBase/Polylang, TranslatePress, and WP-Globus.
 - Added a TranslatePress instruction blueprint documenting the current adapter contract, string-table storage model, URL rules, and smoke-test workflow.
 - TranslatePress string-table batches now use explicit model-profile limits, can batch the post title into the first JSON request, and skip copy-safe identifiers before sending content to the model.
 - String-table translation now supports opt-in parallel windows with saved per-model probe recommendations, a protected worker transport, and automatic serial fallback when parallel execution is unavailable or fails.

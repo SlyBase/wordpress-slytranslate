@@ -159,11 +159,11 @@
             "problemMatcher": []
         },
         {
-            "label": "WP Plugin: Build and Deploy Plugin ZIP",
+            "label": "WP Plugin: Build and Deploy Plugin ZIP to TranslatePress WordPress Pod",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "WP Plugin: Build Plugin ZIP",
-                "WP Plugin: Deploy Plugin ZIP to WordPress Pod"
+                "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod"
             ],
             "presentation": {
                 "close": true
@@ -205,6 +205,15 @@
             "dependsOn": [
                 "WP Plugin: Build Plugin ZIP",
                 "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "WP Plugin: Build and Deploy Plugin ZIP to WP-Globus WordPress Pod",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "WP Plugin: Build Plugin ZIP",
+                "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod"
             ],
             "problemMatcher": []
         }

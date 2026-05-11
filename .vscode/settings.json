@@ -6,11 +6,11 @@
             "alignment": "left",
             "tooltip": "Run WP Plugin workspace tasks",
             "tasks": [
-                // {
-                //     "label": "$(package) Build plugin ZIP",
-                //     "task": "WP Plugin: Build Plugin ZIP",
-                //     "description": "Create Plugin.zip in the workspace root"
-                // },
+                {
+                    "label": "$(package) Build plugin ZIP",
+                    "task": "WP Plugin: Build Plugin ZIP",
+                    "description": "Create Plugin.zip in the workspace root"
+                },
                 // {
                 //     "label": "$(verified) Verify plugin ZIP",
                 //     "task": "WP Plugin: Verify Plugin ZIP",
@@ -22,9 +22,19 @@
                     "description": "Build Plugin.zip and verify the archive contents"
                 },
                 {
+                    "label": "$(combine) Build and deploy (TranslatePress)",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to TranslatePress WordPress Pod",
+                    "description": "Build Plugin.zip and upload it into the TranslatePress WordPress pod in namespace default"
+                },
+                {
                     "label": "$(cloud-upload) Deploy (TranslatePress)",
                     "task": "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
                     "description": "Upload Plugin.zip into the TranslatePress WordPress pod in namespace default"
+                },
+                {
+                    "label": "$(combine) Build and deploy (WP-Globus)",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to WP-Globus WordPress Pod",
+                    "description": "Build Plugin.zip and upload it into the WP-Globus WordPress pod in namespace default"
                 },
                 {
                     "label": "$(cloud-upload) Deploy (WP-Globus)",
@@ -32,7 +42,12 @@
                     "description": "Upload Plugin.zip into the WP-Globus WordPress pod in namespace default"
                 },
                 {
-                    "label": "$(cloud-upload) Deploy (SlyBase)",
+                    "label": "$(combine) Build and deploy (SlyBase / Polylang)",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
+                    "description": "Build Plugin.zip and upload it into the SlyBase WordPress pod in namespace websites"
+                },
+                {
+                    "label": "$(cloud-upload) Deploy (SlyBase / Polylang)",
                     "task": "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod",
                     "description": "Upload Plugin.zip into the SlyBase WordPress pod in namespace websites"
                 },
