@@ -3,6 +3,7 @@ Features:
 * TranslatePress frontend editor pages now include a SlyTranslate sidebar panel with target-language, model, overwrite, progress, and cancel controls for translating the current page without leaving the visual editor.
 
 Changes:
+* VS Code workspace tasks now include a single deploy action that ships the current plugin ZIP to TranslatePress, WP-Globus, and SlyBase in sequence.
 * VS Code task buttons now use direct per-environment build/deploy actions with consistent English labels for ZIP, deploy, and release tasks.
 * Workspace task buttons now expose direct ZIP build and plugin-specific deploy flows for SlyBase/Polylang, TranslatePress, and WP-Globus.
 * Added a TranslatePress instruction blueprint documenting the current adapter contract, string-table storage model, URL rules, and smoke-test workflow.

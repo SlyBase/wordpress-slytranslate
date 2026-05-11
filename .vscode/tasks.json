@@ -200,6 +200,16 @@
             "problemMatcher": []
         },
         {
+            "label": "WP Plugin: Deploy Plugin ZIP to All WordPress Pods",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
+                "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod",
+                "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod"
+            ],
+            "problemMatcher": []
+        },
+        {
             "label": "WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
             "dependsOrder": "sequence",
             "dependsOn": [
