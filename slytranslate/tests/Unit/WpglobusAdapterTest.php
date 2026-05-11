@@ -12,6 +12,9 @@ class WpglobusAdapterTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		if ( class_exists( '\\WPGlobus', false ) ) {
+			\WPGlobus::$config = (object) array();
+		}
 		$this->adapter = new WpglobusAdapter();
 	}
 
@@ -47,6 +50,24 @@ class WpglobusAdapterTest extends TestCase {
 	public function test_get_post_language_returns_current_wpglobus_language_when_available(): void {
 		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
 		$this->stubWpFunctionReturn( 'get_query_var', 'de' );
+		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
+
+		$this->assertSame( 'de', $this->adapter->get_post_language( 123 ) );
+	}
+
+	public function test_get_post_language_prefers_wpglobus_builder_language(): void {
+		$this->ensureWpglobusClassExists();
+		$this->stubWpFunctionReturn( 'wpglobus_languages_list', array( 'en', 'de' ) );
+
+		\WPGlobus::$config = (object) array(
+			'enabled_languages' => array( 'en', 'de' ),
+			'builder'           => new class() {
+				public function get_language( int $post_id = 0 ): string {
+					return 123 === $post_id ? 'de' : 'en';
+				}
+			},
+		);
+
 		$this->stubWpFunctionReturn( 'wpglobus_default_language', 'en' );
 
 		$this->assertSame( 'de', $this->adapter->get_post_language( 123 ) );
@@ -212,5 +233,21 @@ class WpglobusAdapterTest extends TestCase {
 	private function invokeMethod( object $object, string $method, array $args = [] ): mixed {
 		$reflection = new \ReflectionMethod( $object, $method );
 		return $reflection->invoke( $object, ...$args );
+	}
+
+	private function ensureWpglobusClassExists(): void {
+		if ( class_exists( '\\WPGlobus', false ) ) {
+			return;
+		}
+
+		eval(
+			'class WPGlobus {
+				public static $config;
+
+				public static function Config() {
+					return self::$config;
+				}
+			}'
+		);
 	}
 }

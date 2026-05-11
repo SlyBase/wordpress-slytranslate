@@ -29,7 +29,7 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 	}
 
 	public function get_post_language( int $post_id ): ?string {
-		$current_language = $this->get_current_language_code();
+		$current_language = $this->get_current_language_code( $post_id );
 		if ( '' !== $current_language ) {
 			return $current_language;
 		}
@@ -233,10 +233,21 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 		return '';
 	}
 
-	private function get_current_language_code(): string {
+	private function get_current_language_code( int $post_id = 0 ): string {
 		$languages = $this->get_languages();
 		if ( empty( $languages ) ) {
 			return '';
+		}
+
+		if ( class_exists( 'WPGlobus', false ) ) {
+			$config = \WPGlobus::Config();
+
+			if ( isset( $config->builder ) && is_object( $config->builder ) && method_exists( $config->builder, 'get_language' ) ) {
+				$current = sanitize_key( (string) $config->builder->get_language( $post_id ) );
+				if ( '' !== $current && isset( $languages[ $current ] ) ) {
+					return $current;
+				}
+			}
 		}
 
 		if ( function_exists( 'wpglobus_current_language' ) ) {
