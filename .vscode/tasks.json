@@ -3,7 +3,7 @@
     "tasks": [
         {
             "label": "WP Plugin: Build Plugin ZIP",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 "-c",
@@ -26,7 +26,7 @@
         },
         {
             "label": "WP Plugin: Verify Plugin ZIP",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 "-c",
@@ -55,7 +55,7 @@
         },
         {
             "label": "WP Plugin: Sync changelog.txt from CHANGELOG.md",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 ".github/scripts/sync-changelog-txt.sh"
@@ -73,7 +73,7 @@
         },
         {
             "label": "WP Plugin: Generate Language Files",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 ".github/scripts/generate-language-files.sh"
@@ -100,7 +100,7 @@
         },
         {
             "label": "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 "-c",
@@ -130,7 +130,7 @@
         },
         {
             "label": "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 "-c",
@@ -160,7 +160,7 @@
         },
         {
             "label": "WP Plugin: Deploy Plugin ZIP to WP Multilang WordPress Pod",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 "-c",
@@ -211,7 +211,7 @@
         },
         {
             "label": "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod",
-            "type": "shell",
+            "type": "process",
             "command": "bash",
             "args": [
                 "-c",
