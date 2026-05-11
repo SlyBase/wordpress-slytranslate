@@ -1,75 +1,11 @@
 = 1.8.0 =
-Features:
 * TranslatePress frontend editor pages now include a SlyTranslate sidebar panel with target-language, model, overwrite, progress, and cancel controls for translating the current page without leaving the visual editor.
+* TranslatePress Multilingual support: SlyTranslate detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 
-Changes:
 * MCP ability descriptions now spell out single-entry versus multi-post semantics, source-language pinning, overwrite guidance, and the external execute-wrapper troubleshooting boundary for LLM clients.
-* VS Code workspace tasks now include a single deploy action that ships the current plugin ZIP to TranslatePress, WP-Globus, and SlyBase in sequence.
-* VS Code task buttons now use direct per-environment build/deploy actions with consistent English labels for ZIP, deploy, and release tasks.
-* Workspace task buttons now expose direct ZIP build and plugin-specific deploy flows for SlyBase/Polylang, TranslatePress, and WP-Globus.
-* Added a TranslatePress instruction blueprint documenting the current adapter contract, string-table storage model, URL rules, and smoke-test workflow.
-* TranslatePress string-table batches now use explicit model-profile limits, can batch the post title into the first JSON request, and skip copy-safe identifiers before sending content to the model.
-* String-table translation now supports opt-in parallel windows with saved per-model probe recommendations, a protected worker transport, and automatic serial fallback when parallel execution is unavailable or fails.
-* String-table validation retries now target only the specific failing segments instead of retranslating the entire batch; correctly translated items are kept and never resent to the model.
-* Short segments (40 characters or fewer) now receive adjacent-segment context hints in the translation prompt, reducing empty-translation failures for sentence fragments split around inline HTML elements.
-* Empty translation results are no longer stored as source-language fallback text; the segment is left empty so the adapter's language-fallback mechanism handles display.
+* Short segments (≤ 40 characters) now receive adjacent-segment context hints in the translation prompt, reducing empty-translation failures for sentence fragments split around inline HTML elements.
+* Empty translation results (invalid_translation_empty) are no longer stored as source-language fallback text; the segment is left empty so the adapter's language-fallback mechanism handles display rather than silently inserting untranslated content.
 * Timing logs now include content_string_batch_detail with batch count, max encoded input length, and the batch char limit, and job_end includes string_batch_item_retries, string_batch_validation_retries, and string_batch_split_retries for direct diagnosis of retry costs.
-
-Fixes:
-* TranslatePress frontend string-editor sidebar copy now switches to the current WordPress user locale, so English-profile users no longer see that panel in German just because the page itself is German.
-* Bulk translation now preserves explicit source_language overrides for single-entry adapters such as WPGlobus and WP Multilang.
-* TranslatePress adapter table writes now update every existing dictionary row for the same original string ID, so stale duplicate rows no longer leave the visual editor target field empty while the frontend still shows the translated page.
-* WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
-* WPGlobus editor translations now submit the detected source language with the sidebar request, so German to English runs no longer fail with a false same-language error.
-* TranslatePress string-table JSON batches now accept valid JSON wrapped in SlyTranslate output tags, so bilingual-frame model responses no longer fail batch decoding.
-* WPGlobus status and translation actions now respect the currently selected edit language instead of always treating the post as the default source language.
-* TranslatePress string-table JSON batches now accept model responses wrapped in Markdown code fences, so fenced valid JSON no longer fails early as structure drift before batch decoding.
-* Plain-text translations now unwrap accidental full-title Markdown emphasis like **...** when the source had no formatting, so translated post titles no longer keep stray bold markers.
-* Mistral-hosted chat/completions requests now strip unsupported chat_template_kwargs, so Ministral and other Mistral models no longer fail when the shared connector injection path is active.
-* Hosted Mistral connector requests now apply the final request-body mutation later, so models like mistral-medium no longer reintroduce unsupported chat_template_kwargs after SlyTranslate strips them.
-* Hosted Mistral API model IDs now disable SlyTranslate's default enable_thinking=false kwargs at profile-build time as well, fixing mistral-medium requests that were still sending unsupported kwargs through the connector's native payload path.
-* Admin translation UIs now discard stale browser-stored model slugs when those models are no longer available, so sidebar and list-table runs fall back to the current configured default instead of retrying dead endpoints.
-* TranslatePress adapter lookup queries now keep their dynamic IN placeholder lists on the exact prepared SQL line so WordPress.org coding-standard scans no longer report false unprepared-query violations.
-* WordPress.org coding-standard checks now recognise the cached TranslatePress dictionary lookups and direct table writes as intentional prepared queries instead of flagging false positives.
-* WordPress.org plugin checks no longer flag a forbidden updater header, mismatched stable tag metadata, or unsafe TranslatePress lookup queries and editor URL parsing.
-* TranslatePress frontend editor actions now use the shorter German button label "Übersetzen", keep the additional-instructions hint visually compact, keep the model reload button smaller and vertically aligned, reset stale progress text correctly, and refresh the visible target field immediately after a translation without requiring a full page reload.
-* TranslatePress frontend editor runs now overwrite the existing target-language entry automatically and treat REST error payloads as real failures, so repeat clicks no longer report false success while leaving the visible field empty.
-* TranslatePress frontend editor no longer shows a success banner after a completed run and now uses German copy consistently across the visible panel texts.
-* TranslatePress frontend editor now refreshes its post context automatically after in-app navigation, so the warning from parent pages clears itself when you switch to an editable singular post or page.
-* TranslatePress frontend editor now translates only the currently visible TranslatePress text field instead of triggering a whole-post translation run from that UI.
-* TranslatePress frontend editor model dropdown now uses a side-panel-like control style with the same taller field height, clearer focus state, and aligned refresh button.
-* Inline text and block translation requests now clear stale cancel flags before they start, so a previously cancelled post job no longer aborts the next short TranslatePress string run immediately.
-* TranslatePress string-mode translation no longer depends on singular post detection, so the panel stays usable without the old unsupported-context warning while users manually translate individual visible strings.
-* Plain-text recovery prompts now preserve brace-style placeholders like `{current_year}` and `{theme_author}` explicitly, so variable-heavy TranslatePress strings no longer fall from passthrough into assistant-style explanations.
-* Short text translation prompts now explicitly preserve template tokens and tell the model to translate only the remaining source-language fragments when a UI string is already partly in the target language.
-* TranslatePress string-mode field detection now resolves source and target inputs by language hints instead of blindly using the first and last visible fields, so already-English target text is no longer resent as the source string.
-* TranslatePress string-mode field detection now also prefers TranslatePress readonly inputs as the source string and editable inputs as the target, so mixed-language editor layouts no longer send the editable target text back as source input.
-* TranslatePress string-mode field detection now scopes itself to the active visible TranslatePress string container and logs the chosen source and target field details, making wrong-field selections directly traceable.
-* TranslatePress string-mode source resolution now prefers the active TranslatePress runtime string state's original value over the rendered readonly input, avoiding cases where the UI already shows a different language variant in the readonly field.
-* TranslatePress string-mode start runs no longer break on the new source-resolution diagnostics, so the sidebar's Übersetzen button remains clickable while logging the chosen source details.
-* TranslatePress string-mode source resolution now ranks visible candidates by source-language markers before falling back to readonly or position-based selection, so mixed-language field groups can prefer the actual German source text over an already-English preview field.
-* TranslatePress sidebar warning banners now map the language-passthrough validation error to German UI copy instead of showing the backend's English fallback text.
-* TranslatePress frontend editor debugging can now write button-state and run-lifecycle events whenever WordPress debug logging is active, making unexpected button resets directly traceable.
-* TranslatePress frontend editor translations now keep the main button visually stable during short runs and only expose the cancel state once a translation has been running long enough to need it.
-* TranslatePress string-pair saves now resolve the real TranslatePress original-string IDs directly from the source table, so frontend-editor translations no longer disappear into dictionary rows that the editor cannot read back.
-* TranslatePress list-table language pickers now include the source language even when TranslatePress omits it from its target-language settings, so the language selection on post and page overview screens no longer appears empty.
-* TranslatePress now shows the Translate row action and bulk Translate option on post and page overview screens in single-entry mode.
-* TranslatePress no longer leaves segments untranslated when WordPress's wptexturize converts straight quotes to typographic HTML entities at render time; lookup keys now include the texturized and entity-encoded variants of each segment so that existing dictionary entries are matched and filled correctly.
-
-Changes:
-* TranslatePress string-table batches are now sized by their encoded JSON length instead of raw source characters, preventing the runtime chunk splitter from cutting a batch into two invalid JSON fragments.
-* When a string-table batch returns malformed JSON (e.g. two concatenated objects), the batch is automatically halved and each half is retried up to four levels deep, recovering from transient model errors without failing the whole translation job.
-* Decode failures now log detailed diagnostics including object_count_hint, ends_with_brace, and an output_excerpt, making the root cause immediately visible in timing logs.
-
-Features:
-* TranslatePress Multilingual support: SlyTranslate now detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
-* TranslatePress content is now translated via a JSON string-table fast path that batches individual text segments in groups of up to 24, replacing the full Gutenberg block-tree path and reducing the number of AI calls from ~54 to ~8–10 per post.
-
-Changes:
-* TranslatePress existence checks now query only the requested target language and reuse request-local lookups, reducing preflight database work before a translation starts.
-* Content translation now batches eligible simple list items inside single core/list wrappers into one JSON-based model call, reducing list-related subcall fan-out while keeping the existing fallback path for complex lists.
-* List-item batching now accepts richer <li> HTML content and logs deterministic content_list_batch_skip reasons when a list is not batch-eligible, making the next speed bottlenecks directly observable in timing logs.
-* Content translation now attempts JSON micro-batching for groups of short non-list wrapper blocks, reducing tiny per-block model requests in content-heavy posts.
 * Mixed core/list blocks now batch only flat list items and recurse only nested items, preserving structure while still collapsing most list-item calls into one request.
 * Single-block recursive inner-block fast paths now cover additional wrapper block types with inner blocks, reducing avoidable group_structure_drift fallback rounds.
 * Title and excerpt are now only deferred into the meta batch when at least two batch-eligible candidates exist, avoiding unnecessary deferred fallbacks when batching is impossible.
@@ -77,15 +13,15 @@ Changes:
 * Content grouping now applies minimum-size rebalancing, wrapper pre-consolidation, and tiny-series coalescing before translation, enabling more micro-batch hits and reducing one-block call fan-out.
 * Micro-batching now adaptively allows 2-block groups for small pending payloads while preserving per-item validation and fallback safety.
 * Job-end diagnostics now include skip-reason aggregates plus KPI ratios (tiny_call_ratio, micro_batch_hit_rate, avg_chars_per_ai_call, single_block_group_ratio) with explicit target corridor values.
-* Content run building now ignores whitespace-only freeform parser blocks, so neighboring translatable blocks are no longer split into artificial one-block runs.
-* Mixed groups are now split before translation so nested-wrapper blocks are isolated from flat wrappers, reducing costly group_structure_drift fallback cascades.
-* Multi-block placeholder-preservation calls now start with strict marker instructions, avoiding redundant retry calls when block markers are dropped.
 
-Fixes:
-* TranslatePress string-table batches now retry and isolate empty per-segment model results instead of failing the whole content translation.
-* TranslatePress translations now persist stable string-pair lookups around inline links, so linked paragraph segments no longer stay untranslated because of boundary whitespace differences.
-* Paragraph blocks containing inline tags (<a>, <code>, <strong>, ...) are no longer silently left untranslated when the model drops tags during the unwrap optimisation: failed inline-tag retries now fall through to translate the full inner HTML instead of keeping the source block.
-* When all four translation attempts fail to preserve inline tags in a block, the best available translated result is now accepted instead of silently keeping the entire block in the source language.
+* Bulk translation now preserves explicit source_language overrides for single-entry adapters such as WPGlobus and WP Multilang.
+* WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
+* WPGlobus editor translations now submit the detected source language with the sidebar request, so German to English runs no longer fail with a false same-language error.
+* WPGlobus status and translation actions now respect the currently selected edit language instead of always treating the post as the default source language.
+* Mistral-hosted chat/completions requests now strip unsupported chat_template_kwargs, so Ministral and other Mistral models no longer fail when the shared connector injection path is active.
+* Hosted Mistral connector requests now apply the final request-body mutation at a later hook priority, so models like mistral-medium no longer reintroduce unsupported chat_template_kwargs after SlyTranslate strips them.
+* Hosted Mistral API model IDs now disable SlyTranslate's default enable_thinking=false kwargs at profile-build time as well, fixing mistral-medium requests that were still sending unsupported kwargs through the connector's native payload path.
+* Admin translation UIs now discard stale browser-stored model slugs when those models are no longer available, so sidebar and list-table runs fall back to the current configured default instead of retrying dead endpoints.
 
 = 1.7.0 =
 * WPGlobus support: SlyTranslate now detects WPGlobus and translates content stored in the {:lang}text{:} single-post format.

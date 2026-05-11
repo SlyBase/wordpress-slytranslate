@@ -35,6 +35,10 @@ Use SlyTranslate when you need one consistent translation workflow for:
 
 ![Translation UI overview](assets/screenshot-5.png)
 
+### 6) TranslatePress visual editor addon
+
+![TranslatePress visual editor addon](assets/screenshot-6.png)
+
 ## Internal flow
 
 - Uses native WordPress AI connectors through `wp_ai_client_prompt()`.

@@ -115,6 +115,7 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 3. Gutenberg block translation
 4. Page/post translation and bulk action
 5. Translation UI overview
+6. TranslatePress visual editor addon
 
 == Frequently Asked Questions ==
 
