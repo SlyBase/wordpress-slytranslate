@@ -1,0 +1,62 @@
+image:
+  tag: "beta-7.0-php8.3-apache"
+wordpress:
+  debug: true
+  configExtra: |
+    define('WP_ENVIRONMENT_TYPE', 'local');
+  init:
+    enabled: true
+    existingSecret: "wordpress-test-secret"
+    firstname: "Timon"
+    lastname: "Först"
+    title: "Translate test"
+  language: "de_DE"
+  plugins:
+    - name: "ai-provider-for-llamacpp"
+      activate: true
+      autoupdate: true
+    - name: "blocksy-companion"
+      activate: true
+      autoupdate: true
+    - name: "ai"
+      activate: true
+      autoupdate: true
+    - name: "wpglobus"
+      activate: true
+      autoupdate: true
+    - name: "enable-abilities-for-mcp"
+      activate: true
+      autoupdate: true
+    - name: "ultimate-ai-connector-compatible-endpoints"
+      activate: true
+      autoupdate: true
+    - name: "wordpress/mcp-adapter"
+      activate: true
+      autoupdate: true
+    - name: "plugin-check"
+      activate: true
+      autoupdate: true
+    - name: "slytranslate"
+      activate: true
+      autoupdate: true
+  themes:
+    - name: "blocksy"
+      activate: false
+      autoupdate: true
+    - name: "https://creativethemes.com/downloads/blocksy-child.zip"
+      slug: "blocksy-child" # Required for URL themes: enables autoupdate, sites[] and skip-if-installed
+      activate: true
+      autoupdate: true
+  url: "http://192.168.178.21:30112"
+service:
+  nodePorts:
+    http: 30112
+storage:
+  resourcePolicy: "" # Delete PVC on helm uninstall
+apache:
+  customPhpConfigMap: "wordpress-custom-config"
+mariadb:
+  auth:
+    database: "wordpress_db"
+    username: "wordpress_db_user"
+    existingSecret: "wordpress-test-secret"
