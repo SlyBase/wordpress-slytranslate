@@ -22,44 +22,34 @@
                     "description": "Build the plugin ZIP and verify its archive contents"
                 },
                 {
-                    "label": "$(combine) Build and deploy ZIP",
-                    "tasks": [
-                        {
-                            "label": "$(combine) Deploy to TranslatePress",
-                            "task": "WP Plugin: Build and Deploy Plugin ZIP to TranslatePress WordPress Pod",
-                            "description": "Build the plugin ZIP and deploy it to the TranslatePress WordPress pod"
-                        },
-                        {
-                            "label": "$(combine) Deploy to WP-Globus",
-                            "task": "WP Plugin: Build and Deploy Plugin ZIP to WP-Globus WordPress Pod",
-                            "description": "Build the plugin ZIP and deploy it to the WP-Globus WordPress pod"
-                        },
-                        {
-                            "label": "$(combine) Deploy to SlyBase / Polylang",
-                            "task": "WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
-                            "description": "Build the plugin ZIP and deploy it to the SlyBase WordPress pod"
-                        }
-                    ]
+                    "label": "$(combine) Build+deploy TranslatePress",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to TranslatePress WordPress Pod",
+                    "description": "Build the plugin ZIP and deploy it to the TranslatePress WordPress pod"
                 },
                 {
-                    "label": "$(cloud-upload) Choose deploy target",
-                    "tasks": [
-                        {
-                            "label": "$(cloud-upload) TranslatePress",
-                            "task": "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
-                            "description": "Deploy the existing plugin ZIP to the TranslatePress WordPress pod"
-                        },
-                        {
-                            "label": "$(cloud-upload) WP-Globus",
-                            "task": "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod",
-                            "description": "Deploy the existing plugin ZIP to the WP-Globus WordPress pod"
-                        },
-                        {
-                            "label": "$(cloud-upload) SlyBase / Polylang",
-                            "task": "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod",
-                            "description": "Deploy the existing plugin ZIP to the SlyBase WordPress pod"
-                        }
-                    ]
+                    "label": "$(combine) Build+deploy WP-Globus",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to WP-Globus WordPress Pod",
+                    "description": "Build the plugin ZIP and deploy it to the WP-Globus WordPress pod"
+                },
+                {
+                    "label": "$(combine) Build+deploy SlyBase / Polylang",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod",
+                    "description": "Build the plugin ZIP and deploy it to the SlyBase WordPress pod"
+                },
+                {
+                    "label": "$(cloud-upload) Deploy TranslatePress",
+                    "task": "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
+                    "description": "Deploy the existing plugin ZIP to the TranslatePress WordPress pod"
+                },
+                {
+                    "label": "$(cloud-upload) Deploy WP-Globus",
+                    "task": "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod",
+                    "description": "Deploy the existing plugin ZIP to the WP-Globus WordPress pod"
+                },
+                {
+                    "label": "$(cloud-upload) Deploy SlyBase / Polylang",
+                    "task": "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod",
+                    "description": "Deploy the existing plugin ZIP to the SlyBase WordPress pod"
                 },
                 {
                     "label": "$(file-symlink-file) Prepare release files",

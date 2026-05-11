@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - TranslatePress frontend editor pages now include a SlyTranslate sidebar panel with target-language, model, overwrite, progress, and cancel controls for translating the current page without leaving the visual editor.
 
 ### Changes
-- VS Code task buttons now group deploy targets into compact selection menus and use consistent English labels for ZIP, deploy, and release actions.
+- VS Code task buttons now use direct per-environment build/deploy actions with consistent English labels for ZIP, deploy, and release tasks.
 - Workspace task buttons now expose direct ZIP build and plugin-specific deploy flows for SlyBase/Polylang, TranslatePress, and WP-Globus.
 - Added a TranslatePress instruction blueprint documenting the current adapter contract, string-table storage model, URL rules, and smoke-test workflow.
 - TranslatePress string-table batches now use explicit model-profile limits, can batch the post title into the first JSON request, and skip copy-safe identifiers before sending content to the model.
