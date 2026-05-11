@@ -2404,7 +2404,7 @@ class ContentTranslator {
 			$effective_prompt .= "\n\n" . $context_hints;
 		}
 
-		$result = TranslationRuntime::translate_text( $json_input, $to, $from, $effective_prompt );
+		$result = TranslationRuntime::translate_text_raw( $json_input, $to, $from, $effective_prompt );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

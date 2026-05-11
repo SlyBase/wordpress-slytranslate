@@ -198,6 +198,33 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		$this->assertSame( 'Zweiter Satz', $result['Second sentence'] );
 	}
 
+	public function test_string_table_units_accept_json_wrapped_in_code_fences(): void {
+		$units = array(
+			array(
+				'id'          => 'seg_0',
+				'source'      => 'Teil 1',
+				'lookup_keys' => array( 'Teil 1' ),
+			),
+			array(
+				'id'          => 'seg_1',
+				'source'      => 'Teil 2',
+				'lookup_keys' => array( 'Teil 2' ),
+			),
+		);
+
+		$response_json = "```json\n{\"seg_0\":\"Part 1\",\"seg_1\":\"Part 2\"}\n```";
+
+		$this->setStaticProperty( TranslationRuntime::class, 'chunk_char_limit_cache', 50000 );
+		$this->stubWpFunction( 'wp_json_encode', static fn( $val, $flags = 0 ) => json_encode( $val, $flags ) );
+		$this->stubWpAiClientWithFixedResponse( $response_json );
+
+		$result = ContentTranslator::translate_string_table_units( $units, 'en', 'de' );
+
+		$this->assertIsArray( $result );
+		$this->assertSame( 'Part 1', $result['Teil 1'] );
+		$this->assertSame( 'Part 2', $result['Teil 2'] );
+	}
+
 	public function test_string_batch_maps_multiple_lookup_keys_to_same_translation(): void {
 		$units = array(
 			array(

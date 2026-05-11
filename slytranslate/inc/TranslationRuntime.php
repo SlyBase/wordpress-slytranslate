@@ -335,6 +335,25 @@ class TranslationRuntime {
 		}
 	}
 
+	public static function translate_text_raw( $text, string $to, string $from = 'en', string $additional_prompt = '' ): string|\WP_Error {
+		if ( ! $text || trim( $text ) === '' ) {
+			return '';
+		}
+
+		self::$source_lang      = $from;
+		self::$target_lang      = $to;
+		self::$last_diagnostics = null;
+
+		try {
+			$prompt = self::build_prompt( $to, $from, $additional_prompt );
+			return self::translate_chunk( $text, $prompt, 0, true );
+		} finally {
+			self::$source_lang      = null;
+			self::$target_lang      = null;
+			self::$last_diagnostics = null;
+		}
+	}
+
 	/* ---------------------------------------------------------------
 	 * Chunked translation
 	 * ------------------------------------------------------------- */
@@ -1176,7 +1195,7 @@ class TranslationRuntime {
 		return max( self::MIN_TRANSLATION_CHARS, min( self::MAX_TRANSLATION_CHARS, $chunk_char_limit ) );
 	}
 
-	public static function translate_chunk( string $text, string $prompt, int $validation_attempt = 0 ): mixed {
+	public static function translate_chunk( string $text, string $prompt, int $validation_attempt = 0, bool $skip_validation = false ): mixed {
 		$runtime_context = self::get_runtime_context();
 		$model_slug      = self::$model_slug_override ?? $runtime_context['model_slug'];
 		$model_profile   = self::get_model_profile( $model_slug );
@@ -1274,7 +1293,7 @@ class TranslationRuntime {
 			) );
 
 			if ( self::is_rate_limit_error( $result ) ) {
-				return self::handle_rate_limit_and_retry( $result, $text, $prompt, $validation_attempt, $model_slug );
+				return self::handle_rate_limit_and_retry( $result, $text, $prompt, $validation_attempt, $model_slug, $skip_validation );
 			}
 
 			return $result;
@@ -1291,6 +1310,10 @@ class TranslationRuntime {
 			'attempt'      => $validation_attempt,
 			'ok'           => true,
 		) );
+
+		if ( $skip_validation ) {
+			return $result;
+		}
 
 		return self::finalize_translated_chunk( $text, $result, $model_slug, $prompt, $validation_attempt );
 	}
@@ -2533,7 +2556,8 @@ class TranslationRuntime {
 		string $text,
 		string $prompt,
 		int $validation_attempt,
-		string $model_slug
+		string $model_slug,
+		bool $skip_validation = false
 	): mixed {
 		if ( self::$rate_limit_retry_depth >= self::RATE_LIMIT_MAX_RETRIES ) {
 			TimingLogger::log( 'ai_rate_limit_exhausted', array(
@@ -2559,7 +2583,7 @@ class TranslationRuntime {
 		usleep( (int) round( $sleep_seconds * 1_000_000 ) );
 
 		try {
-			return self::translate_chunk( $text, $prompt, $validation_attempt );
+			return self::translate_chunk( $text, $prompt, $validation_attempt, $skip_validation );
 		} finally {
 			self::$rate_limit_retry_depth--;
 		}

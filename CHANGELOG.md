@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timing logs now include `content_string_batch_detail` with batch count, max encoded input length, and the batch char limit, and `job_end` includes `string_batch_item_retries`, `string_batch_validation_retries`, and `string_batch_split_retries` for direct diagnosis of retry costs.
 
 ### Fixes
+- TranslatePress string-table JSON batches now accept model responses wrapped in Markdown code fences, so fenced valid JSON no longer fails early as structure drift before batch decoding.
 - Plain-text translations now unwrap accidental full-title Markdown emphasis like **...** when the source had no formatting, so translated post titles no longer keep stray bold markers.
 - Mistral-hosted chat/completions requests now strip unsupported `chat_template_kwargs`, so Ministral and other Mistral models no longer fail when the shared connector injection path is active.
 - Hosted Mistral connector requests now apply the final request-body mutation at a later hook priority, so models like `mistral-medium` no longer reintroduce unsupported `chat_template_kwargs` after SlyTranslate strips them.
