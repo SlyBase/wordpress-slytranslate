@@ -6,7 +6,6 @@ Description: AI translation abilities for WordPress using native AI Connectors a
 Version: 1.8.0
 Author: Timon Först
 Author URI: https://slybase.com
-Update URI: https://github.com/SlyBase/wordpress-slytranslate
 Requires at least: 6.9
 Requires PHP: 8.1
 License: MIT

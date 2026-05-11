@@ -80,6 +80,10 @@ class FakeWpdb {
 	public array $insert_calls = array();
 
 	public function prepare( string $query, ...$args ): array {
+		while ( false !== strpos( $query, '%i' ) && ! empty( $args ) ) {
+			$query = preg_replace( '/%i/', (string) array_shift( $args ), $query, 1 ) ?? $query;
+		}
+
 		return array(
 			'query' => $query,
 			'args'  => $args,

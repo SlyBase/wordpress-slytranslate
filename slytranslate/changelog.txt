@@ -11,6 +11,7 @@ Changes:
 * Timing logs now include content_string_batch_detail with batch count, max encoded input length, and the batch char limit, and job_end includes string_batch_item_retries, string_batch_validation_retries, and string_batch_split_retries for direct diagnosis of retry costs.
 
 Fixes:
+* WordPress.org plugin checks no longer flag a forbidden updater header, mismatched stable tag metadata, or unsafe TranslatePress lookup queries and editor URL parsing.
 * TranslatePress frontend editor actions now use the shorter German button label "Übersetzen", keep the additional-instructions hint visually compact, keep the model reload button smaller and vertically aligned, reset stale progress text correctly, and refresh the visible target field immediately after a translation without requiring a full page reload.
 * TranslatePress frontend editor runs now overwrite the existing target-language entry automatically and treat REST error payloads as real failures, so repeat clicks no longer report false success while leaving the visible field empty.
 * TranslatePress frontend editor no longer shows a success banner after a completed run and now uses German copy consistently across the visible panel texts.

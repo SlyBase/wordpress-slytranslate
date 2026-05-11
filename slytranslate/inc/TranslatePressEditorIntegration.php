@@ -176,7 +176,7 @@ class TranslatePressEditorIntegration {
 			}
 		}
 
-		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( (string) wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 		if ( '' === $request_uri || ! function_exists( 'home_url' ) || ! function_exists( 'remove_query_arg' ) ) {
 			return 0;
 		}
@@ -192,7 +192,7 @@ class TranslatePressEditorIntegration {
 			return '';
 		}
 
-		$parsed = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current_url ) : parse_url( $current_url );
+		$parsed = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current_url ) : false;
 		if ( ! is_array( $parsed ) ) {
 			return '';
 		}

@@ -752,13 +752,19 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			);
 
 			if ( isset( $dictionary_rows[ $original_id ] ) && isset( $dictionary_rows[ $original_id ]->id ) ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress stores these values in its own dictionary table.
 				$wpdb->update( $dictionary_table, $data, array( 'id' => (int) $dictionary_rows[ $original_id ]->id ) );
 				$updated++;
 				continue;
 			}
 
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress stores these values in its own dictionary table.
 			$wpdb->insert( $dictionary_table, $data );
 			$inserted++;
+		}
+
+		if ( $updated > 0 || $inserted > 0 ) {
+			$this->delete_dictionary_rows_cache( $dictionary_table, array_values( $original_id_map ) );
 		}
 
 		TimingLogger::log( 'translatepress_pairs_saved', array(
@@ -786,12 +792,23 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			return array();
 		}
 
+		$cache_key = $this->get_original_string_id_map_cache_key( $originals );
+		$cached    = $this->get_cached_lookup_result( $cache_key );
+		if ( null !== $cached ) {
+			return $cached;
+		}
+
 		$placeholders = implode( ', ', array_fill( 0, count( $originals ), '%s' ) );
 		$table        = $wpdb->prefix . 'trp_original_strings';
-		$sql          = $wpdb->prepare( "SELECT id, original FROM {$table} WHERE original IN ({$placeholders})", ...$originals );
+		$sql          = $wpdb->prepare(
+			'SELECT id, original FROM %i WHERE original IN (' . $placeholders . ')',
+			...array_merge( array( $table ), $originals )
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress exposes these rows only through its custom tables.
 		$rows         = $wpdb->get_results( $sql );
 
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
+			$this->set_cached_lookup_result( $cache_key, array() );
 			return array();
 		}
 
@@ -803,6 +820,8 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 
 			$result[ (string) $row->original ] = (int) $row->id;
 		}
+
+		$this->set_cached_lookup_result( $cache_key, $result );
 
 		return $result;
 	}
@@ -822,11 +841,22 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			return array();
 		}
 
+		$cache_key = $this->get_dictionary_rows_cache_key( $dictionary_table, $original_ids );
+		$cached    = $this->get_cached_lookup_result( $cache_key );
+		if ( null !== $cached ) {
+			return $cached;
+		}
+
 		$placeholders = implode( ', ', array_fill( 0, count( $original_ids ), '%d' ) );
-		$sql          = $wpdb->prepare( "SELECT id, original_id FROM {$dictionary_table} WHERE original_id IN ({$placeholders})", ...$original_ids );
+		$sql          = $wpdb->prepare(
+			'SELECT id, original_id FROM %i WHERE original_id IN (' . $placeholders . ')',
+			...array_merge( array( $dictionary_table ), $original_ids )
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- TranslatePress exposes these rows only through its custom tables.
 		$rows         = $wpdb->get_results( $sql );
 
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
+			$this->set_cached_lookup_result( $cache_key, array() );
 			return array();
 		}
 
@@ -839,7 +869,48 @@ class TranslatePressAdapter implements TranslationPluginAdapter, StringTableCont
 			$result[ (int) $row->original_id ] = $row;
 		}
 
+		$this->set_cached_lookup_result( $cache_key, $result );
+
 		return $result;
+	}
+
+	/**
+	 * @return array<string, int>|array<int, object>|null
+	 */
+	private function get_cached_lookup_result( string $cache_key ): ?array {
+		if ( ! function_exists( 'wp_cache_get' ) ) {
+			return null;
+		}
+
+		$cached = wp_cache_get( $cache_key, 'slytranslate_translatepress' );
+
+		return is_array( $cached ) ? $cached : null;
+	}
+
+	private function set_cached_lookup_result( string $cache_key, array $value ): void {
+		if ( function_exists( 'wp_cache_set' ) ) {
+			wp_cache_set( $cache_key, $value, 'slytranslate_translatepress' );
+		}
+	}
+
+	private function delete_dictionary_rows_cache( string $dictionary_table, array $original_ids ): void {
+		if ( function_exists( 'wp_cache_delete' ) ) {
+			wp_cache_delete( $this->get_dictionary_rows_cache_key( $dictionary_table, $original_ids ), 'slytranslate_translatepress' );
+		}
+	}
+
+	/**
+	 * @param string[] $originals
+	 */
+	private function get_original_string_id_map_cache_key( array $originals ): string {
+		return 'original-string-id-map:' . md5( wp_json_encode( array_values( $originals ) ) );
+	}
+
+	/**
+	 * @param int[] $original_ids
+	 */
+	private function get_dictionary_rows_cache_key( string $dictionary_table, array $original_ids ): string {
+		return 'dictionary-rows:' . md5( $dictionary_table . '|' . wp_json_encode( array_values( $original_ids ) ) );
 	}
 
 	private function get_dictionary_table_name( string $trp_locale ): ?string {
