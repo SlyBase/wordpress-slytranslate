@@ -217,6 +217,56 @@ class TranslatePressEditorIntegrationTest extends TestCase {
 		$this->assertSame( 'de', $result['sourceLanguage'] );
 	}
 
+	public function test_register_assets_switches_editor_strings_to_current_user_locale(): void {
+		$localized = array();
+		$switches  = array();
+
+		$this->setAiTranslateAdapter( new TranslatePressAdapter() );
+		$this->stubWpFunctionReturn( 'is_singular', false );
+		$this->stubWpFunctionReturn( 'get_current_user_id', 7 );
+		$this->stubWpFunctionReturn( 'get_user_locale', 'en_US' );
+		$this->stubWpFunctionReturn( 'determine_locale', 'de_DE' );
+		$this->stubWpFunction(
+			'switch_to_locale',
+			static function ( string $locale ) use ( &$switches ): bool {
+				$switches[] = 'switch:' . $locale;
+				return true;
+			}
+		);
+		$this->stubWpFunction(
+			'restore_previous_locale',
+			static function () use ( &$switches ): bool {
+				$switches[] = 'restore';
+				return true;
+			}
+		);
+		$this->stubWpFunction(
+			'get_option',
+			static function ( string $option_name, $default = false ) {
+				if ( 'trp_settings' === $option_name ) {
+					return array(
+						'default-language'      => 'de_DE',
+						'translation-languages' => array( 'de_DE', 'en_US' ),
+					);
+				}
+
+				return $default;
+			}
+		);
+		$this->stubWpFunction(
+			'wp_localize_script',
+			static function ( string $handle, string $object_name, array $data ) use ( &$localized ): bool {
+				$localized[] = compact( 'handle', 'object_name', 'data' );
+				return true;
+			}
+		);
+
+		TranslatePressEditorIntegration::register_assets();
+
+		$this->assertSame( array( 'switch:en_US', 'restore' ), $switches );
+		$this->assertSame( 'Translate with SlyTranslate', $localized[0]['data']['i18n']['panelTitle'] );
+	}
+
 	protected function tearDown(): void {
 		$this->setAiTranslateAdapter( null );
 		parent::tearDown();

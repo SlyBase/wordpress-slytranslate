@@ -415,9 +415,33 @@ function get_locale(): string {
 	} );
 }
 
+function determine_locale(): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return get_locale();
+	} );
+}
+
 function get_current_user_id(): int {
 	return (int) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
 		return 0;
+	} );
+}
+
+function get_user_locale( $user = 0 ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return get_locale();
+	} );
+}
+
+function switch_to_locale( string $locale ): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function restore_previous_locale(): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
 	} );
 }
 

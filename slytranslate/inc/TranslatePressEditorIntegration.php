@@ -240,31 +240,71 @@ class TranslatePressEditorIntegration {
 	}
 
 	private static function get_editor_strings(): array {
-		return array(
-			'panelTitle'            => __( 'Translate with SlyTranslate', 'slytranslate' ),
-			'modelLabel'            => __( 'AI model', 'slytranslate' ),
-			'refreshModelsButton'   => __( 'Refresh', 'slytranslate' ),
-			'additionalPromptLabel' => __( 'Additional instructions (optional)', 'slytranslate' ),
-			'additionalPromptHelp'  => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
-			'startButton'           => __( 'Translate', 'slytranslate' ),
-			'cancelButton'          => __( 'Cancel translation', 'slytranslate' ),
-			'loadingModels'         => __( 'Loading available models...', 'slytranslate' ),
-			'noTargetLanguages'     => __( 'No target languages are available for this content item.', 'slytranslate' ),
-			'translatingLanguage'   => __( 'Translating {language}...', 'slytranslate' ),
-			'progressTitle'         => __( 'Translating title...', 'slytranslate' ),
-			'progressContent'       => __( 'Translating content...', 'slytranslate' ),
-			'progressContentFinishing' => __( 'Processing translated content...', 'slytranslate' ),
-			'progressExcerpt'       => __( 'Translating excerpt...', 'slytranslate' ),
-			'progressMeta'          => __( 'Translating metadata...', 'slytranslate' ),
-			'progressSaving'        => __( 'Saving translation...', 'slytranslate' ),
-			'progressDone'          => __( 'Translation complete.', 'slytranslate' ),
-			'successNotice'         => __( 'Translation completed successfully.', 'slytranslate' ),
-			'cancelNotice'          => __( 'Translation cancelled.', 'slytranslate' ),
-			'fieldMissingError'     => __( 'The visible TranslatePress field could not be detected.', 'slytranslate' ),
-			'languagePassthroughError' => __( 'A translated segment still appears to be in the source language instead of English.', 'slytranslate' ),
-			'errorPrefix'           => __( 'Translation failed:', 'slytranslate' ),
-			'unknownError'          => __( 'An unexpected error occurred.', 'slytranslate' ),
+		return self::with_current_user_locale(
+			static function (): array {
+				return array(
+					'panelTitle'            => __( 'Translate with SlyTranslate', 'slytranslate' ),
+					'modelLabel'            => __( 'AI model', 'slytranslate' ),
+					'refreshModelsButton'   => __( 'Refresh', 'slytranslate' ),
+					'additionalPromptLabel' => __( 'Additional instructions (optional)', 'slytranslate' ),
+					'additionalPromptHelp'  => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
+					'startButton'           => __( 'Translate', 'slytranslate' ),
+					'cancelButton'          => __( 'Cancel translation', 'slytranslate' ),
+					'loadingModels'         => __( 'Loading available models...', 'slytranslate' ),
+					'noTargetLanguages'     => __( 'No target languages are available for this content item.', 'slytranslate' ),
+					'translatingLanguage'   => __( 'Translating {language}...', 'slytranslate' ),
+					'progressTitle'         => __( 'Translating title...', 'slytranslate' ),
+					'progressContent'       => __( 'Translating content...', 'slytranslate' ),
+					'progressContentFinishing' => __( 'Processing translated content...', 'slytranslate' ),
+					'progressExcerpt'       => __( 'Translating excerpt...', 'slytranslate' ),
+					'progressMeta'          => __( 'Translating metadata...', 'slytranslate' ),
+					'progressSaving'        => __( 'Saving translation...', 'slytranslate' ),
+					'progressDone'          => __( 'Translation complete.', 'slytranslate' ),
+					'successNotice'         => __( 'Translation completed successfully.', 'slytranslate' ),
+					'cancelNotice'          => __( 'Translation cancelled.', 'slytranslate' ),
+					'fieldMissingError'     => __( 'The visible TranslatePress field could not be detected.', 'slytranslate' ),
+					'languagePassthroughError' => __( 'A translated segment still appears to be in the source language instead of English.', 'slytranslate' ),
+					'errorPrefix'           => __( 'Translation failed:', 'slytranslate' ),
+					'unknownError'          => __( 'An unexpected error occurred.', 'slytranslate' ),
+				);
+			}
 		);
+	}
+
+	/**
+	 * Frontend TranslatePress editor requests keep the site's locale even when
+	 * the current user selected a different dashboard language. Generate the
+	 * editor panel copy in the user's locale so the UI matches their setting.
+	 *
+	 * @param callable():array<string,string> $callback String builder.
+	 * @return array<string,string>
+	 */
+	private static function with_current_user_locale( callable $callback ): array {
+		$user_id = get_current_user_id();
+
+		if ( $user_id < 1 || ! function_exists( 'get_user_locale' ) || ! function_exists( 'switch_to_locale' ) || ! function_exists( 'restore_previous_locale' ) ) {
+			return $callback();
+		}
+
+		$user_locale = (string) get_user_locale( $user_id );
+		if ( '' === $user_locale ) {
+			return $callback();
+		}
+
+		$current_locale = function_exists( 'determine_locale' ) ? (string) determine_locale() : (string) get_locale();
+		if ( '' === $current_locale || $current_locale === $user_locale ) {
+			return $callback();
+		}
+
+		if ( ! switch_to_locale( $user_locale ) ) {
+			return $callback();
+		}
+
+		try {
+			return $callback();
+		} finally {
+			restore_previous_locale();
+		}
 	}
 
 	private static function is_debug_log_enabled(): bool {

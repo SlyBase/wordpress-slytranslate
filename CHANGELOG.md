@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timing logs now include `content_string_batch_detail` with batch count, max encoded input length, and the batch char limit, and `job_end` includes `string_batch_item_retries`, `string_batch_validation_retries`, and `string_batch_split_retries` for direct diagnosis of retry costs.
 
 ### Fixes
-- TranslatePress string-editor sidebar copy now follows the active WordPress user locale, so English admin users no longer see the panel in German.
+- TranslatePress frontend string-editor sidebar copy now switches to the current WordPress user locale, so English-profile users no longer see that panel in German just because the page itself is German.
 - Bulk translation now preserves explicit `source_language` overrides for single-entry adapters such as WPGlobus and WP Multilang.
 - TranslatePress adapter table writes now update every existing dictionary row for the same original string ID, so stale duplicate rows no longer leave the visual editor target field empty while the frontend still shows the translated page.
 - WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
