@@ -2421,6 +2421,9 @@ class ContentTranslator {
 		$stripped = trim( $raw );
 		$stripped = (string) preg_replace( '/^```(?:json)?\s*/i', '', $stripped );
 		$stripped = (string) preg_replace( '/\s*```\s*$/i', '', $stripped );
+		if ( preg_match( '/<slytranslate-output>(.*?)<\/slytranslate-output>/is', $stripped, $matches ) && isset( $matches[1] ) && is_string( $matches[1] ) ) {
+			$stripped = $matches[1];
+		}
 		$stripped = trim( $stripped );
 
 		$decoded = json_decode( $stripped, true );

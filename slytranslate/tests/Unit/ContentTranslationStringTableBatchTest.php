@@ -354,6 +354,14 @@ class ContentTranslationStringTableBatchTest extends TestCase {
 		$this->assertSame( 'Hallo', $decoded['seg_0'] );
 	}
 
+	public function test_decode_string_table_json_strips_slytranslate_output_wrapper(): void {
+		$raw     = '<slytranslate-output>{"seg_0":"Hallo"}</slytranslate-output>';
+		$decoded = $this->invokeStatic( ContentTranslator::class, 'decode_string_table_json', array( $raw, 0, 64 ) );
+
+		$this->assertIsArray( $decoded );
+		$this->assertSame( 'Hallo', $decoded['seg_0'] );
+	}
+
 	public function test_decode_string_table_json_returns_error_for_double_objects(): void {
 		// Two concatenated JSON objects (the original bug scenario).
 		$raw    = '{"seg_0":"Hello"}{"seg_1":"World"}';

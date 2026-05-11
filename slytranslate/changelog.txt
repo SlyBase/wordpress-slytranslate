@@ -15,6 +15,7 @@ Changes:
 * Timing logs now include content_string_batch_detail with batch count, max encoded input length, and the batch char limit, and job_end includes string_batch_item_retries, string_batch_validation_retries, and string_batch_split_retries for direct diagnosis of retry costs.
 
 Fixes:
+* TranslatePress string-table JSON batches now accept valid JSON wrapped in SlyTranslate output tags, so bilingual-frame model responses no longer fail batch decoding.
 * WPGlobus status and translation actions now respect the currently selected edit language instead of always treating the post as the default source language.
 * TranslatePress string-table JSON batches now accept model responses wrapped in Markdown code fences, so fenced valid JSON no longer fails early as structure drift before batch decoding.
 * Plain-text translations now unwrap accidental full-title Markdown emphasis like **...** when the source had no formatting, so translated post titles no longer keep stray bold markers.
