@@ -25,10 +25,11 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 ## 3) Build and deploy after the commit
 
 - Immediately after the commit, the matching VS Code build-and-deploy task must complete successfully.
-- Use exactly one of these tasks depending on the affected plugin environment:
+- Use the matching workspace deployment step depending on the affected plugin environment:
 	- `WP Plugin: Build and Deploy Plugin ZIP to SlyBase WordPress Pod` for Polylang / SlyBase work
 	- `WP Plugin: Build and Deploy Plugin ZIP to TranslatePress WordPress Pod` for TranslatePress work
 	- `WP Plugin: Build and Deploy Plugin ZIP to WP-Globus WordPress Pod` for WPGlobus work
+	- `WP Plugin: Build and Deploy Plugin ZIP to WP Multilang WordPress Pod` for WP Multilang work. If the workspace does not yet expose this task, run the repository's current WP Multilang deployment workflow instead and do not claim completion until that equivalent deploy step succeeds.
 - A task is not finished unless the build succeeds and the plugin ZIP is uploaded successfully to WordPress.
 
 ## 4) MCP Smoke Test
@@ -50,6 +51,11 @@ This instruction applies whenever a cohesive Autopilot task in the repository is
 
 - MCP: `wordpress-wpglobus`
 - Post ID: `8`
+
+### WP Multilang smoke test
+
+- MCP: `wordpress-wpmultilang`
+- Post ID: `5`
 
 ### Shared smoke test parameters
 

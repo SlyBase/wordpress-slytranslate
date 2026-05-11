@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - TranslatePress Multilingual support: SlyTranslate detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 
 ### Changes
+- Internal WP Multilang maintenance guidance now includes dedicated workflow, smoke-test, and adapter-validation instructions.
 - MCP ability descriptions now spell out single-entry versus multi-post semantics, source-language pinning, overwrite guidance, and the external execute-wrapper troubleshooting boundary for LLM clients.
 - Short segments (≤ 40 characters) now receive adjacent-segment context hints in the translation prompt, reducing empty-translation failures for sentence fragments split around inline HTML elements.
 - Empty translation results (`invalid_translation_empty`) are no longer stored as source-language fallback text; the segment is left empty so the adapter's language-fallback mechanism handles display rather than silently inserting untranslated content.

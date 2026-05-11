@@ -487,6 +487,32 @@ function get_post_meta( int $post_id, string $key = '', bool $single = false ) {
 	} );
 }
 
+function update_post_meta( int $post_id, string $meta_key, mixed $meta_value, mixed $prev_value = '' ): bool {
+	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function wp_update_post( $postarr = array(), bool $wp_error = false, bool $fire_after_hooks = true ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $postarr = array() ) {
+		if ( is_array( $postarr ) && isset( $postarr['ID'] ) ) {
+			return (int) $postarr['ID'];
+		}
+
+		return 0;
+	} );
+}
+
+function wp_slash( $value ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $value ) {
+		if ( is_array( $value ) ) {
+			return array_map( 'wp_slash', $value );
+		}
+
+		return $value;
+	} );
+}
+
 function delete_post_meta( int $post_id, string $meta_key, $meta_value = '' ): bool {
 	return (bool) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
 		return true;
@@ -559,5 +585,93 @@ function wpglobus_languages_list(): array {
 function wpglobus_default_language(): string {
 	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
 		return 'en';
+	} );
+}
+
+// -----------------------------------------------------------------------
+// WP Multilang stubs
+// -----------------------------------------------------------------------
+
+function wpm_get_languages(): array {
+	$result = slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+
+	return is_array( $result ) ? $result : array();
+}
+
+function wpm_get_default_language(): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 'en';
+	} );
+}
+
+function wpm_get_language(): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return wpm_get_default_language();
+	} );
+}
+
+function wpm_get_post_config( string $post_type ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function wpm_string_to_ml_array( $string ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $string ) {
+		if ( ! is_string( $string ) || '' === $string ) {
+			return $string;
+		}
+
+		$languages = wpm_get_languages();
+		if ( empty( $languages ) || ! is_array( $languages ) ) {
+			return $string;
+		}
+
+		$blocks = preg_split( '#\[:([a-z-]*)\]#im', $string, -1, PREG_SPLIT_DELIM_CAPTURE );
+		if ( ! is_array( $blocks ) || empty( $blocks ) ) {
+			return $string;
+		}
+
+		$result   = array_fill_keys( array_keys( $languages ), '' );
+		$language = 1 === count( $blocks ) ? wpm_get_default_language() : '';
+
+		foreach ( $blocks as $index => $block ) {
+			if ( 1 === $index % 2 ) {
+				$language = sanitize_key( (string) $block );
+			} elseif ( isset( $result[ $language ] ) ) {
+				$result[ $language ] .= $block;
+			}
+		}
+
+		return array_map(
+			static function ( $value ): string {
+				return trim( (string) $value );
+			},
+			$result
+		);
+	} );
+}
+
+function wpm_ml_array_to_string( $strings ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $strings ) {
+		if ( ! is_array( $strings ) || empty( $strings ) ) {
+			return '';
+		}
+
+		$string = '';
+		foreach ( $strings as $language_code => $value ) {
+			$code = sanitize_key( (string) $language_code );
+			$text = is_scalar( $value ) ? trim( (string) $value ) : '';
+
+			if ( '' === $code || '' === $text ) {
+				continue;
+			}
+
+			$string .= '[:' . $code . ']' . $text;
+		}
+
+		return '' !== $string ? $string . '[:]' : '';
 	} );
 }
