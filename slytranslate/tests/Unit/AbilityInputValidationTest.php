@@ -19,6 +19,17 @@ class AbilityInputValidationTest extends TestCase {
 	}
 
 	public function test_execute_translate_text_rejects_missing_text(): void {
+		$deleted_key = null;
+
+		$this->stubWpFunctionReturn( 'get_current_user_id', 17 );
+		$this->stubWpFunction(
+			'delete_transient',
+			static function ( string $transient_key ) use ( &$deleted_key ): bool {
+				$deleted_key = $transient_key;
+				return true;
+			}
+		);
+
 		$result = AI_Translate::execute_translate_text(
 			array(
 				'text'            => array( 'not-a-string' ),
@@ -29,6 +40,32 @@ class AbilityInputValidationTest extends TestCase {
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'missing_text', $result->get_error_code() );
+		$this->assertSame( 'slytranslate_cancel_17', $deleted_key );
+	}
+
+	public function test_execute_translate_blocks_clears_stale_cancel_flag_before_validating_input(): void {
+		$deleted_key = null;
+
+		$this->stubWpFunctionReturn( 'get_current_user_id', 23 );
+		$this->stubWpFunction(
+			'delete_transient',
+			static function ( string $transient_key ) use ( &$deleted_key ): bool {
+				$deleted_key = $transient_key;
+				return true;
+			}
+		);
+
+		$result = AI_Translate::execute_translate_blocks(
+			array(
+				'content'         => array( 'not-a-string' ),
+				'source_language' => 'en',
+				'target_language' => 'de',
+			)
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'missing_content', $result->get_error_code() );
+		$this->assertSame( 'slytranslate_cancel_23', $deleted_key );
 	}
 
 	public function test_execute_translate_content_rejects_invalid_post_id(): void {

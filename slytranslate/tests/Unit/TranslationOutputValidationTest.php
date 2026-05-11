@@ -841,6 +841,76 @@ class TranslationOutputValidationTest extends TestCase {
 		$this->assertStringContainsString( $source_text, $inputs[2] );
 	}
 
+	public function test_translate_chunk_plain_prompt_recovery_preserves_brace_placeholders(): void {
+		$call_count = 0;
+		$inputs     = array();
+
+		$this->setStaticProperty( TranslationRuntime::class, 'context', array(
+			'service_slug'   => '',
+			'model_slug'     => 'Ministral-8B-Instruct-2410-Q4_K_M',
+			'direct_api_url' => '',
+		) );
+		$this->setStaticProperty( TranslationRuntime::class, 'source_lang', 'de' );
+		$this->setStaticProperty( TranslationRuntime::class, 'target_lang', 'en' );
+
+		$source_text = 'Copyright © {current_year} - WordPress Theme von {theme_author}';
+
+		$this->stubWpFunction( 'get_option',
+			static function ( $option, $default = false ) {
+				if ( 'slytranslate_direct_api_kwargs_detected' === $option ) {
+					return '0';
+				}
+
+				return $default;
+			}
+		);
+		$this->stubWpFunction( 'wp_ai_client_prompt',
+			static function ( string $text ) use ( &$call_count, &$inputs, $source_text ) {
+				return new class( $text, $call_count, $inputs, $source_text ) {
+					private string $text;
+					private int $call_count;
+					private array $inputs;
+					private string $source_text;
+
+					public function __construct( string $text, int &$call_count, array &$inputs, string $source_text ) {
+						$this->text        = $text;
+						$this->call_count  = &$call_count;
+						$this->inputs      = &$inputs;
+						$this->source_text = $source_text;
+					}
+
+					public function using_system_instruction( string $prompt ) { return $this; }
+					public function using_temperature( float $temperature ) { return $this; }
+					public function using_model_preference( string $model_slug ) { return $this; }
+					public function using_max_tokens( int $max_tokens ) { return $this; }
+
+					public function generate_text(): string {
+						$this->call_count++;
+						$this->inputs[] = $this->text;
+
+						if ( $this->call_count < 3 ) {
+							return $this->source_text;
+						}
+
+						return 'Copyright © {current_year} - WordPress theme by {theme_author}';
+					}
+				};
+			}
+		);
+
+		$result = $this->invokeStatic(
+			TranslationRuntime::class,
+			'translate_chunk',
+			array( $source_text, 'Translate this.' )
+		);
+
+		$this->assertSame( 'Copyright © {current_year} - WordPress theme by {theme_author}', $result );
+		$this->assertCount( 3, $inputs );
+		$this->assertStringContainsString( 'Preserve every placeholder token exactly as written.', $inputs[2] );
+		$this->assertStringContainsString( '{current_year}', $inputs[2] );
+		$this->assertStringContainsString( '{theme_author}', $inputs[2] );
+	}
+
 	public function test_tower_profile_retries_validation_failure_with_smaller_chunks(): void {
 		$call_count  = 0;
 		$input_texts = array();

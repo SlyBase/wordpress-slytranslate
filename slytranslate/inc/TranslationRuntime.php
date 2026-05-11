@@ -1349,7 +1349,7 @@ class TranslationRuntime {
 		// that thinking-mode models (Nemotron on OpenRouter) echo back verbatim.
 		// The arrow (→) is a universally-understood translation cue that produces only
 		// the target text without triggering thinking-mode explanations.
-		$user_content = sprintf( '"%1$s" →', $source_text );
+		$user_content = self::build_plain_prompt_recovery_input( $source_text );
 
 		$wp_started = TimingLogger::start();
 		$builder    = wp_ai_client_prompt( $user_content );
@@ -1435,6 +1435,43 @@ class TranslationRuntime {
 		) );
 
 		return $result;
+	}
+
+	private static function build_plain_prompt_recovery_input( string $source_text ): string {
+		$placeholders = self::extract_brace_placeholders( $source_text );
+		if ( empty( $placeholders ) ) {
+			return sprintf( '"%1$s" →', $source_text );
+		}
+
+		$source_label = self::resolve_language_label( is_string( self::$source_lang ) ? self::$source_lang : null, 'Source' );
+		$target_label = self::resolve_language_label( is_string( self::$target_lang ) ? self::$target_lang : null, 'Target' );
+
+		return implode(
+			"\n",
+			array(
+				sprintf( 'Translate from %1$s to %2$s.', $source_label, $target_label ),
+				'Preserve every placeholder token exactly as written. Do not translate, rename, remove, or explain them.',
+				'If parts of the text are already valid target-language text, keep those parts unchanged and translate only the remaining source-language fragments.',
+				'Placeholders: ' . implode( ', ', $placeholders ),
+				'Return only the translated text.',
+				$source_text,
+			)
+		);
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private static function extract_brace_placeholders( string $text ): array {
+		$matches = array();
+		if ( preg_match_all( '/\{[a-z0-9_\-.]+\}/iu', $text, $matches ) < 1 ) {
+			return array();
+		}
+
+		$placeholders = isset( $matches[0] ) && is_array( $matches[0] ) ? $matches[0] : array();
+		$placeholders = array_values( array_unique( array_filter( array_map( 'strval', $placeholders ) ) ) );
+
+		return $placeholders;
 	}
 
 	/* ---------------------------------------------------------------

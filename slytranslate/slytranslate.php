@@ -200,6 +200,10 @@ class AI_Translate {
 				'callback'            => array( self::class, 'execute_get_existing_translation' ),
 				'permission_callback' => $translation_permission,
 			),
+			'/ai-translate/get-editor-context/run' => array(
+				'callback'            => array( self::class, 'execute_get_translatepress_editor_context' ),
+				'permission_callback' => $translation_permission,
+			),
 			'/ai-translate/cancel-translation/run'    => array(
 				'callback'            => array( self::class, 'execute_cancel_translation' ),
 				'permission_callback' => $translation_permission,
@@ -299,6 +303,7 @@ class AI_Translate {
 
 	public static function execute_translate_text( $input ) {
 		$input = is_array( $input ) ? $input : array();
+		TranslationProgressTracker::clear_cancelled();
 
 		return TranslationRuntime::with_model_slug_override(
 			$input,
@@ -313,7 +318,7 @@ class AI_Translate {
 				if ( is_wp_error( $target_language ) ) { return $target_language; }
 
 				$additional_prompt = isset( $input['additional_prompt'] ) && is_string( $input['additional_prompt'] ) ? mb_substr( sanitize_textarea_field( $input['additional_prompt'] ), 0, 2000 ) : '';
-				$plain_text_hint  = 'The input is a short plain-text snippet. Translate it and return only the translated text. Do not wrap in HTML tags or add extra paragraphs.';
+				$plain_text_hint  = self::get_plain_text_translation_hint();
 				$additional_prompt = '' !== trim( $additional_prompt ) ? $additional_prompt . "\n\n" . $plain_text_hint : $plain_text_hint;
 				$translated        = self::translate( $text, $target_language, $source_language, $additional_prompt );
 				if ( is_wp_error( $translated ) ) { return $translated; }
@@ -323,8 +328,13 @@ class AI_Translate {
 		);
 	}
 
+	private static function get_plain_text_translation_hint(): string {
+		return 'The input is a short plain-text snippet. Translate it and return only the translated text. Do not wrap it in HTML tags or add extra paragraphs. Preserve placeholders and template tokens exactly as written, for example {name}, %s, %1$s, {{variable}}, and [shortcode]. If parts of the text are already in the target language, keep those parts unchanged and translate only the remaining source-language fragments.';
+	}
+
 	public static function execute_translate_blocks( $input ) {
 		$input = is_array( $input ) ? $input : array();
+		TranslationProgressTracker::clear_cancelled();
 
 		return TranslationRuntime::with_model_slug_override(
 			$input,
@@ -428,6 +438,16 @@ class AI_Translate {
 		);
 	}
 
+	public static function execute_get_translatepress_editor_context( $input ) {
+		$input = is_array( $input ) ? $input : array();
+
+		$current_url = isset( $input['current_url'] ) && is_string( $input['current_url'] )
+			? esc_url_raw( $input['current_url'] )
+			: '';
+
+		return TranslatePressEditorIntegration::get_bootstrap_data_for_current_url( $current_url );
+	}
+
 	public static function execute_log_editor_event( $input ) {
 		$input = is_array( $input ) ? $input : array();
 
@@ -455,6 +475,19 @@ class AI_Translate {
 			'source_length',
 			'has_source_field',
 			'has_target_field',
+			'source_readonly',
+			'target_readonly',
+			'source_field_name',
+			'target_field_name',
+			'source_field_id',
+			'target_field_id',
+			'source_preview',
+			'target_preview',
+			'candidate_count',
+			'active_scope',
+			'source_origin',
+			'source_selected_index',
+			'source_runtime_preview',
 			'is_running',
 			'found',
 		);

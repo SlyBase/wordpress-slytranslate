@@ -49,6 +49,7 @@ class EditorRestRouteRegistrationTest extends TestCase {
 			'/ai-translate/get-progress/run',
 			'/ai-translate/log-editor-event/run',
 			'/ai-translate/get-existing-translation/run',
+			'/ai-translate/get-editor-context/run',
 			'/ai-translate/cancel-translation/run',
 			'/ai-translate/get-available-models/run',
 			'/ai-translate/string-table-worker/run',

@@ -67,6 +67,15 @@ class PromptBuildingTest extends TestCase {
 		$this->assertStringContainsString( 'Use simple language.', $result );
 	}
 
+	public function test_plain_text_translation_hint_preserves_tokens_and_translates_only_remaining_fragments(): void {
+		$result = $this->invokeStatic( AI_Translate::class, 'get_plain_text_translation_hint' );
+
+		$this->assertStringContainsString( 'Preserve placeholders and template tokens exactly as written', $result );
+		$this->assertStringContainsString( '{name}', $result );
+		$this->assertStringContainsString( '%1$s', $result );
+		$this->assertStringContainsString( 'translate only the remaining source-language fragments', $result );
+	}
+
 	public function test_does_not_append_empty_additional_prompt(): void {
 		$this->stubWpFunctionReturn( 'get_option', false );
 

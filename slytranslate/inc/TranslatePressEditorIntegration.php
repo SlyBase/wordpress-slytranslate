@@ -81,8 +81,12 @@ class TranslatePressEditorIntegration {
 		return $editor_data;
 	}
 
-	private static function get_bootstrap_data(): array {
-		$context                = self::resolve_editor_context();
+	public static function get_bootstrap_data_for_current_url( string $current_url = '' ): array {
+		return self::get_bootstrap_data( $current_url );
+	}
+
+	private static function get_bootstrap_data( string $current_url = '' ): array {
+		$context                = self::resolve_editor_context( $current_url );
 		$user_id                = get_current_user_id();
 		$last_additional_prompt = $user_id > 0 ? (string) get_user_meta( $user_id, '_slytranslate_last_additional_prompt', true ) : '';
 		$source_language        = isset( $context['source_language'] ) ? (string) $context['source_language'] : '';
@@ -104,42 +108,43 @@ class TranslatePressEditorIntegration {
 		);
 	}
 
-	private static function resolve_editor_context(): array {
-		$post_id = self::resolve_post_id();
+	private static function resolve_editor_context( string $current_url = '' ): array {
+		$adapter         = AI_Translate::get_adapter();
+		$source_language = $adapter instanceof TranslatePressAdapter ? (string) ( $adapter->get_post_language( 0 ) ?? '' ) : '';
+		$post_id = self::resolve_post_id( $current_url );
 
 		if ( $post_id < 1 ) {
 			return array(
-				'enabled'         => false,
-				'disabled_reason' => 'no_post',
+				'enabled'         => true,
+				'disabled_reason' => '',
 				'post_id'         => 0,
 				'post_title'      => '',
-				'source_language' => '',
+				'source_language' => $source_language,
 			);
 		}
 
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			return array(
-				'enabled'         => false,
-				'disabled_reason' => 'no_permission',
+				'enabled'         => true,
+				'disabled_reason' => '',
 				'post_id'         => $post_id,
 				'post_title'      => '',
-				'source_language' => '',
+				'source_language' => $source_language,
 			);
 		}
 
 		$post = get_post( $post_id );
 		if ( ! ( $post instanceof \WP_Post ) ) {
 			return array(
-				'enabled'         => false,
-				'disabled_reason' => 'post_not_found',
+				'enabled'         => true,
+				'disabled_reason' => '',
 				'post_id'         => $post_id,
 				'post_title'      => '',
-				'source_language' => '',
+				'source_language' => $source_language,
 			);
 		}
 
-		$adapter         = AI_Translate::get_adapter();
-		$source_language = $adapter instanceof TranslatePressAdapter ? (string) ( $adapter->get_post_language( $post_id ) ?? '' ) : '';
+		$source_language = $adapter instanceof TranslatePressAdapter ? (string) ( $adapter->get_post_language( $post_id ) ?? '' ) : $source_language;
 
 		return array(
 			'enabled'         => true,
@@ -150,7 +155,7 @@ class TranslatePressEditorIntegration {
 		);
 	}
 
-	private static function resolve_post_id(): int {
+	private static function resolve_post_id( string $current_url = '' ): int {
 		if ( function_exists( 'is_singular' ) && is_singular() && function_exists( 'get_queried_object_id' ) ) {
 			$post_id = absint( get_queried_object_id() );
 			if ( $post_id > 0 ) {
@@ -162,6 +167,15 @@ class TranslatePressEditorIntegration {
 			return 0;
 		}
 
+		if ( '' !== trim( $current_url ) ) {
+			$url = self::normalize_current_url_to_site_url( $current_url );
+			if ( '' !== $url ) {
+				$clean_url = remove_query_arg( array( 'trp-edit-translation', 'trp-view-as', 'trp-view-as-nonce' ), $url );
+
+				return absint( url_to_postid( $clean_url ) );
+			}
+		}
+
 		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
 		if ( '' === $request_uri || ! function_exists( 'home_url' ) || ! function_exists( 'remove_query_arg' ) ) {
 			return 0;
@@ -170,6 +184,33 @@ class TranslatePressEditorIntegration {
 		$clean_url = remove_query_arg( array( 'trp-edit-translation', 'trp-view-as', 'trp-view-as-nonce' ), home_url( $request_uri ) );
 
 		return absint( url_to_postid( $clean_url ) );
+	}
+
+	private static function normalize_current_url_to_site_url( string $current_url ): string {
+		$current_url = trim( $current_url );
+		if ( '' === $current_url || ! function_exists( 'home_url' ) ) {
+			return '';
+		}
+
+		$parsed = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current_url ) : parse_url( $current_url );
+		if ( ! is_array( $parsed ) ) {
+			return '';
+		}
+
+		$path     = isset( $parsed['path'] ) && is_string( $parsed['path'] ) ? $parsed['path'] : '';
+		$query    = isset( $parsed['query'] ) && is_string( $parsed['query'] ) ? $parsed['query'] : '';
+		$fragment = isset( $parsed['fragment'] ) && is_string( $parsed['fragment'] ) ? $parsed['fragment'] : '';
+		$request  = '' !== $path ? $path : '/';
+
+		if ( '' !== $query ) {
+			$request .= '?' . $query;
+		}
+
+		if ( '' !== $fragment ) {
+			$request .= '#' . $fragment;
+		}
+
+		return home_url( $request );
 	}
 
 	private static function get_language_options( string $source_language ): array {
@@ -200,28 +241,29 @@ class TranslatePressEditorIntegration {
 
 	private static function get_editor_strings(): array {
 		return array(
-			'panelTitle'            => __( 'Translate with SlyTranslate', 'slytranslate' ),
-			'modelLabel'            => __( 'AI model', 'slytranslate' ),
+			'panelTitle'            => __( 'Mit SlyTranslate übersetzen', 'slytranslate' ),
+			'modelLabel'            => __( 'KI-Modell', 'slytranslate' ),
 			'refreshModelsButton'   => __( 'Neu laden', 'slytranslate' ),
-			'additionalPromptLabel' => __( 'Additional instructions (optional)', 'slytranslate' ),
-			'additionalPromptHelp'  => __( 'Supplements the site-wide translation instructions. Example: Use informal language.', 'slytranslate' ),
+			'additionalPromptLabel' => __( 'Zusätzliche Anweisungen (optional)', 'slytranslate' ),
+			'additionalPromptHelp'  => __( 'Ergänzt die websiteweiten Übersetzungsanweisungen. Beispiel: Verwende einen lockeren Ton.', 'slytranslate' ),
 			'startButton'           => __( 'Übersetzen', 'slytranslate' ),
 			'cancelButton'          => __( 'Übersetzung abbrechen', 'slytranslate' ),
-			'loadingModels'         => __( 'Loading available models...', 'slytranslate' ),
-			'noTargetLanguages'     => __( 'No target languages are available for this content item.', 'slytranslate' ),
-			'translatingLanguage'   => __( 'Translating {language}...', 'slytranslate' ),
-			'progressTitle'         => __( 'Translating title...', 'slytranslate' ),
-			'progressContent'       => __( 'Translating content...', 'slytranslate' ),
-			'progressContentFinishing' => __( 'Processing translated content...', 'slytranslate' ),
-			'progressExcerpt'       => __( 'Translating excerpt...', 'slytranslate' ),
-			'progressMeta'          => __( 'Translating metadata...', 'slytranslate' ),
-			'progressSaving'        => __( 'Saving translation...', 'slytranslate' ),
-			'progressDone'          => __( 'Translation complete.', 'slytranslate' ),
-			'successNotice'         => __( 'Translation completed successfully.', 'slytranslate' ),
-			'cancelNotice'          => __( 'Translation cancelled.', 'slytranslate' ),
-			'errorPrefix'           => __( 'Translation failed:', 'slytranslate' ),
-			'unknownError'          => __( 'An unexpected error occurred.', 'slytranslate' ),
-			'unsupportedNotice'     => __( 'SlyTranslate is only available here for singular posts and pages you can edit.', 'slytranslate' ),
+			'loadingModels'         => __( 'Verfügbare Modelle werden geladen...', 'slytranslate' ),
+			'noTargetLanguages'     => __( 'Für diesen Inhalt sind keine Zielsprachen verfügbar.', 'slytranslate' ),
+			'translatingLanguage'   => __( '{language} wird übersetzt...', 'slytranslate' ),
+			'progressTitle'         => __( 'Titel wird übersetzt...', 'slytranslate' ),
+			'progressContent'       => __( 'Inhalt wird übersetzt...', 'slytranslate' ),
+			'progressContentFinishing' => __( 'Übersetzter Inhalt wird verarbeitet...', 'slytranslate' ),
+			'progressExcerpt'       => __( 'Auszug wird übersetzt...', 'slytranslate' ),
+			'progressMeta'          => __( 'Metadaten werden übersetzt...', 'slytranslate' ),
+			'progressSaving'        => __( 'Übersetzung wird gespeichert...', 'slytranslate' ),
+			'progressDone'          => __( 'Übersetzung abgeschlossen.', 'slytranslate' ),
+			'successNotice'         => __( 'Übersetzung erfolgreich abgeschlossen.', 'slytranslate' ),
+			'cancelNotice'          => __( 'Übersetzung abgebrochen.', 'slytranslate' ),
+			'fieldMissingError'     => __( 'Das sichtbare TranslatePress-Feld konnte nicht erkannt werden.', 'slytranslate' ),
+			'languagePassthroughError' => __( 'Ein übersetzter Abschnitt scheint noch in der Ausgangssprache statt auf Englisch vorzuliegen.', 'slytranslate' ),
+			'errorPrefix'           => __( 'Übersetzung fehlgeschlagen:', 'slytranslate' ),
+			'unknownError'          => __( 'Es ist ein unerwarteter Fehler aufgetreten.', 'slytranslate' ),
 		);
 	}
 
