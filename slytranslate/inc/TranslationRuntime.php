@@ -959,11 +959,13 @@ class TranslationRuntime {
 			return self::inject_extra_request_body_into_http_args( $args, $url, $injections );
 		};
 
-		add_filter( 'http_request_args', $filter, 999, 2 );
+		// Run late so provider plugins cannot re-add stripped keys like
+		// chat_template_kwargs on hosted Mistral requests after our mutation.
+		add_filter( 'http_request_args', $filter, 9999, 2 );
 		try {
 			return $callback();
 		} finally {
-			remove_filter( 'http_request_args', $filter, 999 );
+			remove_filter( 'http_request_args', $filter, 9999 );
 		}
 	}
 
