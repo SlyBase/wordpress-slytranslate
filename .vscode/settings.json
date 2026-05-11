@@ -27,6 +27,11 @@
                     "description": "Build the plugin ZIP and deploy it to the TranslatePress WordPress pod"
                 },
                 {
+                    "label": "$(combine) Build+deploy WP Multilang",
+                    "task": "WP Plugin: Build and Deploy Plugin ZIP to WP Multilang WordPress Pod",
+                    "description": "Build the plugin ZIP and deploy it to the WP Multilang WordPress pod"
+                },
+                {
                     "label": "$(combine) Build+deploy WP-Globus",
                     "task": "WP Plugin: Build and Deploy Plugin ZIP to WP-Globus WordPress Pod",
                     "description": "Build the plugin ZIP and deploy it to the WP-Globus WordPress pod"
@@ -37,14 +42,19 @@
                     "description": "Build the plugin ZIP and deploy it to the SlyBase WordPress pod"
                 },
                 {
-                    "label": "$(cloud-upload) Deploy all 3 pods",
+                    "label": "$(cloud-upload) Deploy all 4 pods",
                     "task": "WP Plugin: Deploy Plugin ZIP to All WordPress Pods",
-                    "description": "Deploy the existing plugin ZIP to the TranslatePress, WP-Globus, and SlyBase WordPress pods"
+                    "description": "Deploy the existing plugin ZIP to the TranslatePress, WP Multilang, WP-Globus, and SlyBase WordPress pods"
                 },
                 {
                     "label": "$(cloud-upload) Deploy TranslatePress",
                     "task": "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
                     "description": "Deploy the existing plugin ZIP to the TranslatePress WordPress pod"
+                },
+                {
+                    "label": "$(cloud-upload) Deploy WP Multilang",
+                    "task": "WP Plugin: Deploy Plugin ZIP to WP Multilang WordPress Pod",
+                    "description": "Deploy the existing plugin ZIP to the WP Multilang WordPress pod"
                 },
                 {
                     "label": "$(cloud-upload) Deploy WP-Globus",

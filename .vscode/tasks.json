@@ -159,6 +159,36 @@
             "problemMatcher": []
         },
         {
+            "label": "WP Plugin: Deploy Plugin ZIP to WP Multilang WordPress Pod",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source .github/scripts/plugin-config.sh && bash .github/scripts/deploy-plugin-to-wordpress-pod.sh \"${workspaceFolder}/${plugin_slug}.zip\""
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "DEPLOY_NAMESPACE": "default",
+                    "DEPLOY_POD_SELECTOR": "app.kubernetes.io/instance=wp-test-wpmultilang,app.kubernetes.io/name=wordpress",
+                    "DEPLOY_CONTAINER": "wordpress",
+                    "KUBECTL_BIN": "/opt/homebrew/bin/kubectl"
+                }
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "WP Plugin: Verify Plugin ZIP"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true,
+                "close": true,
+                "showReuseMessage": false
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "WP Plugin: Build and Deploy Plugin ZIP to TranslatePress WordPress Pod",
             "dependsOrder": "sequence",
             "dependsOn": [
@@ -168,6 +198,15 @@
             "presentation": {
                 "close": true
             },
+            "problemMatcher": []
+        },
+        {
+            "label": "WP Plugin: Build and Deploy Plugin ZIP to WP Multilang WordPress Pod",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "WP Plugin: Build Plugin ZIP",
+                "WP Plugin: Deploy Plugin ZIP to WP Multilang WordPress Pod"
+            ],
             "problemMatcher": []
         },
         {
@@ -204,6 +243,7 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "WP Plugin: Deploy Plugin ZIP to TranslatePress WordPress Pod",
+                "WP Plugin: Deploy Plugin ZIP to WP Multilang WordPress Pod",
                 "WP Plugin: Deploy Plugin ZIP to WP-Globus WordPress Pod",
                 "WP Plugin: Deploy Plugin ZIP to SlyBase WordPress Pod"
             ],
