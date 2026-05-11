@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
 - WPGlobus editor translations now submit the detected source language with the sidebar request, so German to English runs no longer fail with a false same-language error.
 - WPGlobus status and translation actions now respect the currently selected edit language instead of always treating the post as the default source language.
-- WPGlobus language detection now uses internal sanitized overrides for editor hints, avoiding lingering WPCS request and cookie warnings without changing source-language resolution.
+- WPGlobus language detection now uses internal sanitized overrides plus explicit read-only WPCS annotations for dynamic editor hints and builder cookies, without changing source-language resolution.
 - Mistral-hosted chat/completions requests now strip unsupported `chat_template_kwargs`, so Ministral and other Mistral models no longer fail when the shared connector injection path is active.
 - Hosted Mistral connector requests now apply the final request-body mutation at a later hook priority, so models like `mistral-medium` no longer reintroduce unsupported `chat_template_kwargs` after SlyTranslate strips them.
 - Hosted Mistral API model IDs now disable SlyTranslate's default `enable_thinking=false` kwargs at profile-build time as well, fixing `mistral-medium` requests that were still sending unsupported kwargs through the connector's native payload path.

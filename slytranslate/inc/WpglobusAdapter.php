@@ -383,15 +383,15 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 			return '';
 		}
 
-		return sanitize_key( (string) wp_unslash( $_REQUEST[ $request_key ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only editor language detection must honor WPGlobus request hints and does not mutate state.
+		return sanitize_key( (string) wp_unslash( $_REQUEST[ $request_key ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only editor language detection consumes a dynamic WPGlobus request hint and sanitizes it immediately after unslashing.
 	}
 
 	private function get_cookie_input( string $cookie_name ): string {
-		if ( '' === $cookie_name || ! isset( $_COOKIE[ $cookie_name ] ) ) {
+		if ( '' === $cookie_name || ! isset( $_COOKIE[ $cookie_name ] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only presence check for a dynamic WPGlobus builder cookie key.
 			return '';
 		}
 
-		return sanitize_text_field( (string) wp_unslash( $_COOKIE[ $cookie_name ] ) );
+		return sanitize_text_field( (string) wp_unslash( $_COOKIE[ $cookie_name ] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only WPGlobus builder cookie lookup sanitized immediately after unslashing.
 	}
 
 	/**
