@@ -23,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Job-end diagnostics now include skip-reason aggregates plus KPI ratios (`tiny_call_ratio`, `micro_batch_hit_rate`, `avg_chars_per_ai_call`, `single_block_group_ratio`) with explicit target corridor values.
 
 ### Fixes
-- Release ZIP builds now generate and ship the required Composer autoloader so plugin activation no longer fails on missing vendor files.
 - Bulk translation now preserves explicit `source_language` overrides for single-entry adapters such as WPGlobus and WP Multilang.
 - WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
 - WPGlobus editor translations now submit the detected source language with the sidebar request, so German to English runs no longer fail with a false same-language error.
