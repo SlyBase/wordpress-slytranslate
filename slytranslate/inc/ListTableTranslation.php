@@ -38,6 +38,10 @@ class ListTableTranslation {
 			return;
 		}
 
+		if ( ! AI_Translate::is_server_translation_ui_available() ) {
+			return;
+		}
+
 		$post_type  = $screen->post_type;
 		$row_filter = is_post_type_hierarchical( $post_type ) ? 'page_row_actions' : 'post_row_actions';
 
@@ -359,6 +363,10 @@ class ListTableTranslation {
 			return;
 		}
 
+		if ( ! AI_Translate::is_server_translation_ui_available() ) {
+			return;
+		}
+
 		wp_enqueue_style(
 			self::LIST_TABLE_STYLE_HANDLE,
 			plugins_url( 'assets/list-table-dialog.css', self::plugin_base_file() ),
@@ -558,6 +566,9 @@ class ListTableTranslation {
 			return;
 		}
 		if ( ! AI_Translate::current_user_can_access_translation_abilities() ) {
+			return;
+		}
+		if ( ! AI_Translate::is_server_translation_ui_available() ) {
 			return;
 		}
 

@@ -73,6 +73,21 @@ class AI_Translate {
 		return self::$adapter;
 	}
 
+	/**
+	 * Whether the server-side AI connector is available for translation UI.
+	 *
+	 * Gating rule: the WordPress AI Client's wp_ai_client_prompt() function must
+	 * be present. When absent, all visible SlyTranslate translation UI (sidebar,
+	 * list-table actions, TP editor panel) is suppressed, while REST routes and
+	 * MCP abilities remain registered and reachable.
+	 *
+	 * Extendable via the 'slytranslate_server_translation_ui_available' filter.
+	 */
+	public static function is_server_translation_ui_available(): bool {
+		$available = function_exists( 'wp_ai_client_prompt' );
+		return (bool) apply_filters( 'slytranslate_server_translation_ui_available', $available );
+	}
+
 	public static function is_single_entry_translation_mode(): bool {
 		$adapter = self::get_adapter();
 		return $adapter instanceof WpMultilangAdapter
@@ -224,6 +239,22 @@ class AI_Translate {
 			),
 			'/ai-translate/user-preference/run'       => array(
 				'callback'            => array( self::class, 'execute_save_additional_prompt' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/prepare-client-translation/run' => array(
+				'callback'            => array( self::class, 'execute_prepare_client_translation' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/apply-client-translation/run' => array(
+				'callback'            => array( self::class, 'execute_apply_client_translation' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/prepare-client-translation-bulk/run' => array(
+				'callback'            => array( self::class, 'execute_prepare_client_translation_bulk' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/apply-client-translation-bulk/run' => array(
+				'callback'            => array( self::class, 'execute_apply_client_translation_bulk' ),
 				'permission_callback' => $translation_permission,
 			),
 		);
@@ -732,6 +763,30 @@ class AI_Translate {
 
 		update_user_meta( $user_id, '_slytranslate_last_additional_prompt', $additional_prompt );
 		return array( 'additional_prompt' => $additional_prompt );
+	}
+
+	/* ---------------------------------------------------------------
+	 * Client-side translation workflow execute callbacks
+	 * ------------------------------------------------------------- */
+
+	public static function execute_prepare_client_translation( $input ) {
+		$input = is_array( $input ) ? $input : array();
+		return ClientTranslationWorkflowService::prepare_single( $input );
+	}
+
+	public static function execute_apply_client_translation( $input ) {
+		$input = is_array( $input ) ? $input : array();
+		return ClientTranslationWorkflowService::apply_single( $input );
+	}
+
+	public static function execute_prepare_client_translation_bulk( $input ) {
+		$input = is_array( $input ) ? $input : array();
+		return ClientTranslationWorkflowService::prepare_bulk( $input );
+	}
+
+	public static function execute_apply_client_translation_bulk( $input ) {
+		$input = is_array( $input ) ? $input : array();
+		return ClientTranslationWorkflowService::apply_bulk( $input );
 	}
 
 	/* ---------------------------------------------------------------

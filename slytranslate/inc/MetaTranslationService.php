@@ -495,4 +495,93 @@ class MetaTranslationService {
 		}
 		return SeoPluginDetector::normalize_meta_keys( $merged );
 	}
+
+	/* ---------------------------------------------------------------
+	 * Client-translation workflow helpers
+	 * ------------------------------------------------------------- */
+
+	/**
+	 * Build translation units for all translatable meta fields of a post.
+	 *
+	 * Each returned unit has:
+	 *   id          => "meta:{$key}"
+	 *   field       => "meta"
+	 *   meta_key    => raw meta key
+	 *   source      => first scalar string value
+	 *   format      => "plain_text"
+	 *   lookup_keys => []
+	 *
+	 * Only simple (non-array) string values ≤ 1000 chars that are not in the
+	 * skip list are included.  The caller is responsible for enforcing any
+	 * total-payload budget.
+	 *
+	 * @param int   $post_id  Source post ID.
+	 * @param array $all_meta Raw result of get_post_meta( $post_id ), i.e. values
+	 *                        are single-element arrays.  Pass an empty array to skip
+	 *                        meta entirely.
+	 * @return array<array{id:string,field:string,meta_key:string,source:string,format:string,lookup_keys:array}>
+	 */
+	public static function build_meta_units( int $post_id, array $all_meta ): array {
+		if ( empty( $all_meta ) ) {
+			return array();
+		}
+
+		$meta_key_config = self::get_effective_meta_key_config( $post_id, $all_meta );
+		$translate_keys  = $meta_key_config['translate'];
+
+		$units = array();
+		foreach ( $translate_keys as $meta_key ) {
+			if ( self::should_skip_meta_key( $meta_key ) ) {
+				continue;
+			}
+
+			if ( ! isset( $all_meta[ $meta_key ] ) ) {
+				continue;
+			}
+
+			// get_post_meta() wraps values in single-element arrays.
+			$raw = $all_meta[ $meta_key ];
+			if ( is_array( $raw ) ) {
+				$raw = reset( $raw );
+			}
+
+			if ( ! is_string( $raw ) || '' === $raw || strlen( $raw ) > 1000 ) {
+				continue;
+			}
+
+			$units[] = array(
+				'id'          => 'meta:' . $meta_key,
+				'field'       => 'meta',
+				'meta_key'    => $meta_key,
+				'source'      => $raw,
+				'format'      => 'plain_text',
+				'lookup_keys' => array(),
+			);
+		}
+
+		return $units;
+	}
+
+	/**
+	 * Merge translated meta units back into the $data array that is passed to
+	 * TranslationPluginAdapter::create_translation().
+	 *
+	 * @param array $data         Existing $data['meta'] array (key => translated value).
+	 * @param array $translations Flat map of unit id => translated string from the
+	 *                            apply-client-translation payload.
+	 * @return array Updated $data['meta'] map.
+	 */
+	public static function merge_translated_meta_units( array $data_meta, array $translations ): array {
+		foreach ( $translations as $unit_id => $translated ) {
+			if ( ! str_starts_with( $unit_id, 'meta:' ) ) {
+				continue;
+			}
+			$meta_key = substr( $unit_id, strlen( 'meta:' ) );
+			if ( '' === $meta_key || ! is_string( $translated ) ) {
+				continue;
+			}
+			$data_meta[ $meta_key ] = $translated;
+		}
+		return $data_meta;
+	}
 }

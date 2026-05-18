@@ -9,6 +9,10 @@ class EditorBootstrap {
 	private const AVAILABLE_MODELS_TRANSIENT = 'slytranslate_available_models';
 
 	public static function enqueue_editor_plugin(): void {
+		if ( ! AI_Translate::is_server_translation_ui_available() ) {
+			return;
+		}
+
 		wp_enqueue_script(
 			Plugin::EDITOR_SCRIPT,
 			plugins_url( 'assets/editor-plugin.js', dirname( __DIR__ ) . '/slytranslate.php' ),

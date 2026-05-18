@@ -5,6 +5,8 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.8.0]
 ### Features
+- Added client-side translation workflow abilities (`ai-translate/prepare-client-translation`, `ai-translate/apply-client-translation`, and bulk variants) enabling LLM-driven translation without requiring a server-side AI connector.
+- Gated all server-side translation UI (editor sidebar, list-table actions, TranslatePress editor panel) on AI connector availability so MCP-only setups do not display non-functional controls.
 - TranslatePress frontend editor pages now include a SlyTranslate sidebar panel with target-language, model, overwrite, progress, and cancel controls for translating the current page without leaving the visual editor.
 - TranslatePress Multilingual support: SlyTranslate detects TranslatePress and writes translations into its string-pair DB tables using positional HTML-segment matching.
 

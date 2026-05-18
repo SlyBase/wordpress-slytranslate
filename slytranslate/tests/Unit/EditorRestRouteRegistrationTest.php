@@ -55,6 +55,10 @@ class EditorRestRouteRegistrationTest extends TestCase {
 			'/ai-translate/string-table-worker/run',
 			'/ai-translate/save-additional-prompt/run',
 			'/ai-translate/user-preference/run',
+			'/ai-translate/prepare-client-translation/run',
+			'/ai-translate/apply-client-translation/run',
+			'/ai-translate/prepare-client-translation-bulk/run',
+			'/ai-translate/apply-client-translation-bulk/run',
 		);
 
 		$this->assertSame( $expected_routes, array_keys( $registered_routes ) );

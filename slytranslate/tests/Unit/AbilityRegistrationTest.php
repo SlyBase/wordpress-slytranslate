@@ -53,7 +53,7 @@ class AbilityRegistrationTest extends TestCase {
 	public function test_register_abilities_registers_expected_ability_contracts(): void {
 		$registered_abilities = $this->capture_registered_abilities();
 
-		$this->assertCount( 13, $registered_abilities );
+		$this->assertCount( 17, $registered_abilities );
 		$this->assertSame( array_keys( $this->expected_ability_contracts() ), array_keys( $registered_abilities ) );
 		$this->assertArrayNotHasKey( 'ai-translate/translate-post', $registered_abilities );
 
@@ -905,6 +905,156 @@ class AbilityRegistrationTest extends TestCase {
 					),
 				),
 				'meta'             => $this->expected_public_mcp_meta( array( 'idempotent' => true ) ),
+			),
+			'ai-translate/prepare-client-translation' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_prepare_client_translation' ),
+				'input_schema'     => array(
+					'type'       => 'object',
+					'properties' => array(
+						'source_post_id'  => array( 'type' => 'integer', 'description' => 'The source post ID to prepare.' ),
+						'target_language' => array( 'type' => 'string', 'description' => 'Target language code.' ),
+						'source_language' => array( 'type' => 'string', 'description' => 'Optional source language override for single-entry adapters.' ),
+						'overwrite'       => array( 'type' => 'boolean', 'description' => 'When true, prepare even if a translation already exists.' ),
+						'post_status'     => array( 'type' => 'string', 'description' => 'Optional target post status.' ),
+					),
+					'required' => array( 'source_post_id', 'target_language' ),
+				),
+				'output_schema'    => array(
+					'type'       => 'object',
+					'properties' => array(
+						'source_post_id'          => array( 'type' => 'integer' ),
+						'source_language'         => array( 'type' => 'string' ),
+						'target_language'         => array( 'type' => 'string' ),
+						'single_entry_mode'       => array( 'type' => 'boolean' ),
+						'overwrite'               => array( 'type' => 'boolean' ),
+						'post_status'             => array( 'type' => 'string' ),
+						'existing_translation_id' => array( 'type' => 'integer' ),
+						'source_hash'             => array( 'type' => 'string' ),
+						'units'                   => array(
+							'type'  => 'array',
+							'items' => array(
+								'type'       => 'object',
+								'properties' => array(
+									'id'          => array( 'type' => 'string' ),
+									'field'       => array( 'type' => 'string' ),
+									'source'      => array( 'type' => 'string' ),
+									'format'      => array( 'type' => 'string' ),
+									'lookup_keys' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+								),
+							),
+						),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
+			),
+			'ai-translate/apply-client-translation' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_apply_client_translation' ),
+				'input_schema'     => array(
+					'type'       => 'object',
+					'properties' => array(
+						'source_post_id'     => array( 'type' => 'integer', 'description' => 'The source post ID.' ),
+						'target_language'    => array( 'type' => 'string', 'description' => 'Target language code.' ),
+						'source_language'    => array( 'type' => 'string', 'description' => 'Optional source language override.' ),
+						'overwrite'          => array( 'type' => 'boolean' ),
+						'post_status'        => array( 'type' => 'string' ),
+						'source_hash'        => array( 'type' => 'string', 'description' => 'Source hash from prepare step. Checked for staleness unless allow_stale_source is true.' ),
+						'allow_stale_source' => array( 'type' => 'boolean', 'description' => 'Skip source-staleness check.' ),
+						'translations'       => array(
+							'type'        => 'array',
+							'description' => 'Array of translated units: [{id, translated}].',
+							'items'       => array(
+								'type'       => 'object',
+								'properties' => array(
+									'id'         => array( 'type' => 'string' ),
+									'translated' => array( 'type' => 'string' ),
+								),
+							),
+						),
+					),
+					'required' => array( 'source_post_id', 'target_language', 'translations' ),
+				),
+				'output_schema'    => array(
+					'type'       => 'object',
+					'properties' => array(
+						'translated_post_id'   => array( 'type' => 'integer' ),
+						'source_post_id'       => array( 'type' => 'integer' ),
+						'target_language'      => array( 'type' => 'string' ),
+						'title'                => array( 'type' => 'string' ),
+						'translated_post_type' => array( 'type' => 'string' ),
+						'post_status'          => array( 'type' => 'string' ),
+						'edit_link'            => array( 'type' => 'string' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta(),
+			),
+			'ai-translate/prepare-client-translation-bulk' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_prepare_client_translation_bulk' ),
+				'input_schema'     => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_ids'        => array(
+							'type'     => 'array',
+							'minItems' => 1,
+							'maxItems' => 50,
+							'items'    => array( 'type' => 'integer' ),
+							'description' => 'Explicit source post IDs.',
+						),
+						'post_type'       => array( 'type' => 'string', 'description' => 'Post type for discovery when post_ids are omitted.' ),
+						'limit'           => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20 ),
+						'target_language' => array( 'type' => 'string' ),
+						'source_language' => array( 'type' => 'string' ),
+						'overwrite'       => array( 'type' => 'boolean' ),
+						'post_status'     => array( 'type' => 'string' ),
+					),
+					'required' => array( 'target_language' ),
+				),
+				'output_schema'    => array(
+					'type'       => 'object',
+					'properties' => array(
+						'target_language' => array( 'type' => 'string' ),
+						'total'           => array( 'type' => 'integer' ),
+						'packages'        => array( 'type' => 'array', 'items' => array( 'type' => 'object' ) ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
+			),
+			'ai-translate/apply-client-translation-bulk' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_apply_client_translation_bulk' ),
+				'input_schema'     => array(
+					'type'       => 'object',
+					'properties' => array(
+						'packages' => array(
+							'type'        => 'array',
+							'description' => 'Array of packages, each being an apply-single input with its own source_post_id, target_language, translations, etc.',
+							'items'       => array( 'type' => 'object' ),
+							'minItems'    => 1,
+						),
+					),
+					'required' => array( 'packages' ),
+				),
+				'output_schema'    => array(
+					'type'       => 'object',
+					'properties' => array(
+						'results'   => array(
+							'type'  => 'array',
+							'items' => array(
+								'type'       => 'object',
+								'properties' => array(
+									'source_post_id'     => array( 'type' => 'integer' ),
+									'translated_post_id' => array( 'type' => 'integer' ),
+									'status'             => array( 'type' => 'string' ),
+									'error'              => array( 'type' => 'string' ),
+									'edit_link'          => array( 'type' => 'string' ),
+								),
+							),
+						),
+						'total'     => array( 'type' => 'integer' ),
+						'succeeded' => array( 'type' => 'integer' ),
+						'failed'    => array( 'type' => 'integer' ),
+						'skipped'   => array( 'type' => 'integer' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta(),
 			),
 		);
 	}

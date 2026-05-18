@@ -314,7 +314,8 @@ class TranslatePressEditorIntegration {
 	private static function is_supported_context(): bool {
 		$adapter = AI_Translate::get_adapter();
 
-		return $adapter instanceof TranslatePressAdapter;
+		return $adapter instanceof TranslatePressAdapter
+			&& AI_Translate::is_server_translation_ui_available();
 	}
 
 	private static function plugin_base_file(): string {
