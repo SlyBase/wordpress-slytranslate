@@ -47,6 +47,7 @@ required_files=(
 	"${plugin_slug}/${plugin_slug}.php"
 	"${plugin_slug}/readme.txt"
 	"${plugin_slug}/uninstall.php"
+	"${plugin_slug}/vendor/autoload.php"
 )
 
 for required_file in "${required_files[@]}"; do
