@@ -1025,7 +1025,7 @@ class AbilityRegistrationTest extends TestCase {
 					'properties' => array(
 						'packages' => array(
 							'type'        => 'array',
-							'description' => 'Array of packages, each being an apply-single input with its own source_post_id, target_language, translations, etc.',
+							'description' => 'Array of packages, each an apply-single input with source_post_id, target_language, and translations as [{id, translated}] where each id matches a unit from the prepare-bulk response.',
 							'items'       => array( 'type' => 'object' ),
 							'minItems'    => 1,
 						),

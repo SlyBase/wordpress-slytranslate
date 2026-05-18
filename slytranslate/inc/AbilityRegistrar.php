@@ -605,11 +605,11 @@ class AbilityRegistrar {
 						'items' => array(
 							'type'       => 'object',
 							'properties' => array(
-								'id'          => array( 'type' => 'string' ),
-								'field'       => array( 'type' => 'string' ),
-								'source'      => array( 'type' => 'string' ),
-								'format'      => array( 'type' => 'string' ),
-								'lookup_keys' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+									'id'          => array( 'type' => 'string', 'description' => 'Unit identifier. Use this as id in the translations array when calling apply-client-translation.' ),
+									'field'       => array( 'type' => 'string', 'description' => 'Post field this unit belongs to, e.g. title, content, excerpt, or a meta key.' ),
+									'source'      => array( 'type' => 'string', 'description' => 'Source text to translate.' ),
+									'format'      => array( 'type' => 'string', 'description' => 'Content format: html or plain.' ),
+									'lookup_keys' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Alternative lookup variants for string-table adapters like TranslatePress. Not relevant for field-based adapters.' ),
 							),
 						),
 					),
@@ -626,7 +626,7 @@ class AbilityRegistrar {
 	private static function register_apply_client_translation_ability(): void {
 		wp_register_ability( 'ai-translate/apply-client-translation', array(
 			'label'               => __( 'Apply Client Translation', 'slytranslate' ),
-			'description'         => __( 'Persist translated units for one post that were prepared with prepare-client-translation. Accepts a translations array keyed by unit id.', 'slytranslate' ),
+			'description'         => __( 'Persist translated units for one post that were prepared with prepare-client-translation. Pass translations as [{id, translated}] where each id matches a unit id from the prepare step.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -647,6 +647,7 @@ class AbilityRegistrar {
 								'id'         => array( 'type' => 'string' ),
 								'translated' => array( 'type' => 'string' ),
 							),
+							'required'   => array( 'id', 'translated' ),
 						),
 					),
 				),
@@ -715,14 +716,14 @@ class AbilityRegistrar {
 	private static function register_apply_client_translation_bulk_ability(): void {
 		wp_register_ability( 'ai-translate/apply-client-translation-bulk', array(
 			'label'               => __( 'Apply Client Translation (Bulk)', 'slytranslate' ),
-			'description'         => __( 'Persist translated unit packages for multiple posts prepared with prepare-client-translation-bulk.', 'slytranslate' ),
+			'description'         => __( 'Persist translated unit packages for multiple posts prepared with prepare-client-translation-bulk. Each package must include source_post_id, target_language, and translations as [{id, translated}] where each id matches a unit from the prepare-bulk response.', 'slytranslate' ),
 			'category'            => 'ai-translation',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
 					'packages' => array(
 						'type'        => 'array',
-						'description' => 'Array of packages, each being an apply-single input with its own source_post_id, target_language, translations, etc.',
+						'description' => 'Array of packages, each an apply-single input with source_post_id, target_language, and translations as [{id, translated}] where each id matches a unit from the prepare-bulk response.',
 						'items'       => array( 'type' => 'object' ),
 						'minItems'    => 1,
 					),

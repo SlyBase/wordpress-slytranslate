@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Job-end diagnostics now include skip-reason aggregates plus KPI ratios (`tiny_call_ratio`, `micro_batch_hit_rate`, `avg_chars_per_ai_call`, `single_block_group_ratio`) with explicit target corridor values.
 
 ### Fixes
+- Corrected the `apply-client-translation` and `apply-client-translation-bulk` MCP ability descriptions to accurately reflect that `translations` is an array of `{id, translated}` objects, not an associative array keyed by unit id; also added descriptions to the `prepare-client-translation` output unit properties so LLM clients can use the workflow without calling `get-ability-info`.
 - Bulk translation now preserves explicit `source_language` overrides for single-entry adapters such as WPGlobus and WP Multilang.
 - WPGlobus editor status now keeps the selected post language when the block editor opens via a language-specific context, so the sidebar no longer falls back to English as the source language.
 - WPGlobus editor translations now submit the detected source language with the sidebar request, so German to English runs no longer fail with a false same-language error.
