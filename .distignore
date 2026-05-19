@@ -1,0 +1,18 @@
+# Repo-Meta
+/.git
+/.github
+/.gitignore
+/.gitattributes
+/.distignore
+
+# Dev-Only
+/plan
+/build
+/tests
+/seo-plugin-test-matrix.md
+
+# Assets (werden separat via ASSETS_DIR deployed)
+/assets
+
+# macOS
+.DS_Store
