@@ -12,6 +12,10 @@ on:
         description: 'Dry-run (kein echter SVN-Commit)'
         required: false
         default: 'true'
+      version:
+        description: 'Versions-Override (optional, z.B. 1.7.0)'
+        required: false
+        default: ''
 
 jobs:
   deploy:
@@ -61,7 +65,9 @@ jobs:
       - name: Resolve plugin version
         id: version
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
             # workflow_dispatch or branch run: read from plugin header
