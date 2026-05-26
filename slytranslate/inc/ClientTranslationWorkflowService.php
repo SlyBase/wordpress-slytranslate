@@ -130,16 +130,16 @@ class ClientTranslationWorkflowService {
 		$content_string_pairs = null;
 
 		if ( $adapter instanceof StringTableContentAdapter && $adapter->supports_pretranslated_content_pairs() ) {
-			// Collect seg_N pairs.
+			// Collect lookup_key → translated pairs (the format create_translation expects).
 			$seg_pairs = array();
 			$original_units = $adapter->build_content_translation_units( (string) $post->post_content );
 			foreach ( $original_units as $unit ) {
 				$seg_id = $unit['id'];
 				if ( isset( $by_id[ $seg_id ] ) ) {
-					$seg_pairs[] = array(
-						'original'    => $unit['source'],
-						'translated'  => (string) $by_id[ $seg_id ],
-					);
+					$translated = (string) $by_id[ $seg_id ];
+					foreach ( $unit['lookup_keys'] as $lookup_key ) {
+						$seg_pairs[ $lookup_key ] = $translated;
+					}
 				}
 			}
 			if ( ! empty( $seg_pairs ) ) {
@@ -462,9 +462,9 @@ class ClientTranslationWorkflowService {
 		// Content: string-table segments or single HTML unit.
 		if ( $adapter instanceof StringTableContentAdapter && $adapter->supports_pretranslated_content_pairs() ) {
 			$seg_units = $adapter->build_content_translation_units( (string) $post->post_content );
-			foreach ( $seg_units as $idx => $seg ) {
+			foreach ( $seg_units as $seg ) {
 				$units[] = array(
-					'id'          => 'seg_' . $idx,
+					'id'          => $seg['id'],
 					'field'       => 'string_table_segment',
 					'source'      => $seg['source'],
 					'format'      => 'plain_text',
