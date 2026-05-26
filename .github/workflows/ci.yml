@@ -184,6 +184,28 @@ jobs:
         run: vendor/bin/phpunit --testdox
         working-directory: slytranslate
 
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - lint-workflows
+      - validate-metadata
+      - lint-php
+      - lint-javascript
+      - tests-unit
+      - build-plugin
+    steps:
+      - name: Check all jobs passed
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          for result in $results; do
+            if [[ "$result" != "success" ]]; then
+              echo "One or more jobs did not succeed: $results"
+              exit 1
+            fi
+          done
+
   build-plugin:
     name: Build Plugin Archive
     runs-on: ubuntu-latest
