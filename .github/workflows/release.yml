@@ -2,6 +2,7 @@ name: Create WordPress Plugin Release
 
 permissions:
   contents: write
+  actions: write
 
 on:
   push:
@@ -116,6 +117,17 @@ jobs:
           echo "Successfully created release v${{ steps.version.outputs.version }}"
           echo "https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}"
           unzip -l "slytranslate-${{ steps.version.outputs.version }}.zip"
+
+      - name: Trigger SVN Deploy
+        if: steps.check-release.outputs.exists == 'false' && steps.version.outputs.prerelease == 'false'
+        run: |
+          gh workflow run deploy-wordpress-org.yml \
+            --repo "${{ github.repository }}" \
+            --field dry_run=false \
+            --field version="${{ steps.version.outputs.version }}"
+          echo "SVN deploy workflow triggered for v${{ steps.version.outputs.version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Skip Release (Already Exists)
         if: steps.check-release.outputs.exists == 'true'
