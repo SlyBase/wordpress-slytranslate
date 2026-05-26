@@ -1,101 +1,171 @@
-# SlyTranslate - AI Translation Abilities
+# SlyTranslate — AI Translation for WordPress
 
-SlyTranslate brings practical AI translation to WordPress. It is built for teams that need translation directly in editing workflows and also want the same workflows available through REST and MCP automation.
+SlyTranslate wires AI translation into WordPress at three different levels: the admin UI, the Gutenberg editor, and from external LLM tools via MCP. Whichever level you work at, the same language plugin integrations and translation quality controls apply.
 
-## Why this plugin?
+It works with any LLM available through a WordPress AI connector and natively supports Polylang, WP Multilang, WPGlobus, and TranslatePress Multilingual.
 
-Use SlyTranslate when you need one consistent translation workflow for:
+---
 
-- page/post translation in wp-admin
-- TranslatePress visual-editor translation on the current page
-- inline selected-text translation in Gutenberg
-- Gutenberg block translation
-- bulk translation from list-table actions
-- SEO title/description translation in the same process
+## What it does
 
-## Screenshots
+- Translates posts, pages, and custom post types into any language managed by your active language plugin
+- Translates selected text or entire Gutenberg blocks inline, without leaving the editor
+- Exposes the same functionality as MCP abilities, so external LLM tools (Claude Code, Codex, and others) can drive translations programmatically
+- Carries SEO metadata (title, description) through the same translation workflow as the post content
+- Handles long and structured content with chunking and output validation
+- Supports model-specific profiles that tune prompt style and retry behavior for known model families
 
-### 1) Panel UI in page/post
+---
 
-![Panel UI in page or post](assets/screenshot-1.png)
+## Three ways to use it
 
-### 2) Inline translation
+### 1 — Admin UI translation (posts & pages overview, side panel)
 
-![Inline translation](assets/screenshot-2.png)
+Translate full posts or pages directly inside WordPress admin — either one at a time from the editor side panel or in bulk from the list view.
 
-### 3) Gutenberg block translation
+```
+Requirements: language plugin + configured AI Connector
+```
 
-![Gutenberg block translation](assets/screenshot-3.png)
+From the **post/page list**, select one or more items and choose a translation action from the bulk-actions menu. A dialog lets you pick target language, model, and whether to overwrite existing translations. Progress updates live while the translation runs, and you can cancel at any time.
 
-### 4) Page/post translation and bulk action
+From the **editor side panel**, the same controls appear alongside the post you are currently editing. TranslatePress users get an equivalent panel inside the TranslatePress visual editor on `?trp-edit-translation` pages.
 
-![Page/post translation and bulk action](assets/screenshot-4.png)
+The language plugin (Polylang, WP Multilang, WPGlobus, or TranslatePress) handles the translated post as it normally would — SlyTranslate creates or updates the translated entry and lets the language plugin own the relationship.
 
-### 5) Translation UI overview
+---
 
-![Translation UI overview](assets/screenshot-5.png)
+### 2 — Inline Gutenberg translation (block or selected text)
 
-### 6) TranslatePress visual editor addon
+Translate content while writing, without touching a language plugin or a full-post workflow.
 
-![TranslatePress visual editor addon](assets/screenshot-6.png)
+```
+Requirements: configured AI Connector
+```
+
+Select any text in a Gutenberg block and the block toolbar gains a **Translate** button. The selected text is replaced with the translation in place. When no text is selected, the button translates the entire block.
+
+This workflow is self-contained: it does not require a language plugin and does not create or modify translated post entries. It is useful for one-off corrections, translating imported content on the fly, or working in a single-language site where you just need AI rewriting in another language.
+
+---
+
+### 3 — LLM wrapper via MCP (Claude Code, Codex, and others)
+
+Drive WordPress translations from inside your LLM tool of choice.
+
+```
+Requirements: language plugin + WordPress application password (token)
+WordPress MCP Adapter plugin to expose the MCP endpoint
+```
+
+When a WordPress MCP Adapter is active, SlyTranslate registers its abilities over MCP. Any MCP-capable LLM client — Claude Code, Codex, custom agents — can then discover and call them.
+
+In this workflow **the LLM wrapper provides the translation itself**. SlyTranslate's MCP abilities handle the WordPress side: reading content structure, checking translation status, writing translated entries, and coordinating with the language plugin. No WordPress AI Connector is needed because translation is performed by the external model, not by WordPress.
+
+A typical agent session looks like:
+
+1. Call `ai-translate/get-languages` to find valid target language codes.
+2. Call `ai-translate/get-translation-status` on the source post to read `source_language` and `single_entry_mode`.
+3. Translate the content using the agent's own LLM.
+4. Call `ai-translate/translate-content` to write the translated entry.
+
+This is the right workflow for automating bulk site migrations, integrating translation into a CI/CD pipeline, or building a custom translation agent that uses a model not available as a WordPress AI connector.
+
+---
 
 ## Internal flow
 
-- Uses native WordPress AI connectors through `wp_ai_client_prompt()`.
-- Registers translation workflows as WordPress Abilities.
-- Exposes abilities over REST (`/wp-abilities/v1/`) and MCP discovery.
-- Supports long/structured content with chunking and output validation.
-- Optional `direct_api_url` supports OpenAI-compatible endpoints for model-specific payload needs.
-- In WP Multilang mode, translation state is detected from language-specific content so placeholder titles do not count as completed translations.
-- List-table translation now includes an explicit overwrite option with a confirmation step.
-- TranslatePress editor pages get a SlyTranslate sidebar panel that can translate the current singular page with model selection, overwrite, progress, and cancel controls.
+```
+  ┌──────────────────┐   ┌───────────────────┐   ┌────────────────────────┐
+  │    Admin UI      │   │    Gutenberg       │   │   LLM Wrapper          │
+  │  (panel / list)  │   │ (block / toolbar)  │   │ (Claude Code, Codex…)  │
+  └────────┬─────────┘   └────────┬──────────┘   └──────────┬─────────────┘
+           │ REST                 │ REST                     │ MCP
+           └──────────────────────┴──────────────────────────┘
+                                          │
+                               ┌──────────▼──────────────┐
+                               │  SlyTranslate  Ability  │
+                               │  (REST / MCP endpoint)  │
+                               └──────────┬──────────────┘
+                                          │
+                              ┌───────────▼───────────┐
+                              │     AI Connector      │  ← only for UI/
+                              │  (wp_ai_client_prompt)│    block workflows
+                              └───────────┬───────────┘
+                                          │
+                              ┌───────────▼───────────┐
+                              │   LLM (any provider)  │
+                              └───────────┬───────────┘
+                                          │
+                              ┌───────────▼───────────┐
+                              │  Chunk + Validate     │
+                              │  output               │
+                              └───────────┬───────────┘
+                                          │
+                              ┌───────────▼───────────┐
+                              │   Language Plugin     │
+                              │  Polylang / TP / …    │
+                              └───────────┬───────────┘
+                                          │
+                              ┌───────────▼───────────┐
+                              │   WordPress Post      │
+                              └───────────────────────┘
+```
 
-## Abilities
+In the MCP workflow the LLM Wrapper box at the top also acts as the translation engine — the AI Connector and LLM steps inside WordPress are bypassed.
+
+---
+
+## Abilities reference
 
 | Ability | Purpose |
 | --- | --- |
 | `ai-translate/get-languages` | List languages exposed by the active language plugin |
 | `ai-translate/get-translation-status` | Show translation status for a content item, including `source_language` and `single_entry_mode` |
-| `ai-translate/set-post-language` | Change the language assignment of an existing content item (only exposed when supported, e.g. Polylang) |
+| `ai-translate/set-post-language` | Change the language assignment of an existing content item (Polylang only) |
 | `ai-translate/get-untranslated` | Find content still missing a target translation |
 | `ai-translate/translate-text` | Translate arbitrary text |
 | `ai-translate/translate-blocks` | Translate serialized Gutenberg blocks |
-| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry (call `get-translation-status` first; optional `source_language` + `overwrite`) |
-| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries (supports optional `source_language` and `overwrite`) |
+| `ai-translate/translate-content` | Create or update one translated post/page/CPT entry |
+| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries |
 | `ai-translate/get-progress` | Return live progress for a running translation |
 | `ai-translate/cancel-translation` | Cancel a running translation |
 | `ai-translate/get-available-models` | List models from configured connectors |
 | `ai-translate/save-additional-prompt` | Save per-user additional instructions |
 | `ai-translate/configure` | Read or update persistent plugin settings |
 
-## MCP Call Flow
+### MCP call sequence
 
-For LLM and MCP clients, the most reliable sequence is:
+For reliable results in agent workflows:
 
-- Call `ai-translate/get-languages` first when the correct target language code is unknown.
-- Call `ai-translate/get-translation-status` before `ai-translate/translate-content` to inspect `source_language`, `single_entry_mode`, and whether the target language already exists.
-- Omit `source_language` unless you intentionally pin a source variant. In single-entry adapters, reuse `get-translation-status.source_language` when you do pin it.
-- Set `overwrite=true` only when status or prior context shows that the target language already exists.
-- Expect `translated_post_id` to equal `source_post_id` in single-entry adapters such as WP Multilang, WPGlobus, and TranslatePress. In multi-post adapters such as Polylang, the translated item uses a sibling post ID.
+- Call `get-languages` first when the correct target language code is unknown.
+- Call `get-translation-status` before `translate-content` to read `source_language`, `single_entry_mode`, and whether a translation already exists.
+- Omit `source_language` unless you intentionally pin a source variant.
+- Set `overwrite=true` only when status or prior context confirms a target-language entry already exists.
+- `translated_post_id` equals `source_post_id` in single-entry adapters (WP Multilang, WPGlobus, TranslatePress). In multi-post adapters (Polylang) the translated item has a sibling post ID.
+
+---
 
 ## Requirements
 
 - WordPress 6.9+
 - PHP 8.1+
-- An AI connector configured in WordPress (Settings > Connectors)
-- A supported language plugin (Polylang, WP Multilang, WPGlobus, or TranslatePress Multilingual) for content-translation workflows across posts/pages/CPTs
-- WordPress MCP Adapter if you want MCP discovery
+- An AI connector configured in WordPress (Settings > Connectors) — required for UI and Gutenberg workflows
+- A supported language plugin for content-translation workflows across posts/pages/CPTs
+- WordPress MCP Adapter if you want MCP discovery for LLM wrapper workflows
+
+---
 
 ## Supported plugins
 
-### Language plugin
+**Language plugins**
 
 - Polylang
 - WP Multilang
 - WPGlobus
 - TranslatePress Multilingual
 
-### SEO plugins
+**SEO plugins** (metadata translated alongside content)
 
 - Genesis SEO
 - Yoast SEO
@@ -105,20 +175,26 @@ For LLM and MCP clients, the most reliable sequence is:
 - SEOpress
 - Slim SEO
 
+---
+
 ## Supported model profiles
 
-Any LLM available through a WordPress AI connector works out of the box — no special configuration needed. The following model families additionally have dedicated built-in profiles that tune prompt style, chunking, and retry behavior for better results:
+Any LLM available through a WordPress AI connector works without configuration. The following model families have dedicated built-in profiles that tune prompt style, chunking, and retry behavior:
 
-- TranslateGemma: dedicated runtime with `chat_template_kwargs` support through `direct_api_url`.
-- TowerInstruct / Salamandra: bilingual framing, conservative chunking, stricter retry behavior.
-- Nvidia Nemotron: system-prompt-aware with reasoning-disable and provider-parameter forwarding.
-- Qwen 3.x / GLM-4.6v / Gemma 4 / Phi-4: thinking-aware profiles.
-- EuroLLM / Llama 3.1-8B / SauerkrautLM: conservative chunking tuned for European languages.
-- Ministral-3 / Ministral-8B: optimized for the Ministral model family.
+- **TranslateGemma** — dedicated runtime with `chat_template_kwargs` support via `direct_api_url`
+- **TowerInstruct / Salamandra** — bilingual framing, conservative chunking, stricter retries
+- **Nvidia Nemotron** — system-prompt-aware, reasoning-disable, provider-parameter forwarding
+- **Qwen 3.x / GLM-4.6v / Gemma 4 / Phi-4** — thinking-aware profiles
+- **EuroLLM / Llama 3.1-8B / SauerkrautLM** — conservative chunking tuned for European languages
+- **Ministral-3 / Ministral-8B** — optimized for the Ministral model family
+
+Additional profiles can be registered via the `slytranslate_model_profiles` filter.
+
+---
 
 ## Installation
 
-**Via WordPress Plugin Directory (recommended):**
+**Via WordPress Plugin Directory (recommended)**
 
 1. Ensure WordPress 6.9+ and PHP 8.1+ are running.
 2. In wp-admin, go to Plugins > Add New and search for "SlyTranslate".
@@ -129,51 +205,66 @@ Any LLM available through a WordPress AI connector works out of the box — no s
 7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
 8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
 
-**Manual installation:**
+**Manual installation**
 
 1. Ensure WordPress 6.9+ and PHP 8.1+ are running.
 2. Copy the `slytranslate` directory to `/wp-content/plugins/`.
 3. Activate SlyTranslate in wp-admin.
-4. Install and configure an AI connector in Settings > Connectors.
-5. Optional for content translation: install and activate Polylang, WP Multilang, WPGlobus, or TranslatePress Multilingual.
-6. Optional for local llama.cpp models: install AI Provider for llama.cpp.
-7. Optional for other OpenAI-compatible local/self-hosted endpoints: install Ultimate AI Connector for Compatible Endpoints.
-8. Optional for MCP discovery: install and activate WordPress MCP Adapter.
+4. Configure an AI connector in Settings > Connectors.
+5. Optional steps same as above.
+
+---
 
 ## FAQ
 
-### Does this work without a language plugin?
+**Does this work without a language plugin?**
+Yes, for inline text and block translation. Content translation workflows (full post/page) require a supported language plugin.
 
-Yes, for text and block translation (`translate-text`, `translate-blocks`, inline selected-text workflow). Content translation workflows require a supported language plugin (Polylang, WP Multilang, WPGlobus, or TranslatePress Multilingual).
-
-### Where are API keys configured?
-
+**Where are API keys configured?**
 In WordPress Settings > Connectors, not inside SlyTranslate.
 
-### Can I use bulk translation from post/page lists?
+**Can I run bulk translation from the post/page list?**
+Yes. Select items in wp-admin, pick the bulk translation action, choose language and model, and confirm.
 
-Yes. Use `translate-content-bulk` through abilities or the wp-admin list-table translation UI.
+**Does this work inside the TranslatePress visual editor?**
+Yes. On pages opened with `?trp-edit-translation=true`, SlyTranslate adds a sidebar panel with the same model, overwrite, progress, and cancel controls used elsewhere.
 
-### Does this work inside the TranslatePress visual editor?
+**How does overwriting existing translations work?**
+In the list-table dialog, overwrite is off by default. If a translation already exists you must enable it and confirm before the translation starts.
 
-Yes. On singular pages opened with `?trp-edit-translation=true`, SlyTranslate adds a sidebar panel in the TranslatePress editor so you can translate the current page with the same model, overwrite, progress, and cancel controls used elsewhere in the plugin.
+**Can I change a post's language without re-translating?**
+Yes, when using Polylang. Call `ai-translate/set-post-language` with `post_id` and `target_language`. Use `force` to bypass conflict checks and `relink=true` to rewrite translation relations. Not available in WP Multilang mode.
 
-### How does overwriting existing translations work?
+**How do I control the prompt and translation style?**
+Use `ai-translate/configure` for persistent defaults. Pass `additional_prompt` on any `translate-*` call for per-request instructions.
 
-In the list-table dialog, **Overwrite existing translation** is off by default. If a translation already exists, you must enable overwrite and confirm before the translation starts.
+**Why does `execute-ability` fail even when discovery looks correct?**
+Some external WordPress MCP adapter wrappers expose a flatter `execute-ability` signature. If `discover-abilities` shows the correct SlyTranslate schema but `execute-ability` still errors about a missing `parameters` wrapper, investigate the external adapter layer — SlyTranslate controls ability names, descriptions, and schemas, not the wrapper surface.
 
-### Can I change the language assignment of an existing post without running translation?
+---
 
-Yes, when the active language plugin supports language mutation (currently Polylang). In that case `ai-translate/set-post-language` is exposed and can be called with `post_id` and `target_language`. By default language conflicts fail with `language_conflict`; use `force` to opt in, and pass `relink=true` when translation relations should be rewritten. In WP Multilang mode this ability is not exposed.
+## Screenshots
 
-### How do I control prompts and style?
+### 1) Side panel in post/page editor
 
-Use `ai-translate/configure` for persistent defaults and `additional_prompt` on `translate-*` abilities for per-request instructions.
+![Panel UI in page or post](assets/screenshot-1.png)
 
-### Why can MCP execute-ability still fail after discovery looks correct?
+### 2) Inline text translation
 
-Some external WordPress MCP adapter wrappers expose a flatter `execute-ability` signature than they actually accept. If `discover-abilities` or `get-ability-info` shows the correct SlyTranslate schema but `execute-ability` still errors about a missing `parameters` wrapper, investigate the external adapter layer first. SlyTranslate controls the registered ability names, descriptions, and schemas, not that wrapper surface.
+![Inline translation](assets/screenshot-2.png)
 
-### Which model-specific profiles are supported?
+### 3) Gutenberg block translation
 
-Any LLM from a WordPress AI connector works without configuration. Built-in dedicated profiles exist for: TranslateGemma, TowerInstruct, Salamandra, Nvidia Nemotron, Qwen 3.x, GLM-4.6v, Gemma 4, Phi-4, EuroLLM, Llama 3.1-8B, SauerkrautLM, Ministral-3, and Ministral-8B. Additional profiles can be registered via the `slytranslate_model_profiles` filter.
+![Gutenberg block translation](assets/screenshot-3.png)
+
+### 4) Post/page list with bulk translation action
+
+![Page/post translation and bulk action](assets/screenshot-4.png)
+
+### 5) Translation UI overview
+
+![Translation UI overview](assets/screenshot-5.png)
+
+### 6) TranslatePress visual editor addon
+
+![TranslatePress visual editor addon](assets/screenshot-6.png)
