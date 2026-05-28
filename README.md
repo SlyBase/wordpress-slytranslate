@@ -1,3 +1,5 @@
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github)](https://github.com/sponsors/slydlake)
+
 # SlyTranslate — AI Translation for WordPress
 
 SlyTranslate wires AI translation into WordPress at three different levels: the admin UI, the Gutenberg editor, and from external LLM tools via MCP. Whichever level you work at, the same language plugin integrations and translation quality controls apply.
