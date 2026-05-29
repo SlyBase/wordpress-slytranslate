@@ -15,9 +15,11 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const author = context.payload.pull_request.user;
+            if (author.type === 'Bot' || author.login.endsWith('[bot]')) return;
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              assignees: [context.payload.pull_request.user.login]
+              assignees: [author.login]
             });
