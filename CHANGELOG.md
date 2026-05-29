@@ -3,6 +3,12 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+## [1.10.0]
+### Features
+- ACF (Advanced Custom Fields) support: translatable `text`, `textarea`, and `wysiwyg` fields are now detected and translated automatically — no configuration required when ACF is active.
+- New filter API for dynamic meta-key control: `slytranslate_meta_keys_translate`, `slytranslate_meta_keys_clear`, and `slytranslate_translate_meta_key` allow third-party code to add or remove meta keys at runtime without touching plugin settings.
+- Source and target language codes are now passed to all meta-key filters, enabling language-aware resolver callbacks.
+
 ## [1.9.0]
 ### Features
 - Added client-side translation workflow abilities (`ai-translate/prepare-client-translation`, `ai-translate/apply-client-translation`, and bulk variants) enabling LLM-driven translation without requiring a server-side AI connector.

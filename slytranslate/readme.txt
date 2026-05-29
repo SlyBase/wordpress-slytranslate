@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, wp-multilang
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 1.9.0
+Stable tag: 1.10.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -22,6 +22,7 @@ It works with any LLM available through a WordPress AI connector and natively su
 * Translates selected text or entire Gutenberg blocks inline, without leaving the editor
 * Exposes the same functionality as MCP abilities, so external LLM tools (Claude Code, Codex, and others) can drive translations programmatically
 * Carries SEO metadata (title, description) through the same translation workflow as the post content
+* Translates Advanced Custom Fields (ACF) `text`, `textarea`, and `wysiwyg` fields automatically — no configuration required when ACF is active
 * Handles long and structured content with chunking and output validation
 * Supports model-specific profiles that tune prompt style and retry behavior for known model families
 
@@ -151,6 +152,10 @@ For reliable results in agent workflows:
 * WPGlobus
 * TranslatePress Multilingual
 
+**Field plugins** (custom fields translated alongside content)
+
+* Advanced Custom Fields (ACF) — Free and Pro, including Repeater and Flexible Content
+
 **SEO plugins** (metadata translated alongside content)
 
 * Genesis SEO
@@ -196,6 +201,20 @@ Additional profiles can be registered via the `slytranslate_model_profiles` filt
 5. Optional steps same as above.
 
 == Frequently Asked Questions ==
+
+= Do ACF fields get translated automatically? =
+
+Yes. When Advanced Custom Fields (Free or Pro) is active, SlyTranslate automatically detects `text`, `textarea`, and `wysiwyg` fields on the post being translated and includes them in the translation — no settings to configure. Fields of other types (`image`, `number`, `url`, `select`, relationships, etc.) are left untouched.
+
+This includes Repeater and Flexible Content layouts: each leaf field with a translatable type is picked up individually, regardless of nesting depth.
+
+To extend which field types are translated, add a filter to your theme's `functions.php` or a site-specific plugin:
+
+`add_filter( 'slytranslate_acf_translatable_field_types', function ( $types ) { $types[] = 'url'; return $types; } );`
+
+To exclude a specific field key from translation:
+
+`add_filter( 'slytranslate_translate_meta_key', function ( $translate, $meta_key ) { return $meta_key === 'my_field' ? false : $translate; }, 10, 2 );`
 
 = Does this work without a language plugin? =
 

@@ -179,7 +179,7 @@ class PostTranslationService {
 			}
 
 			$meta_for_batch   = is_array( $all_meta ) ? $all_meta : array();
-			$meta_key_config  = MetaTranslationService::get_effective_meta_key_config( $post_id, $meta_for_batch );
+			$meta_key_config  = MetaTranslationService::get_effective_meta_key_config( $post_id, $meta_for_batch, $from, $to );
 			$batch_candidates = MetaTranslationService::count_batch_eligible_candidates( $meta_for_batch, $meta_key_config, $batch_eligible_candidates );
 
 			$will_batch_title = $title_batch_eligible && $batch_candidates >= 2;

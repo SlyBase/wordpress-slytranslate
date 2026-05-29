@@ -675,3 +675,13 @@ function wpm_ml_array_to_string( $strings ): string {
 		return '' !== $string ? $string . '[:]' : '';
 	} );
 }
+
+// -----------------------------------------------------------------------
+// ACF stubs
+// -----------------------------------------------------------------------
+
+function acf_get_field( $field ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $field ) {
+		return false;
+	} );
+}
