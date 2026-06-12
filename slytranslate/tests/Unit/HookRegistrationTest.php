@@ -9,6 +9,7 @@ use SlyTranslate\AbilityRegistrar;
 use SlyTranslate\EditorBootstrap;
 use SlyTranslate\ListTableTranslation;
 use SlyTranslate\Settings;
+use SlyTranslate\SettingsPage;
 use SlyTranslate\TranslatePressEditorIntegration;
 
 class HookRegistrationTest extends TestCase {
@@ -62,8 +63,29 @@ class HookRegistrationTest extends TestCase {
 				),
 				array(
 					'type'          => 'action',
+					'hook'          => 'admin_menu',
+					'callback'      => array( SettingsPage::class, 'register_menu' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'type'          => 'action',
+					'hook'          => 'admin_enqueue_scripts',
+					'callback'      => array( SettingsPage::class, 'enqueue_assets' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'type'          => 'action',
 					'hook'          => 'rest_api_init',
 					'callback'      => array( AI_Translate::class, 'register_editor_rest_routes' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'type'          => 'action',
+					'hook'          => 'rest_api_init',
+					'callback'      => array( SettingsPage::class, 'register_rest_routes' ),
 					'priority'      => 10,
 					'accepted_args' => 1,
 				),

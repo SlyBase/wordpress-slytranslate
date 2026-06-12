@@ -112,7 +112,10 @@ class AI_Translate {
 		self::maybe_migrate_legacy_options();
 		add_action( 'enqueue_block_editor_assets', array( EditorBootstrap::class, 'enqueue_editor_plugin' ) );
 		add_action( 'admin_init',                  array( Settings::class, 'register' ) );
+		add_action( 'admin_menu',                  array( SettingsPage::class, 'register_menu' ) );
+		add_action( 'admin_enqueue_scripts',       array( SettingsPage::class, 'enqueue_assets' ) );
 		add_action( 'rest_api_init', array( self::class, 'register_editor_rest_routes' ) );
+		add_action( 'rest_api_init', array( SettingsPage::class, 'register_rest_routes' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
 		TranslatePressEditorIntegration::add_hooks();

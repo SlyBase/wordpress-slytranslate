@@ -70,6 +70,11 @@ function register_rest_route( ...$args ): void {
 		return null;
 	} );
 }
+function add_options_page( ...$args ) {
+	return slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return '';
+	} );
+}
 function register_activation_hook( ...$args ): void {
 	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
 		return null;
