@@ -111,6 +111,15 @@ class ContentTranslator {
 		string $from,
 		string $additional_prompt
 	): mixed {
+		// Pre-pass: translate ACF block field data (attrs.data of acf/* blocks)
+		// before the regular content pipeline runs. The pipeline preserves block
+		// comments (and therefore the attrs JSON) via placeholders, so the
+		// translated data survives all downstream paths unchanged.
+		$blocks = AcfBlockTranslator::translate_blocks_data( $blocks, $to, $from, $additional_prompt );
+		if ( is_wp_error( $blocks ) ) {
+			return $blocks;
+		}
+
 		$translated_sections = array();
 		$pending_blocks      = array();
 		$chunk_char_limit    = TranslationRuntime::get_chunk_char_limit();

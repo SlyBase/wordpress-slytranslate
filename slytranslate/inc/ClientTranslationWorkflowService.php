@@ -147,6 +147,21 @@ class ClientTranslationWorkflowService {
 			}
 		} else {
 			$translated_content = isset( $by_id['content'] ) ? (string) $by_id['content'] : null;
+
+			// Merge translated ACF block units into the content. The translated
+			// content (when provided) keeps the source block structure, so the
+			// acf_block unit paths from the prepare step still resolve.
+			$has_acf_block_units = false;
+			foreach ( $by_id as $unit_id => $unused ) {
+				if ( str_starts_with( (string) $unit_id, 'acf_block:' ) ) {
+					$has_acf_block_units = true;
+					break;
+				}
+			}
+			if ( $has_acf_block_units ) {
+				$content_for_injection = null !== $translated_content ? $translated_content : (string) $post->post_content;
+				$translated_content    = AcfBlockTranslator::apply_block_unit_translations( $content_for_injection, $by_id );
+			}
 		}
 
 		// Collect translated meta.
@@ -480,6 +495,13 @@ class ClientTranslationWorkflowService {
 				'format'      => 'html',
 				'lookup_keys' => array(),
 			);
+
+			// ACF block field data lives in the block-comment JSON, which clients
+			// must preserve verbatim inside the content unit — so those values
+			// are exposed as their own units and merged back on apply.
+			foreach ( AcfBlockTranslator::build_block_units( (string) $post->post_content ) as $acf_unit ) {
+				$units[] = $acf_unit;
+			}
 		}
 
 		// Excerpt unit.
@@ -505,9 +527,11 @@ class ClientTranslationWorkflowService {
 	/**
 	 * Compute a source hash over title, content, and excerpt to detect
 	 * source changes between prepare and apply calls.
+	 *
+	 * Shared with the server-side diff retranslation via TranslationFingerprint.
 	 */
 	private static function compute_source_hash( \WP_Post $post ): string {
-		return md5( $post->post_title . "\x00" . $post->post_content . "\x00" . $post->post_excerpt );
+		return TranslationFingerprint::compute_post_fingerprint( $post );
 	}
 
 	/**

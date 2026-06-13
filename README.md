@@ -14,7 +14,7 @@ It works with any LLM available through a WordPress AI connector and natively su
 - Translates selected text or entire Gutenberg blocks inline, without leaving the editor
 - Exposes the same functionality as MCP abilities, so external LLM tools (Claude Code, Codex, and others) can drive translations programmatically
 - Carries SEO metadata (title, description) through the same translation workflow as the post content
-- Translates Advanced Custom Fields (ACF) `text`, `textarea`, and `wysiwyg` fields automatically — no configuration required when ACF is active
+- Translates custom fields from ACF (including ACF blocks and options pages), Meta Box, and Pods automatically — no configuration required when the field plugin is active
 - Handles long and structured content with chunking and output validation
 - Supports model-specific profiles that tune prompt style and retry behavior for known model families
 
@@ -130,9 +130,11 @@ In the MCP workflow the LLM Wrapper box at the top also acts as the translation 
 | `ai-translate/translate-text` | Translate arbitrary text |
 | `ai-translate/translate-blocks` | Translate serialized Gutenberg blocks |
 | `ai-translate/translate-content` | Create or update one translated post/page/CPT entry |
-| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries |
-| `ai-translate/get-progress` | Return live progress for a running translation |
-| `ai-translate/cancel-translation` | Cancel a running translation |
+| `ai-translate/translate-content-bulk` | Bulk-translate multiple entries (`background=true` queues the batch via Action Scheduler/WP-Cron) |
+| `ai-translate/translate-terms` | Bulk-translate taxonomy terms and link them as translations (Polylang only) |
+| `ai-translate/get-translatable-fields` | Introspect which meta fields a translation would translate or clear, with source attribution |
+| `ai-translate/get-progress` | Return live progress for a running translation or a queued background job (`job_id`) |
+| `ai-translate/cancel-translation` | Cancel a running translation or a queued background job (`job_id`) |
 | `ai-translate/get-available-models` | List models from configured connectors |
 | `ai-translate/save-additional-prompt` | Save per-user additional instructions |
 | `ai-translate/configure` | Read or update persistent plugin settings |
@@ -170,7 +172,9 @@ For reliable results in agent workflows:
 
 **Field plugins** (custom fields translated alongside content)
 
-- Advanced Custom Fields (ACF) — Free and Pro, including Repeater and Flexible Content
+- Advanced Custom Fields (ACF) — Free and Pro, including Repeater and Flexible Content, ACF blocks in Gutenberg, and options pages
+- Meta Box (metabox.io)
+- Pods
 
 **SEO plugins** (metadata translated alongside content)
 
@@ -238,7 +242,11 @@ add_filter( 'slytranslate_acf_translatable_field_types', function ( $types ) {
 } );
 ```
 
-To exclude a specific field or add one that is not ACF-registered, use the `slytranslate_translate_meta_key` filter:
+To exclude fields there are three options, from simplest to most flexible:
+
+1. **ACF field editor** — enable the "Exclude from AI translation" toggle in the field's settings.
+2. **Exclusion list** — add the meta keys (whitespace-separated) to the `meta_keys_exclude` setting (via the `configure` MCP ability or the `slytranslate_meta_keys_exclude` option). Works for any meta key, not just ACF.
+3. **Filter API** — use the `slytranslate_translate_meta_key` filter, which has the final say:
 
 ```php
 add_filter( 'slytranslate_translate_meta_key', function ( $translate, $meta_key ) {
@@ -248,6 +256,21 @@ add_filter( 'slytranslate_translate_meta_key', function ( $translate, $meta_key 
     return $translate;
 }, 10, 2 );
 ```
+
+**Are ACF blocks and options pages covered?**
+Yes. Field data stored inside `acf/*` Gutenberg blocks is translated automatically along with the post content, including repeater sub-fields. ACF `link` fields translate only the link title — URL and target are never sent to the model.
+
+ACF fields on options pages (global content such as footer texts or CTAs) are translated through the `ai-translate/translate-options` MCP ability. With WPGlobus or WP Multilang the translated variant is merged into the option value; with TranslatePress nothing needs to happen (its string table already translates option output). Polylang has no language-aware option storage — opt in to per-language storage via the `slytranslate_acf_options_post_id` filter:
+
+```php
+// Polylang pattern: store translated options under options_{lang}
+add_filter( 'slytranslate_acf_options_post_id', function ( $post_id, $target_language ) {
+    return 'options_' . $target_language;
+}, 10, 2 );
+```
+
+**Do Meta Box or Pods fields get translated automatically?**
+Yes. Translatable field types (`text`, `textarea`, `wysiwyg` for Meta Box; `text`, `paragraph`, `wysiwyg` for Pods) are detected through each plugin's field registry. The type lists are extensible via the `slytranslate_metabox_translatable_field_types` and `slytranslate_pods_translatable_field_types` filters.
 
 **Does this work without a language plugin?**
 Yes, for inline text and block translation. Content translation workflows (full post/page) require a supported language plugin.
@@ -268,7 +291,7 @@ In the list-table dialog, overwrite is off by default. If a translation already 
 Yes, when using Polylang. Call `ai-translate/set-post-language` with `post_id` and `target_language`. Use `force` to bypass conflict checks and `relink=true` to rewrite translation relations. Not available in WP Multilang mode.
 
 **How do I control the prompt and translation style?**
-Use `ai-translate/configure` for persistent defaults. Pass `additional_prompt` on any `translate-*` call for per-request instructions.
+Use the settings page (Settings → SlyTranslate) or `ai-translate/configure` for persistent defaults — both write through the same backend. Pass `additional_prompt` on any `translate-*` call for per-request instructions.
 
 **Why does `execute-ability` fail even when discovery looks correct?**
 Some external WordPress MCP adapter wrappers expose a flatter `execute-ability` signature. If `discover-abilities` shows the correct SlyTranslate schema but `execute-ability` still errors about a missing `parameters` wrapper, investigate the external adapter layer — SlyTranslate controls ability names, descriptions, and schemas, not the wrapper surface.

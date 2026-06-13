@@ -3,7 +3,7 @@
 Plugin Name: SlyTranslate - AI Translation Abilities
 Plugin URI: https://github.com/SlyBase/wordpress-slytranslate/
 Description: AI translation abilities for WordPress using native AI Connectors as a core feature, plus the AI Client and Abilities API for text and content translation.
-Version: 1.10.0
+Version: 1.11.0
 Author: Timon Först
 Author URI: https://slybase.com
 Requires at least: 6.9
@@ -110,13 +110,23 @@ class AI_Translate {
 
 	public static function add_hooks(): void {
 		self::maybe_migrate_legacy_options();
+		// Priority 5 so third-party callbacks at default priority 10 can still
+		// overrule the user-configured exclusion list.
+		add_filter( 'slytranslate_translate_meta_key', array( MetaTranslationService::class, 'filter_excluded_meta_key' ), 5, 2 );
 		add_action( 'enqueue_block_editor_assets', array( EditorBootstrap::class, 'enqueue_editor_plugin' ) );
 		add_action( 'admin_init',                  array( Settings::class, 'register' ) );
+		SettingsPage::add_hooks();
 		add_action( 'rest_api_init', array( self::class, 'register_editor_rest_routes' ) );
 		add_action( 'wp_abilities_api_categories_init', array( AbilityRegistrar::class, 'register_ability_category' ) );
 		add_action( 'wp_abilities_api_init', array( AbilityRegistrar::class, 'register_abilities' ) );
 		TranslatePressEditorIntegration::add_hooks();
 		ListTableTranslation::add_hooks();
+		// Background queue worker (one post per scheduled action).
+		add_action( TranslationQueue::WORKER_HOOK, array( TranslationQueue::class, 'process_queued_translation' ), 10, 2 );
+		// Auto-translate on publish (consumes the slytranslate_new_post option).
+		add_action( 'transition_post_status', array( AutoPublishTranslationService::class, 'handle_transition_post_status' ), 10, 3 );
+		// Polylang media duplication: translate alt text, caption, description.
+		add_action( 'pll_translate_media', array( MediaTranslationService::class, 'handle_pll_translate_media' ), 10, 3 );
 	}
 
 	/**
@@ -198,8 +208,20 @@ class AI_Translate {
 				'callback'            => array( self::class, 'execute_translate_posts' ),
 				'permission_callback' => $translation_permission,
 			),
+			'/ai-translate/translate-terms/run'       => array(
+				'callback'            => array( self::class, 'execute_translate_terms' ),
+				'permission_callback' => $translation_permission,
+			),
+			'/ai-translate/get-translatable-fields/run' => array(
+				'callback'            => array( self::class, 'execute_get_translatable_fields' ),
+				'permission_callback' => $translation_permission,
+			),
 			'/ai-translate/configure/run'             => array(
 				'callback'            => array( self::class, 'execute_configure' ),
+				'permission_callback' => $admin_permission,
+			),
+			'/ai-translate/probe-string-table-concurrency/run' => array(
+				'callback'            => array( self::class, 'execute_probe_string_table_concurrency' ),
 				'permission_callback' => $admin_permission,
 			),
 			'/ai-translate/get-progress/run'          => array(
@@ -571,6 +593,33 @@ class AI_Translate {
 					$additional_prompt = '';
 				}
 
+				// Background mode: hand the job to the queue (one action per
+				// post) so it survives closed tabs and PHP timeouts. Falls
+				// through to the synchronous loop when no transport exists.
+				if ( ! empty( $input['background'] ) && TranslationQueue::is_available() ) {
+					$queued = TranslationQueue::enqueue_bulk( $post_ids, $target_language, array(
+						'post_status'       => self::get_optional_sanitized_key_input( $input, 'post_status' ),
+						'overwrite'         => $overwrite,
+						'translate_title'   => $input['translate_title'] ?? true,
+						'additional_prompt' => $additional_prompt,
+						'source_language'   => $requested_source_language,
+						'model_slug'        => isset( $input['model_slug'] ) && is_string( $input['model_slug'] ) ? $input['model_slug'] : '',
+					) );
+					if ( is_wp_error( $queued ) ) {
+						return $queued;
+					}
+
+					return array(
+						'results'   => array(),
+						'total'     => $queued['total'],
+						'succeeded' => 0,
+						'failed'    => 0,
+						'skipped'   => 0,
+						'queued'    => true,
+						'job_id'    => $queued['job_id'],
+					);
+				}
+
 				foreach ( $post_ids as $post_id ) {
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						$failed++;
@@ -611,6 +660,21 @@ class AI_Translate {
 		);
 	}
 
+	public static function execute_translate_options( $input ) {
+		$input = is_array( $input ) ? $input : array();
+		return AcfOptionsTranslationService::translate_options( $input );
+	}
+
+	public static function execute_translate_terms( $input ) {
+		return TermTranslationService::execute_translate_terms( is_array( $input ) ? $input : array() );
+	}
+
+	public static function execute_get_translatable_fields( $input ): array {
+		$input   = is_array( $input ) ? $input : array();
+		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+		return MetaTranslationService::get_translatable_fields_report( $post_id );
+	}
+
 	public static function execute_configure( $input ) {
 		$input         = is_array( $input ) ? $input : array();
 		$config_result = ConfigurationService::save( $input );
@@ -630,7 +694,11 @@ class AI_Translate {
 			'prompt_addon'                     => get_option( 'slytranslate_prompt_addon', '' ),
 			'meta_keys_translate'              => get_option( 'slytranslate_meta_translate', '' ),
 			'meta_keys_clear'                  => get_option( 'slytranslate_meta_clear', '' ),
+			'meta_keys_exclude'                => get_option( 'slytranslate_meta_keys_exclude', '' ),
 			'auto_translate_new'               => get_option( 'slytranslate_new_post', '0' ) === '1',
+			'translate_terms'                  => get_option( 'slytranslate_translate_terms', '0' ) === '1',
+			'translate_slugs'                  => get_option( 'slytranslate_translate_slugs', '0' ) === '1',
+			'glossary'                         => GlossaryService::get_entries(),
 			'context_window_tokens'            => absint( get_option( 'slytranslate_context_window_tokens', 0 ) ),
 			'string_table_concurrency'         => ConfigurationService::get_string_table_concurrency_setting(),
 			'string_table_concurrency_effective' => ConfigurationService::get_effective_string_table_concurrency()['effective'],
@@ -655,6 +723,20 @@ class AI_Translate {
 			'effective_chunk_chars'            => TranslationRuntime::get_chunk_char_limit(),
 			'last_transport_diagnostics'       => TranslationRuntime::get_last_diagnostics_snapshot(),
 		);
+	}
+
+	/**
+	 * Settings-UI action: run the string-table concurrency probe for the
+	 * given (or configured) model and return the per-level results.
+	 */
+	public static function execute_probe_string_table_concurrency( $input ): array {
+		$input      = is_array( $input ) ? $input : array();
+		$model_slug = isset( $input['model_slug'] ) && is_string( $input['model_slug'] ) ? $input['model_slug'] : '';
+		if ( '' === $model_slug ) {
+			$model_slug = TranslationRuntime::get_requested_model_slug();
+		}
+
+		return ConfigurationService::probe_string_table_concurrency( $model_slug );
 	}
 
 	public static function execute_string_table_worker( $input ) {
@@ -726,7 +808,17 @@ class AI_Translate {
 	}
 
 	public static function execute_get_progress( $input ): array {
-		$input   = is_array( $input ) ? $input : array();
+		$input = is_array( $input ) ? $input : array();
+
+		// Queue-job progress (background bulk translation).
+		$job_id = isset( $input['job_id'] ) && is_string( $input['job_id'] ) ? sanitize_key( $input['job_id'] ) : '';
+		if ( '' !== $job_id ) {
+			$job_status = TranslationQueue::get_job_status( $job_id );
+			if ( null !== $job_status ) {
+				return $job_status;
+			}
+		}
+
 		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
 		return TranslationProgressTracker::get_progress( $post_id );
 	}
@@ -736,7 +828,12 @@ class AI_Translate {
 		$input   = is_array( $input ) ? $input : array();
 		$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
 		TranslationProgressTracker::clear_progress( $post_id );
-		return array( 'cancelled' => true );
+
+		// Queue-job cancellation: unschedule all pending actions of the job.
+		$job_id        = isset( $input['job_id'] ) && is_string( $input['job_id'] ) ? sanitize_key( $input['job_id'] ) : '';
+		$job_cancelled = '' !== $job_id ? TranslationQueue::cancel( $job_id ) : false;
+
+		return array( 'cancelled' => true, 'job_cancelled' => $job_cancelled );
 	}
 
 	public static function execute_get_available_models( $input ): array {
@@ -859,6 +956,9 @@ class AI_Translate {
 			'slytranslate_meta_translate',
 			'slytranslate_meta_clear',
 			'slytranslate_new_post',
+			'slytranslate_translate_terms',
+			'slytranslate_translate_slugs',
+			'slytranslate_glossary',
 			'slytranslate_context_window_tokens',
 			'slytranslate_model_slug',
 			'slytranslate_direct_api_url',

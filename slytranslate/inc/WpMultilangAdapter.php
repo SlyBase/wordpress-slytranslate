@@ -246,6 +246,17 @@ class WpMultilangAdapter implements TranslationPluginAdapter {
 		return '' !== $default_language ? $default_language : '';
 	}
 
+	/**
+	 * Public mutation helper: write a target-language variant into an existing
+	 * (possibly markup-less) value, preserving all other language segments.
+	 * Used by AcfOptionsTranslationService for option values.
+	 */
+	public function merge_language_variant( string $existing_value, string $source_language, string $target_language, string $target_value ): string {
+		$default_language = $this->get_default_language_code();
+		$source_fallback  = $this->extract_language_value( $existing_value, sanitize_key( $source_language ), $default_language );
+		return $this->merge_language_value( $existing_value, $source_language, $target_language, $target_value, $source_fallback );
+	}
+
 	private function extract_language_value( string $value, string $language_code, string $default_language ): string {
 		$value = (string) $value;
 		if ( '' === $value ) {

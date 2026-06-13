@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, wp-multilang
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 1.10.0
+Stable tag: 1.11.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -22,7 +22,7 @@ It works with any LLM available through a WordPress AI connector and natively su
 * Translates selected text or entire Gutenberg blocks inline, without leaving the editor
 * Exposes the same functionality as MCP abilities, so external LLM tools (Claude Code, Codex, and others) can drive translations programmatically
 * Carries SEO metadata (title, description) through the same translation workflow as the post content
-* Translates Advanced Custom Fields (ACF) `text`, `textarea`, and `wysiwyg` fields automatically — no configuration required when ACF is active
+* Translates custom fields from ACF (including ACF blocks and options pages), Meta Box, and Pods automatically — no configuration required when the field plugin is active
 * Handles long and structured content with chunking and output validation
 * Supports model-specific profiles that tune prompt style and retry behavior for known model families
 
@@ -121,11 +121,15 @@ In the MCP workflow the LLM Wrapper acts as the translation engine — the AI Co
 
 `ai-translate/translate-content` — Create or update one translated post/page/CPT entry
 
-`ai-translate/translate-content-bulk` — Bulk-translate multiple entries
+`ai-translate/translate-content-bulk` — Bulk-translate multiple entries (set `background=true` to queue the batch via Action Scheduler/WP-Cron and poll it with `get-progress`)
 
-`ai-translate/get-progress` — Return live progress for a running translation
+`ai-translate/translate-terms` — Bulk-translate taxonomy terms and link them as translations (Polylang only)
 
-`ai-translate/cancel-translation` — Cancel a running translation
+`ai-translate/get-translatable-fields` — Introspect which meta fields a translation would translate or clear, with source attribution (manual/SEO/ACF/default/filter)
+
+`ai-translate/get-progress` — Return live progress for a running translation or a queued background job (`job_id`)
+
+`ai-translate/cancel-translation` — Cancel a running translation or a queued background job (`job_id`)
 
 `ai-translate/get-available-models` — List models from configured connectors
 
@@ -154,7 +158,9 @@ For reliable results in agent workflows:
 
 **Field plugins** (custom fields translated alongside content)
 
-* Advanced Custom Fields (ACF) — Free and Pro, including Repeater and Flexible Content
+* Advanced Custom Fields (ACF) — Free and Pro, including Repeater and Flexible Content, ACF blocks in Gutenberg, and options pages
+* Meta Box (metabox.io)
+* Pods
 
 **SEO plugins** (metadata translated alongside content)
 
@@ -212,9 +218,19 @@ To extend which field types are translated, add a filter to your theme's `functi
 
 `add_filter( 'slytranslate_acf_translatable_field_types', function ( $types ) { $types[] = 'url'; return $types; } );`
 
-To exclude a specific field key from translation:
+To exclude fields there are three options: enable the "Exclude from AI translation" toggle in the ACF field editor, add the meta keys to the `meta_keys_exclude` setting (via the `configure` MCP ability), or use the `slytranslate_translate_meta_key` filter, which has the final say:
 
 `add_filter( 'slytranslate_translate_meta_key', function ( $translate, $meta_key ) { return $meta_key === 'my_field' ? false : $translate; }, 10, 2 );`
+
+= Are ACF blocks and options pages covered? =
+
+Yes. Field data stored inside `acf/*` Gutenberg blocks is translated automatically along with the post content, including repeater sub-fields. ACF `link` fields translate only the link title — URL and target are never sent to the model.
+
+ACF fields on options pages are translated through the `ai-translate/translate-options` MCP ability. With WPGlobus or WP Multilang the translated variant is merged into the option value; TranslatePress needs no separate step (its string table already translates option output). Polylang has no language-aware option storage — opt in to per-language storage via the `slytranslate_acf_options_post_id` filter.
+
+= Do Meta Box or Pods fields get translated automatically? =
+
+Yes. Translatable field types (`text`, `textarea`, `wysiwyg` for Meta Box; `text`, `paragraph`, `wysiwyg` for Pods) are detected through each plugin's field registry. The type lists are extensible via the `slytranslate_metabox_translatable_field_types` and `slytranslate_pods_translatable_field_types` filters.
 
 = Does this work without a language plugin? =
 
@@ -227,6 +243,26 @@ In WordPress Settings > Connectors, not inside SlyTranslate.
 = Can I run bulk translation from the post/page list? =
 
 Yes. Select items in wp-admin, pick the bulk translation action, choose language and model, and confirm.
+
+= Can bulk jobs run in the background? =
+
+Yes. Call `ai-translate/translate-content-bulk` with `background=true` and the batch is queued with one post per scheduled action — via Action Scheduler when available (bundled by WooCommerce), otherwise via WP-Cron. Poll with `get-progress` (`job_id`) and cancel with `cancel-translation` (`job_id`). Jobs survive closed browser tabs and PHP timeouts. Without a working cron the browser-driven mode keeps working as before.
+
+= Are taxonomy terms (categories, tags) translated? =
+
+With Polylang, enable `translate_terms` in `ai-translate/configure`: terms without a target-language translation are then created and linked automatically during post translation instead of being dropped. For existing sites, `ai-translate/translate-terms` bulk-translates whole taxonomies (use `dry_run=true` to preview).
+
+= Are image alt texts translated? =
+
+Yes. Alt texts embedded in the content are translated with the content. The attachment meta alt text (`_wp_attachment_image_alt`) is translated by default, and with Polylang's media translation enabled, duplicating a media item also translates its alt text, caption, and description.
+
+= Can I protect brand names or enforce fixed terminology? =
+
+Yes. Configure the `glossary` setting via `ai-translate/configure`: entries with `mode=keep` are never translated; entries with `mode=translate` always use your fixed per-language translation.
+
+= Can new posts be translated automatically on publish? =
+
+Yes. Enable `auto_translate_new` in `ai-translate/configure`. Publishing a post in the source language queues draft translations for all missing target languages in the background — they are never auto-published, so editorial review stays in place.
 
 = Does this work inside the TranslatePress visual editor? =
 
@@ -242,7 +278,7 @@ Yes, when using Polylang. Call `ai-translate/set-post-language` with `post_id` a
 
 = How do I control the prompt and translation style? =
 
-Use `ai-translate/configure` for persistent defaults. Pass `additional_prompt` on any `translate-*` call for per-request instructions.
+Use the settings page (Settings → SlyTranslate) or `ai-translate/configure` for persistent defaults — both write through the same backend. Pass `additional_prompt` on any `translate-*` call for per-request instructions.
 
 = Why does execute-ability fail even when discovery looks correct? =
 

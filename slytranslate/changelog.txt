@@ -1,3 +1,28 @@
+= 1.11.0 =
+Features:
+* Admin settings page (Settings -> SlyTranslate): status overview (detected language/SEO/field plugins, AI client, model), model picker, site-wide prompt add-on, glossary editor, meta-field list with per-key exclusion checkboxes and per-post preview, automation toggles, and an Advanced section (prompt template, context-window override, direct-API URL with probe status, string-table concurrency test, transport diagnostics). Saves through the same backend as the MCP configure ability.
+* The settings page and the ACF field-editor toggle ship with German translations (de_DE).
+* ACF blocks in Gutenberg: field data stored in the block-comment JSON of acf/* blocks (attrs.data) is now translated automatically, including repeater/group sub-keys. Short values are batched into a single AI call; the client translation workflow exposes ACF block fields as their own units.
+* ACF options pages: new MCP ability ai-translate/translate-options translates ACF fields on options pages (global content such as footer texts or CTAs). WPGlobus/WP Multilang write inline language markup; Polylang-style per-language storage is opt-in via the slytranslate_acf_options_post_id filter; TranslatePress reports not_required because its string table already covers option output.
+* Meta-key exclusion list: new meta_keys_exclude setting excludes keys from translation uniformly across manual, SEO-detected, and field-plugin-resolved keys. Implemented as a priority-5 callback on slytranslate_translate_meta_key, so third-party filters can still override it.
+* Per-field opt-out in the ACF field editor: a new "Exclude from AI translation" toggle in every ACF field definition skips that field during automatic translation.
+* Structured field types: ACF link fields are now translated selectively — only the title sub-key is sent to the model, url/target are copied unchanged. Extensible via the new slytranslate_meta_value_translation_spec filter.
+* Meta Box (metabox.io) support: text, textarea, and wysiwyg fields are detected via the field registry and translated automatically (filter: slytranslate_metabox_translatable_field_types).
+* Pods support: text, paragraph, and wysiwyg fields are detected via the pod definition and translated automatically (filter: slytranslate_pods_translatable_field_types).
+* New introspection helper describe_effective_meta_keys() reports every effective meta key with its source (acf/seo/manual/filter), ACF field label/type, and exclusion state.
+* Taxonomy-term translation (opt-in via translate_terms): missing target-language terms are created and linked automatically instead of being dropped (Polylang). New MCP ability ai-translate/translate-terms bulk-translates whole taxonomies with dry_run preview.
+* Image alt texts are now translated by default (_wp_attachment_image_alt). Polylang media duplication translates alt text, caption, and description; post translation back-fills the featured image alt on the target attachment when empty.
+* Background processing for bulk jobs: translate-content-bulk accepts background=true and queues one post per scheduled action (Action Scheduler or WP-Cron). get-progress and cancel-translation accept job_id. Jobs survive closed tabs and PHP timeouts.
+* Auto-translate on publish: publishing a source-language post queues draft translations for all missing target languages (option auto_translate_new, never auto-published).
+* Glossary / do-not-translate list: new glossary setting with keep entries (never translate) and fixed per-language translations, injected into every prompt.
+* Slug translation (opt-in via translate_slugs): slugs of newly created translations are derived from the translated title; existing slugs stay untouched.
+* Diff-based retranslation: overwriting an existing translation only sends changed blocks and meta values through the model; unchanged parts are reused.
+* New readonly MCP ability ai-translate/get-translatable-fields reports which meta fields would be translated or cleared, with per-key source attribution.
+
+Changes:
+* Shared ACF introspection extracted into AcfFieldIntrospector; AcfMetaResolver is now a thin consumer of it. The slytranslate_acf_translatable_field_types filter is unchanged.
+* WpglobusAdapter and WpMultilangAdapter expose a public merge_language_variant() mutation helper used by the options translation service.
+
 = 1.10.0 =
 Features:
 * ACF (Advanced Custom Fields) support: translatable text, textarea, and wysiwyg fields are now detected and translated automatically — no configuration required when ACF is active.

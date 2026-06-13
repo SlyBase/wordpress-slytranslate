@@ -35,8 +35,25 @@ class ConfigurationService {
 		if ( isset( $input['meta_keys_clear'] ) ) {
 			update_option( 'slytranslate_meta_clear', sanitize_textarea_field( $input['meta_keys_clear'] ), false );
 		}
+		if ( isset( $input['meta_keys_exclude'] ) ) {
+			update_option( 'slytranslate_meta_keys_exclude', sanitize_textarea_field( $input['meta_keys_exclude'] ), false );
+		}
 		if ( isset( $input['auto_translate_new'] ) ) {
 			update_option( 'slytranslate_new_post', $input['auto_translate_new'] ? '1' : '0', false );
+		}
+		if ( isset( $input['translate_terms'] ) ) {
+			update_option( 'slytranslate_translate_terms', $input['translate_terms'] ? '1' : '0', false );
+		}
+		if ( isset( $input['translate_slugs'] ) ) {
+			update_option( 'slytranslate_translate_slugs', $input['translate_slugs'] ? '1' : '0', false );
+		}
+		if ( array_key_exists( 'glossary', $input ) ) {
+			$glossary = GlossaryService::sanitize_entries( $input['glossary'] );
+			if ( empty( $glossary ) ) {
+				delete_option( 'slytranslate_glossary' );
+			} else {
+				update_option( 'slytranslate_glossary', $glossary, false );
+			}
 		}
 		if ( isset( $input['context_window_tokens'] ) ) {
 			$context_window_tokens = min( 4000000, absint( $input['context_window_tokens'] ) );

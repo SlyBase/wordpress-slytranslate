@@ -165,13 +165,14 @@ class MetaKeyRuntimeFilterTest extends TestCase {
 	}
 
 	/**
-	 * Test backward compatibility: without filters, result is empty (no SEO plugin, no user config).
+	 * Test backward compatibility: without filters and without SEO plugin or
+	 * user config, only the plugin default keys (image alt text) remain.
 	 */
 	public function test_no_filter_backward_compatible(): void {
 		$config = $this->invokeStatic( MetaTranslationService::class, 'get_effective_meta_key_config', array( 0 ) );
 
 		$this->assertIsArray( $config );
-		$this->assertSame( array(), $config['translate'] );
+		$this->assertSame( MetaTranslationService::DEFAULT_TRANSLATE_META_KEYS, $config['translate'] );
 		$this->assertSame( array(), $config['clear'] );
 	}
 

@@ -29,6 +29,17 @@ class MetaTranslationService {
 
 	private const INTERNAL_META_PREFIXES_TO_SKIP = array(
 		'_oembed_',
+		'_slytranslate_',
+	);
+
+	/**
+	 * Meta keys translated by default on every install. Alt texts are SEO- and
+	 * accessibility-relevant and there is no legitimate reason to keep them in
+	 * the source language; the exclusion list and the per-key filter can still
+	 * veto the key.
+	 */
+	public const DEFAULT_TRANSLATE_META_KEYS = array(
+		'_wp_attachment_image_alt',
 	);
 
 	/* ---------------------------------------------------------------
@@ -39,6 +50,15 @@ class MetaTranslationService {
 	private static $meta_clear              = null;
 	private static $seo_plugin_config       = null;
 	private static $resolved_meta_key_config = array();
+
+	/**
+	 * Per-request value-spec registry for structured meta values:
+	 * meta_key => array( 'spec' => array( 'subkeys' => string[] ), 'field_type' => string ).
+	 *
+	 * Populated by resolvers (e.g. AcfMetaResolver for ACF link fields) so
+	 * translate_meta_value_for_key() only translates the listed sub-keys.
+	 */
+	private static $meta_value_specs = array();
 
 	/* ---------------------------------------------------------------
 	 * Public helpers used by AI_Translate and tests
@@ -71,6 +91,67 @@ class MetaTranslationService {
 		self::$meta_clear               = null;
 		self::$seo_plugin_config        = null;
 		self::$resolved_meta_key_config = array();
+		self::$meta_value_specs         = array();
+		AcfMetaResolver::reset_cache();
+	}
+
+	/* ---------------------------------------------------------------
+	 * Value specs for structured meta values
+	 * ------------------------------------------------------------- */
+
+	/**
+	 * Register a sub-key translation spec for a meta key.
+	 *
+	 * @param string $meta_key   Meta key the spec applies to.
+	 * @param array  $spec       array( 'subkeys' => string[] ).
+	 * @param string $field_type Originating field type (e.g. 'link').
+	 */
+	public static function set_meta_value_spec( string $meta_key, array $spec, string $field_type = '' ): void {
+		if ( '' === $meta_key ) {
+			return;
+		}
+		self::$meta_value_specs[ $meta_key ] = array(
+			'spec'       => $spec,
+			'field_type' => $field_type,
+		);
+	}
+
+	/**
+	 * Registered value spec for a meta key (empty array when none).
+	 *
+	 * @return array{spec: array, field_type: string}
+	 */
+	public static function get_meta_value_spec( string $meta_key ): array {
+		return self::$meta_value_specs[ $meta_key ] ?? array( 'spec' => array(), 'field_type' => '' );
+	}
+
+	/* ---------------------------------------------------------------
+	 * Exclusion list (slytranslate_meta_keys_exclude option)
+	 * ------------------------------------------------------------- */
+
+	/**
+	 * User-configured meta keys excluded from translation.
+	 *
+	 * @return string[]
+	 */
+	public static function meta_keys_exclude(): array {
+		return self::meta_keys( 'slytranslate_meta_keys_exclude' );
+	}
+
+	/**
+	 * Core callback on slytranslate_translate_meta_key (priority 5): vetoes
+	 * keys on the exclusion list. Third-party callbacks at default priority 10
+	 * can still overrule this, keeping the filter API the final authority.
+	 *
+	 * @param bool|mixed $include  Whether the key is included so far.
+	 * @param string     $meta_key Meta key being decided.
+	 * @return bool|mixed
+	 */
+	public static function filter_excluded_meta_key( $include, $meta_key ) {
+		if ( in_array( (string) $meta_key, self::meta_keys_exclude(), true ) ) {
+			return false;
+		}
+		return $include;
 	}
 
 	/* ---------------------------------------------------------------
@@ -86,6 +167,9 @@ class MetaTranslationService {
 	 *                                 not exist in real post meta. Successful batch
 	 *                                 translations are returned as part of the result so
 	 *                                 the caller can extract and clean them up.
+	 * @param array $skip_keys        Meta keys to omit from the result entirely, e.g.
+	 *                                 because the existing translation already holds an
+	 *                                 up-to-date value (diff retranslation).
 	 * @return array|\WP_Error
 	 */
 	public static function prepare_translation_meta(
@@ -94,9 +178,13 @@ class MetaTranslationService {
 		string $from,
 		string $additional_prompt,
 		array $all_meta = array(),
-		array $extra_candidates = array()
+		array $extra_candidates = array(),
+		array $skip_keys = array()
 	): array|\WP_Error {
 		$meta            = ! empty( $all_meta ) ? $all_meta : get_post_meta( $post_id );
+		if ( ! empty( $skip_keys ) && is_array( $meta ) ) {
+			$meta = array_diff_key( $meta, array_flip( $skip_keys ) );
+		}
 		$processed_meta  = array();
 		$meta_key_config = self::get_effective_meta_key_config( $post_id, is_array( $meta ) ? $meta : array(), $from, $to );
 
@@ -318,6 +406,10 @@ class MetaTranslationService {
 			if ( 'slim_seo' === $key ) {
 				continue;
 			}
+			// Keys with a value spec need sub-key handling — skip from batching.
+			if ( ! empty( self::get_meta_value_spec( (string) $key )['spec'] ) ) {
+				continue;
+			}
 
 			$value = maybe_unserialize( $values[0] ?? '' );
 			if ( ! is_string( $value ) || '' === trim( $value ) ) {
@@ -397,6 +489,38 @@ class MetaTranslationService {
 			return $translated_value;
 		}
 
+		// Structured values with a sub-key spec (e.g. ACF link arrays): only the
+		// listed sub-keys are translated, everything else (url, target, …) is
+		// copied unchanged. Third parties can adjust or provide specs here.
+		$registered = self::get_meta_value_spec( $meta_key );
+		$spec       = apply_filters(
+			'slytranslate_meta_value_translation_spec',
+			$registered['spec'],
+			$meta_key,
+			$registered['field_type']
+		);
+
+		if ( is_array( $spec ) && ! empty( $spec['subkeys'] ) ) {
+			// A spec means the value has a fixed structure; non-array values
+			// (e.g. a bare URL string from a link field) are never translated.
+			if ( ! is_array( $value ) ) {
+				return $value;
+			}
+
+			$translated_value = $value;
+			foreach ( (array) $spec['subkeys'] as $subkey ) {
+				if ( ! array_key_exists( $subkey, $translated_value ) ) {
+					continue;
+				}
+				$translated_subkey = self::translate_meta_value( $translated_value[ $subkey ], $to, $from, $additional_prompt );
+				if ( is_wp_error( $translated_subkey ) ) {
+					return $translated_subkey;
+				}
+				$translated_value[ $subkey ] = $translated_subkey;
+			}
+			return $translated_value;
+		}
+
 		return self::translate_meta_value( $value, $to, $from, $additional_prompt );
 	}
 
@@ -432,7 +556,7 @@ class MetaTranslationService {
 		}
 
 		$meta_key_config = array(
-			'translate' => self::merge_meta_keys( self::meta_keys( 'slytranslate_meta_translate' ), $seo_plugin_config['translate'] ),
+			'translate' => self::merge_meta_keys( self::meta_keys( 'slytranslate_meta_translate' ), $seo_plugin_config['translate'], self::DEFAULT_TRANSLATE_META_KEYS ),
 			'clear'     => self::merge_meta_keys( self::meta_keys( 'slytranslate_meta_clear' ), $seo_plugin_config['clear'] ),
 			'seo'       => $seo_plugin_config,
 		);
@@ -467,6 +591,110 @@ class MetaTranslationService {
 		}
 
 		return $meta_key_config;
+	}
+
+	/**
+	 * Describe the effective translate keys with their source for UIs and
+	 * introspection abilities.
+	 *
+	 * Sources: 'manual' (slytranslate_meta_translate option), 'seo' (detected
+	 * SEO plugin), 'acf' (resolved by AcfMetaResolver), 'filter' (added by a
+	 * third-party slytranslate_meta_keys_translate callback). Keys on the
+	 * exclusion list are included with excluded=true even though they are
+	 * removed from the effective translate list.
+	 *
+	 * @return array<int, array{key: string, source: string, field_label: string, field_type: string, excluded: bool}>
+	 */
+	public static function describe_effective_meta_keys( int $post_id = 0 ): array {
+		$post_meta = null;
+		if ( $post_id > 0 ) {
+			$post_meta = get_post_meta( $post_id );
+			$post_meta = is_array( $post_meta ) ? $post_meta : array();
+		}
+
+		$config      = self::get_effective_meta_key_config( $post_id, $post_meta );
+		$manual_keys = self::meta_keys( 'slytranslate_meta_translate' );
+		$seo_keys    = is_array( $config['seo']['translate'] ?? null ) ? $config['seo']['translate'] : array();
+		$excluded    = self::meta_keys_exclude();
+		$acf_info    = AcfMetaResolver::get_resolved_field_info( $post_id );
+
+		// Excluded keys are missing from the effective list but should still be
+		// reported (with excluded=true) when a known source would provide them.
+		$known_source_keys = array_merge( $manual_keys, $seo_keys, array_keys( $acf_info ), self::DEFAULT_TRANSLATE_META_KEYS );
+		$all_keys          = self::merge_meta_keys( $config['translate'], array_intersect( $excluded, $known_source_keys ) );
+
+		$described = array();
+		foreach ( $all_keys as $meta_key ) {
+			if ( isset( $acf_info[ $meta_key ] ) ) {
+				$source = 'acf';
+			} elseif ( in_array( $meta_key, $manual_keys, true ) ) {
+				$source = 'manual';
+			} elseif ( in_array( $meta_key, $seo_keys, true ) ) {
+				$source = 'seo';
+			} elseif ( in_array( $meta_key, self::DEFAULT_TRANSLATE_META_KEYS, true ) ) {
+				$source = 'default';
+			} else {
+				$source = 'filter';
+			}
+
+			$described[] = array(
+				'key'         => $meta_key,
+				'source'      => $source,
+				'field_label' => (string) ( $acf_info[ $meta_key ]['field_label'] ?? '' ),
+				'field_type'  => (string) ( $acf_info[ $meta_key ]['field_type'] ?? '' ),
+				'excluded'    => in_array( $meta_key, $excluded, true ),
+			);
+		}
+
+		return $described;
+	}
+
+	/**
+	 * Full introspection report for the get-translatable-fields ability and
+	 * the settings UI: effective translate keys (with source attribution),
+	 * clear keys, detected SEO plugin, and active field-plugin resolvers.
+	 *
+	 * @param int $post_id Optional post context (0 = global view).
+	 */
+	public static function get_translatable_fields_report( int $post_id = 0 ): array {
+		$fields = array();
+		foreach ( self::describe_effective_meta_keys( $post_id ) as $entry ) {
+			$entry['action'] = 'translate';
+			$fields[]        = $entry;
+		}
+
+		$seo_config = self::get_active_seo_plugin_config();
+		$seo_clear  = is_array( $seo_config['clear'] ?? null ) ? $seo_config['clear'] : array();
+		$excluded   = self::meta_keys_exclude();
+		foreach ( self::meta_clear( $post_id ) as $meta_key ) {
+			$fields[] = array(
+				'key'         => $meta_key,
+				'source'      => in_array( $meta_key, $seo_clear, true ) ? 'seo' : 'manual',
+				'field_label' => '',
+				'field_type'  => '',
+				'excluded'    => in_array( $meta_key, $excluded, true ),
+				'action'      => 'clear',
+			);
+		}
+
+		$active_resolvers = array();
+		if ( function_exists( 'acf_get_field' ) ) {
+			$active_resolvers[] = 'acf';
+		}
+		if ( function_exists( 'rwmb_get_field_settings' ) ) {
+			$active_resolvers[] = 'metabox';
+		}
+		if ( function_exists( 'pods_api' ) ) {
+			$active_resolvers[] = 'pods';
+		}
+
+		return array(
+			'post_id'          => $post_id,
+			'fields'           => $fields,
+			'seo_plugin'       => (string) ( $seo_config['key'] ?? '' ),
+			'seo_plugin_label' => (string) ( $seo_config['label'] ?? '' ),
+			'active_resolvers' => $active_resolvers,
+		);
 	}
 
 	private static function get_runtime_source_meta_keys( array $post_meta ): array {
