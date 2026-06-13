@@ -66,7 +66,7 @@ class ClientTranslationWorkflowService {
 
 		$all_meta     = is_callable( 'get_post_meta' ) ? get_post_meta( $post->ID ) : array();
 		$all_meta     = is_array( $all_meta ) ? $all_meta : array();
-		$units        = self::build_units_for_post( $post, $adapter, $from, $all_meta );
+		$units        = self::build_units_for_post( $post, $adapter, $from, $all_meta, $to );
 		$source_hash  = self::compute_source_hash( $post );
 		$target_status = self::normalize_post_status_for_client( $post_status, $post );
 
@@ -254,7 +254,7 @@ class ClientTranslationWorkflowService {
 
 			$all_meta = is_callable( 'get_post_meta' ) ? get_post_meta( $post_id ) : array();
 			$all_meta = is_array( $all_meta ) ? $all_meta : array();
-			$units    = self::build_units_for_post( $post, $adapter, $from, $all_meta );
+			$units    = self::build_units_for_post( $post, $adapter, $from, $all_meta, $to );
 
 			$total_chars = 0;
 			foreach ( $units as $unit ) {
@@ -444,7 +444,8 @@ class ClientTranslationWorkflowService {
 		\WP_Post $post,
 		TranslationPluginAdapter $adapter,
 		string $from,
-		array $all_meta
+		array $all_meta,
+		string $to = ''
 	): array {
 		$units = array();
 
@@ -493,7 +494,7 @@ class ClientTranslationWorkflowService {
 		}
 
 		// Meta units.
-		$meta_units = MetaTranslationService::build_meta_units( $post->ID, $all_meta );
+		$meta_units = MetaTranslationService::build_meta_units( $post->ID, $all_meta, $from, $to );
 		foreach ( $meta_units as $meta_unit ) {
 			$units[] = $meta_unit;
 		}

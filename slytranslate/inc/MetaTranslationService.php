@@ -98,7 +98,7 @@ class MetaTranslationService {
 	): array|\WP_Error {
 		$meta            = ! empty( $all_meta ) ? $all_meta : get_post_meta( $post_id );
 		$processed_meta  = array();
-		$meta_key_config = self::get_effective_meta_key_config( $post_id, is_array( $meta ) ? $meta : array() );
+		$meta_key_config = self::get_effective_meta_key_config( $post_id, is_array( $meta ) ? $meta : array(), $from, $to );
 
 		$meta_calls_before = (int) ( TimingLogger::get_counters()['ai_calls'] ?? 0 );
 		TimingLogger::log( 'meta_start', array(
@@ -413,7 +413,7 @@ class MetaTranslationService {
 		return self::$seo_plugin_config;
 	}
 
-	public static function get_effective_meta_key_config( int $post_id = 0, ?array $post_meta = null ): array {
+	public static function get_effective_meta_key_config( int $post_id = 0, ?array $post_meta = null, string $from = '', string $to = '' ): array {
 		if ( $post_id > 0 && null === $post_meta && isset( self::$resolved_meta_key_config[ $post_id ] ) ) {
 			return self::$resolved_meta_key_config[ $post_id ];
 		}
@@ -436,6 +436,31 @@ class MetaTranslationService {
 			'clear'     => self::merge_meta_keys( self::meta_keys( 'slytranslate_meta_clear' ), $seo_plugin_config['clear'] ),
 			'seo'       => $seo_plugin_config,
 		);
+
+		// Apply runtime filters so third-party code (e.g. AcfMetaResolver) can
+		// add or remove keys without touching plugin settings.
+		$post_meta_for_filter = is_array( $post_meta ) ? $post_meta : array();
+
+		$translate = apply_filters( 'slytranslate_meta_keys_translate', $meta_key_config['translate'], $post_id, $from, $to, $post_meta_for_filter );
+		$clear     = apply_filters( 'slytranslate_meta_keys_clear',     $meta_key_config['clear'],     $post_id, $from, $to, $post_meta_for_filter );
+
+		$translate = SeoPluginDetector::normalize_meta_keys( is_array( $translate ) ? $translate : array() );
+		$clear     = SeoPluginDetector::normalize_meta_keys( is_array( $clear ) ? $clear : array() );
+
+		// Per-key filter: allows fine-grained control over individual keys.
+		$filtered_translate = array();
+		foreach ( $translate as $meta_key ) {
+			if ( self::should_skip_meta_key( $meta_key ) ) {
+				continue;
+			}
+			$include = apply_filters( 'slytranslate_translate_meta_key', true, $meta_key, $post_id, $from, $to, $post_meta_for_filter );
+			if ( $include ) {
+				$filtered_translate[] = $meta_key;
+			}
+		}
+
+		$meta_key_config['translate'] = $filtered_translate;
+		$meta_key_config['clear']     = $clear;
 
 		if ( $post_id > 0 ) {
 			self::$resolved_meta_key_config[ $post_id ] = $meta_key_config;
@@ -521,12 +546,12 @@ class MetaTranslationService {
 	 *                        meta entirely.
 	 * @return array<array{id:string,field:string,meta_key:string,source:string,format:string,lookup_keys:array}>
 	 */
-	public static function build_meta_units( int $post_id, array $all_meta ): array {
+	public static function build_meta_units( int $post_id, array $all_meta, string $from = '', string $to = '' ): array {
 		if ( empty( $all_meta ) ) {
 			return array();
 		}
 
-		$meta_key_config = self::get_effective_meta_key_config( $post_id, $all_meta );
+		$meta_key_config = self::get_effective_meta_key_config( $post_id, $all_meta, $from, $to );
 		$translate_keys  = $meta_key_config['translate'];
 
 		$units = array();

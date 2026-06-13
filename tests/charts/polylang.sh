@@ -1,3 +1,3 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 kubectl apply -f "$SCRIPT_DIR/mariaDB.secrets.yaml" &&
-helm upgrade --install wp-test-wpglobus  oci://ghcr.io/slybase/charts/wordpress --values "$SCRIPT_DIR/wpglobus.yaml"
+helm upgrade --install wp-test-polylang oci://ghcr.io/slybase/charts/wordpress --values "$SCRIPT_DIR/polylang.yaml"

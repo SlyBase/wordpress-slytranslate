@@ -7,19 +7,13 @@ wordpress:
     existingSecret: "wordpress-test-secret"
     firstname: "Timon"
     lastname: "Först"
-    title: "Translate test"
+    title: "Polylang ACF translate test"
   language: "de_DE"
   plugins:
     - name: "ai-provider-for-llamacpp"
       activate: true
       autoupdate: true
-    - name: "blocksy-companion"
-      activate: true
-      autoupdate: true
     - name: "ai"
-      activate: true
-      autoupdate: true
-    - name: "translatepress-multilingual"
       activate: true
       autoupdate: true
     - name: "enable-abilities-for-mcp"
@@ -38,17 +32,13 @@ wordpress:
       activate: true
       autoupdate: true
   themes:
-    - name: "blocksy"
-      activate: false
-      autoupdate: true
-    - name: "https://creativethemes.com/downloads/blocksy-child.zip"
-      slug: "blocksy-child" # Required for URL themes: enables autoupdate, sites[] and skip-if-installed
+    - name: "twentytwentyfour"
       activate: true
       autoupdate: true
-  url: "http://192.168.178.21:30111"
+  url: "http://192.168.178.21:30114"
 service:
   nodePorts:
-    http: 30111
+    http: 30114
 storage:
   resourcePolicy: "" # Delete PVC on helm uninstall
 apache:
