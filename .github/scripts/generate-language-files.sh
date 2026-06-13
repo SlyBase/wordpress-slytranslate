@@ -19,7 +19,9 @@ for po_file in "$languages_dir"/*.po; do
 	mo_file="${po_file%.po}.mo"
 	msgfmt -o "$mo_file" "$po_file"
 	echo "Compiled: $(basename "$po_file") → $(basename "$mo_file")"
-	((compiled++))
+	# Not ((compiled++)): post-increment evaluates to the old value, so the
+	# first iteration returns status 1 and aborts the script under set -e.
+	compiled=$((compiled + 1))
 done
 
 if [[ $compiled -eq 0 ]]; then

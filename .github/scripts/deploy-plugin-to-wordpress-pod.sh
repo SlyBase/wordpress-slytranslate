@@ -46,15 +46,18 @@ kubectl_exec() {
 	"$kubectl_cmd" "$@"
 }
 
-resolve_pod_name() {
-	local pod_name
-	pod_name="$(kubectl_exec -n "$namespace" get pod -l "$pod_selector" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')"
+# All matching pods, one name per line. Deployments with multiple replicas
+# (e.g. a scaled StatefulSet) must receive the plugin on every pod — wp-admin
+# requests are load-balanced, so a partially deployed plugin flaps per request.
+resolve_pod_names() {
+	local pod_names
+	pod_names="$(kubectl_exec -n "$namespace" get pod -l "$pod_selector" --field-selector=status.phase=Running -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
 
-	if [[ -z "$pod_name" ]]; then
-		pod_name="$(kubectl_exec -n "$namespace" get pod -l "$pod_selector" -o jsonpath='{.items[0].metadata.name}')"
+	if [[ -z "$pod_names" ]]; then
+		pod_names="$(kubectl_exec -n "$namespace" get pod -l "$pod_selector" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
 	fi
 
-	printf '%s' "$pod_name"
+	printf '%s' "$pod_names"
 }
 
 resolve_container_name() {
@@ -111,16 +114,13 @@ if [[ -z "$kubectl_cmd" ]]; then
 	exit 1
 fi
 
-pod_name="$(resolve_pod_name)"
+pod_names="$(resolve_pod_names)"
 
-if [[ -z "$pod_name" ]]; then
+if [[ -z "$pod_names" ]]; then
 	echo "No pod found for selector '$pod_selector' in namespace '$namespace'" >&2
 	exit 1
 fi
 
-container="$(resolve_container_name "$pod_name")"
-
-echo "Deploying $zip_file to pod $pod_name ($namespace/$container)"
 unzip -q "$zip_file" -d "$staging_root"
 
 if [[ ! -d "$staging_root/$plugin_slug" ]]; then
@@ -132,18 +132,23 @@ if [[ "$(uname -s)" == 'Darwin' ]] && command -v xattr >/dev/null 2>&1; then
 	xattr -cr "$staging_root/$plugin_slug"
 fi
 
-if ! deploy_to_pod "$pod_name" "$container"; then
-	echo "Initial deploy attempt failed. Refreshing pod/container and retrying once..." >&2
-	pod_name="$(resolve_pod_name)"
-
-	if [[ -z "$pod_name" ]]; then
-		echo "No pod found for selector '$pod_selector' in namespace '$namespace' on retry" >&2
-		exit 1
-	fi
-
+deployed_pods=()
+while IFS= read -r pod_name; do
+	[[ -z "$pod_name" ]] && continue
 	container="$(resolve_container_name "$pod_name")"
-	echo "Retrying deploy to pod $pod_name ($namespace/$container)" >&2
-	deploy_to_pod "$pod_name" "$container"
+
+	echo "Deploying $zip_file to pod $pod_name ($namespace/$container)"
+	if ! deploy_to_pod "$pod_name" "$container"; then
+		echo "Initial deploy attempt to $pod_name failed. Retrying once..." >&2
+		container="$(resolve_container_name "$pod_name")"
+		deploy_to_pod "$pod_name" "$container"
+	fi
+	deployed_pods+=("$pod_name")
+done <<< "$pod_names"
+
+if [[ ${#deployed_pods[@]} -eq 0 ]]; then
+	echo "No running pod received the deployment for selector '$pod_selector'" >&2
+	exit 1
 fi
 
-echo "Deployment completed: $target_dir on pod $pod_name"
+echo "Deployment completed: $target_dir on pod(s) ${deployed_pods[*]}"
