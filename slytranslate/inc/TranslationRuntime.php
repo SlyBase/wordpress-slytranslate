@@ -226,7 +226,7 @@ class TranslationRuntime {
 	 * Prompt building
 	 * ------------------------------------------------------------- */
 
-	public static function build_prompt( string $to, string $from = 'en', string $additional_prompt = '' ): string {
+	public static function build_prompt( string $to, string $from = 'en', string $additional_prompt = '', string $source_text = '' ): string {
 		$template    = get_option( 'slytranslate_prompt', AI_Translate::get_default_prompt() );
 		$base_prompt = str_replace(
 			array( '{FROM_CODE}', '{TO_CODE}' ),
@@ -239,6 +239,11 @@ class TranslationRuntime {
 		$global_addon = get_option( 'slytranslate_prompt_addon', '' );
 		if ( is_string( $global_addon ) && '' !== trim( $global_addon ) ) {
 			$parts[] = trim( $global_addon );
+		}
+
+		$glossary_block = GlossaryService::build_prompt_block( $to, $source_text );
+		if ( '' !== $glossary_block ) {
+			$parts[] = $glossary_block;
 		}
 
 		if ( is_string( $additional_prompt ) && '' !== trim( $additional_prompt ) ) {
@@ -326,7 +331,7 @@ class TranslationRuntime {
 		self::$last_diagnostics = null;
 
 		try {
-			$prompt = self::build_prompt( $to, $from, $additional_prompt );
+			$prompt = self::build_prompt( $to, $from, $additional_prompt, (string) $text );
 			return self::translate_with_chunk_limit( $text, $prompt, self::get_chunk_char_limit() );
 		} finally {
 			self::$source_lang    = null;
@@ -345,7 +350,7 @@ class TranslationRuntime {
 		self::$last_diagnostics = null;
 
 		try {
-			$prompt = self::build_prompt( $to, $from, $additional_prompt );
+			$prompt = self::build_prompt( $to, $from, $additional_prompt, (string) $text );
 			return self::translate_chunk( $text, $prompt, 0, true );
 		} finally {
 			self::$source_lang      = null;

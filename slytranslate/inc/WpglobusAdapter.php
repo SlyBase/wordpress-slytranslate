@@ -450,6 +450,17 @@ class WpglobusAdapter implements TranslationPluginAdapter {
 		return $language_code;
 	}
 
+	/**
+	 * Public mutation helper: write a target-language variant into an existing
+	 * (possibly markup-less) value, preserving all other language segments.
+	 * Used by AcfOptionsTranslationService for option values.
+	 */
+	public function merge_language_variant( string $existing_value, string $source_language, string $target_language, string $target_value ): string {
+		$default_language = $this->get_default_language_code();
+		$source_fallback  = $this->extract_language_value( $existing_value, sanitize_key( $source_language ), $default_language );
+		return $this->merge_language_value( $existing_value, $source_language, $target_language, $target_value, $source_fallback );
+	}
+
 	private function has_wpglobus_markup( string $value ): bool {
 		// WPGlobus format: {:lang}text{:} — detect opening language tag.
 		return (bool) preg_match( '/\{:[a-z]{2,10}\}/', $value );

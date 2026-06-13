@@ -307,6 +307,84 @@ class AcfMetaResolverTest extends TestCase {
 	}
 
 	/**
+	 * Test that fields flagged with the editor opt-out are skipped.
+	 */
+	public function test_field_with_exclude_flag_is_skipped(): void {
+		$this->stubWpFunction( 'acf_get_field', static function ( $ref ) {
+			if ( 'field_hidden' === $ref ) {
+				return array( 'type' => 'text', 'slytranslate_exclude' => 1 );
+			}
+			return false;
+		} );
+
+		$post_meta = array(
+			'hidden_text'  => array( 'value' ),
+			'_hidden_text' => array( 'field_hidden' ),
+		);
+
+		$result = AcfMetaResolver::add_acf_translatable_keys( array(), 42, 'de', 'en', $post_meta );
+
+		$this->assertNotContains( 'hidden_text', $result );
+	}
+
+	/**
+	 * Test that structured link fields are added and register a value spec.
+	 */
+	public function test_link_field_is_added_with_value_spec(): void {
+		\SlyTranslate\MetaTranslationService::reset_cache();
+
+		$this->stubWpFunction( 'acf_get_field', static function ( $ref ) {
+			if ( 'field_link' === $ref ) {
+				return array( 'type' => 'link', 'label' => 'CTA Link' );
+			}
+			return false;
+		} );
+
+		$post_meta = array(
+			'cta'  => array( 'a:3:{...}' ),
+			'_cta' => array( 'field_link' ),
+		);
+
+		$result = AcfMetaResolver::add_acf_translatable_keys( array(), 42, 'de', 'en', $post_meta );
+
+		$this->assertContains( 'cta', $result );
+		$this->assertSame(
+			array( 'subkeys' => array( 'title' ) ),
+			\SlyTranslate\MetaTranslationService::get_meta_value_spec( 'cta' )['spec']
+		);
+
+		\SlyTranslate\MetaTranslationService::reset_cache();
+	}
+
+	/**
+	 * Test that resolved field info (label/type) is recorded per post.
+	 */
+	public function test_resolved_field_info_is_recorded(): void {
+		AcfMetaResolver::reset_cache();
+
+		$this->stubWpFunction( 'acf_get_field', static function ( $ref ) {
+			if ( 'field_hero' === $ref ) {
+				return array( 'type' => 'text', 'label' => 'Hero Text' );
+			}
+			return false;
+		} );
+
+		$post_meta = array(
+			'hero'  => array( 'Big headline' ),
+			'_hero' => array( 'field_hero' ),
+		);
+
+		AcfMetaResolver::add_acf_translatable_keys( array(), 42, 'de', 'en', $post_meta );
+
+		$info = AcfMetaResolver::get_resolved_field_info( 42 );
+		$this->assertSame( 'text', $info['hero']['field_type'] );
+		$this->assertSame( 'Hero Text', $info['hero']['field_label'] );
+		$this->assertSame( array(), AcfMetaResolver::get_resolved_field_info( 99 ) );
+
+		AcfMetaResolver::reset_cache();
+	}
+
+	/**
 	 * Test that existing keys in translate list are preserved.
 	 */
 	public function test_existing_translate_keys_are_preserved(): void {

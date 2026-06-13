@@ -687,3 +687,287 @@ msgstr ""
 #: slytranslate/slytranslate.php:489
 msgid "You must be logged in to save preferences."
 msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "AI client available"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "AI client missing — install an AI connector for in-WordPress translation"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Add glossary entry"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Additional instructions (site-wide)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Additional keys"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Advanced"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Appended to every translation request, e.g. tone or brand wording."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Automatically translate new posts on publish (as draft)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Automation"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Built-in default"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Clear (space-separated meta keys)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Cleared on translation"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Concurrency probe failed."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Context window override (tokens, 0 = automatic)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Default model"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Detected automatically from your SEO and field plugins. Unchecking a field excludes it from translation; the filter API can still override this."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Direct API URL (OpenAI-compatible, optional)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Direct API: chat_template_kwargs not detected"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Direct API: chat_template_kwargs supported"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Effective:"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Errors"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Exclude from AI translation"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Failed to load settings."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Field plugins"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Filter API"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Fixed translation"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Glossary / do not translate"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Keep unchanged"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Level"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Load preview"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Loading settings …"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Manual key"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Meta fields"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Mode"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Model"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "No SEO plugin detected"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "No language plugin detected"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "No parallel transport available."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "No translatable meta fields detected for this context."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Only used by model profiles that require a direct endpoint (e.g. TranslateGemma). Saving runs a capability probe."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Placeholders: {FROM_CODE} and {TO_CODE}."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Preview for post ID"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Probe: chat_template_kwargs not detected."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Probe: chat_template_kwargs supported."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Prompt template"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Recommended concurrency:"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Remove"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Reset to default"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "SEO plugin"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Save settings"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Saving failed."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Settings saved."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Showing resolution for post"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Speedup"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Status"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "String-table concurrency (TranslatePress batches)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Term"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Test concurrency"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Translate (space-separated meta keys)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Translate post slugs"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Translate taxonomy terms alongside content"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Translation"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Translations (en=…, fr=…)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Transport diagnostics"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "Wall time (ms)"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "When enabled, SlyTranslate skips this field during automatic translation."
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "chunk size:"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "detected"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "learned:"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "recommended:"
+msgstr ""
+
+#: slytranslate/inc/SettingsPage.php
+msgid "tokens"
+msgstr ""

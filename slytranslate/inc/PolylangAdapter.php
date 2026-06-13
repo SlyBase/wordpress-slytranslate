@@ -38,6 +38,18 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 		return pll_get_post_translations( $post_id );
 	}
 
+	/**
+	 * Whether Polylang exposes the term-translation API needed by
+	 * TermTranslationService. String-table adapters never support this —
+	 * their string-table path already covers term names.
+	 */
+	public function supports_term_translation(): bool {
+		return $this->is_available()
+			&& function_exists( 'pll_get_term' )
+			&& function_exists( 'pll_set_term_language' )
+			&& function_exists( 'pll_save_term_translations' );
+	}
+
 	public function supports_mutation_capability( string $capability ): bool {
 		if ( ! $this->is_available() ) {
 			return false;
@@ -113,7 +125,7 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 			return new \WP_Error( 'source_post_not_found', 'Source post not found.' );
 		}
 
-		$from_lang = pll_get_post_language( $source_post_id );
+		$from_lang = $this->get_post_language( $source_post_id );
 		$existing  = pll_get_post( $source_post_id, $target_lang );
 		$overwrite = ! empty( $data['overwrite'] );
 
@@ -124,7 +136,8 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 			);
 		}
 
-		$translation_id = $existing;
+		$translation_id    = $existing;
+		$is_new_translation = ! $translation_id;
 
 		// Use a filter to preserve the original post author.
 		$author_override = function ( $data ) use ( $post ) {
@@ -180,7 +193,35 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 		}
 		$update_data['post_status'] = $data['post_status'] ?? 'draft';
 
+		// Opt-in slug translation: derive the slug from the already-translated
+		// title (no extra LLM call). Only on newly created translations — or
+		// when the existing slug is still the auto-generated stub — because
+		// changing slugs of live translations breaks inbound links.
+		if ( get_option( 'slytranslate_translate_slugs', '0' ) === '1'
+			&& isset( $update_data['post_title'] )
+			&& '' !== trim( (string) $update_data['post_title'] )
+		) {
+			$apply_slug = $is_new_translation;
+			if ( ! $apply_slug && function_exists( 'get_post_field' ) ) {
+				$current_slug = (string) get_post_field( 'post_name', $translation_id );
+				$apply_slug   = '' !== $current_slug && $current_slug === sanitize_title( $post->post_title . " ({$target_lang})" );
+			}
+
+			if ( $apply_slug ) {
+				$translated_slug = sanitize_title( (string) $update_data['post_title'] );
+				if ( '' !== $translated_slug ) {
+					$update_data['post_name'] = function_exists( 'wp_unique_post_slug' )
+						? wp_unique_post_slug( $translated_slug, (int) $translation_id, (string) $update_data['post_status'], $post->post_type, (int) ( $post->post_parent ?? 0 ) )
+						: $translated_slug;
+				}
+			}
+		}
+
 		wp_update_post( wp_slash( $update_data ) );
+
+		// Loop-guard marker for auto-translate-on-publish: posts created by the
+		// plugin must never trigger another translation round.
+		update_post_meta( $translation_id, AutoPublishTranslationService::GENERATED_META_KEY, '1' );
 
 		// Copy and process meta.
 		if ( ! empty( $data['meta'] ) && is_array( $data['meta'] ) ) {
@@ -211,6 +252,16 @@ class PolylangAdapter implements TranslationPluginAdapter, TranslationMutationAd
 
 				if ( function_exists( 'pll_is_translated_taxonomy' ) && ! pll_is_translated_taxonomy( $taxonomy ) ) {
 					$translated_term_ids[] = $term_id;
+					continue;
+				}
+
+				// Opt-in: translate the missing term instead of silently
+				// dropping it, so the translated post keeps its categories/tags.
+				if ( TermTranslationService::is_enabled() && $this->supports_term_translation() && is_string( $from_lang ) && '' !== $from_lang ) {
+					$created_term_id = TermTranslationService::translate_term( (int) $term_id, $target_lang, $from_lang );
+					if ( ! is_wp_error( $created_term_id ) && $created_term_id > 0 ) {
+						$translated_term_ids[] = $created_term_id;
+					}
 				}
 			}
 

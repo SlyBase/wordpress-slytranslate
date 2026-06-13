@@ -180,6 +180,19 @@ class PostTranslationService {
 
 			$meta_for_batch   = is_array( $all_meta ) ? $all_meta : array();
 			$meta_key_config  = MetaTranslationService::get_effective_meta_key_config( $post_id, $meta_for_batch, $from, $to );
+
+			// Diff retranslation: when overwriting an existing sibling-post
+			// translation, meta keys whose source value is unchanged keep their
+			// already-translated target value and skip the pipeline entirely.
+			$skip_meta_keys = array();
+			if ( $overwrite && $existing_translation && ! AI_Translate::is_single_entry_translation_mode() ) {
+				$skip_meta_keys = TranslationFingerprint::get_unchanged_meta_keys( (int) $existing_translation, $meta_for_batch, $meta_key_config['translate'] );
+				if ( ! empty( $skip_meta_keys ) ) {
+					$meta_for_batch = array_diff_key( $meta_for_batch, array_flip( $skip_meta_keys ) );
+					TimingLogger::log( 'diff_meta_skipped', array( 'keys' => $skip_meta_keys ) );
+				}
+			}
+
 			$batch_candidates = MetaTranslationService::count_batch_eligible_candidates( $meta_for_batch, $meta_key_config, $batch_eligible_candidates );
 
 			$will_batch_title = $title_batch_eligible && $batch_candidates >= 2;
@@ -292,7 +305,16 @@ class PostTranslationService {
 					TranslationProgressTracker::complete_phase( 'title' );
 				}
 			} else {
-				$content = ContentTranslator::translate_parsed_blocks( $parsed_blocks, $post->post_content, $to, $from, $additional_prompt );
+				// Diff retranslation: reuse translated blocks from the existing
+				// translation for source blocks whose content hash is unchanged.
+				$content_reuse_map = null;
+				if ( $overwrite && $existing_translation && is_array( $parsed_blocks ) && ! empty( $parsed_blocks ) && ! AI_Translate::is_single_entry_translation_mode() ) {
+					$content_reuse_map = TranslationFingerprint::plan_block_reuse( $parsed_blocks, (int) $existing_translation );
+				}
+
+				$content = is_array( $content_reuse_map )
+					? self::translate_blocks_with_reuse( $parsed_blocks, $content_reuse_map, $to, $from, $additional_prompt )
+					: ContentTranslator::translate_parsed_blocks( $parsed_blocks, $post->post_content, $to, $from, $additional_prompt );
 				if ( is_wp_error( $content ) ) {
 					TimingLogger::log( 'phase_end', array( 'phase' => 'content', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $content->get_error_code() ) );
 					self::log_job_end( $post_id, $job_started_at, false );
@@ -338,7 +360,7 @@ class PostTranslationService {
 			TranslationProgressTracker::mark_phase( 'meta' );
 			TimingLogger::log( 'phase_start', array( 'phase' => 'meta' ) );
 			$phase_started = TimingLogger::start();
-			$processed_meta = MetaTranslationService::prepare_translation_meta( $post_id, $to, $from, $additional_prompt, $all_meta, $extra_candidates );
+			$processed_meta = MetaTranslationService::prepare_translation_meta( $post_id, $to, $from, $additional_prompt, $all_meta, $extra_candidates, $skip_meta_keys );
 			if ( is_wp_error( $processed_meta ) ) {
 				TimingLogger::log( 'phase_end', array( 'phase' => 'meta', 'duration_ms' => TimingLogger::stop( $phase_started ), 'ok' => false, 'reason' => $processed_meta->get_error_code() ) );
 				self::log_job_end( $post_id, $job_started_at, false );
@@ -411,6 +433,19 @@ class PostTranslationService {
 
 			if ( $saving_ok ) {
 				self::clear_embed_cache_meta( (int) $result );
+
+				if ( ! AI_Translate::is_single_entry_translation_mode() && (int) $result !== $post_id ) {
+					// Record source fingerprints on the translation so the next
+					// overwrite can skip unchanged blocks and meta values.
+					TranslationFingerprint::store_fingerprints(
+						(int) $result,
+						is_array( $parsed_blocks ) ? $parsed_blocks : array(),
+						$all_meta,
+						$meta_key_config['translate']
+					);
+					MediaTranslationService::maybe_translate_featured_image_alt( $post_id, (int) $result, $to, $from );
+				}
+
 				TranslationProgressTracker::complete_phase( 'saving' );
 				TranslationProgressTracker::set_progress( 'done' );
 			}
@@ -423,6 +458,70 @@ class PostTranslationService {
 			// inherit the last percentage from this completed/failed job.
 			TranslationProgressTracker::clear_progress( $post_id );
 		}
+	}
+
+	/**
+	 * Translate only the top-level blocks whose content hash is not covered by
+	 * the reuse map; unchanged blocks are copied from the existing translation.
+	 *
+	 * Consecutive changed blocks are translated as one group so the existing
+	 * grouping/batching inside ContentTranslator keeps working.
+	 *
+	 * @param array                $blocks            parse_blocks() result of the source content.
+	 * @param array<string,string> $translated_by_hash Source block hash → serialized translated block.
+	 * @return string|\WP_Error
+	 */
+	private static function translate_blocks_with_reuse( array $blocks, array $translated_by_hash, string $to, string $from, string $additional_prompt ): string|\WP_Error {
+		$pieces  = array();
+		$pending = array();
+
+		$flush = static function () use ( &$pieces, &$pending, $to, $from, $additional_prompt ) {
+			if ( empty( $pending ) ) {
+				return true;
+			}
+			$serialized = serialize_blocks( $pending );
+			$translated = ContentTranslator::translate_parsed_blocks( $pending, $serialized, $to, $from, $additional_prompt );
+			if ( is_wp_error( $translated ) ) {
+				return $translated;
+			}
+			$pieces[] = (string) $translated;
+			$pending  = array();
+			return true;
+		};
+
+		$reused = 0;
+		foreach ( $blocks as $block ) {
+			if ( ! is_array( $block ) ) {
+				continue;
+			}
+
+			$serialized_block = serialize_blocks( array( $block ) );
+			$hash             = TranslationFingerprint::hash( $serialized_block );
+			if ( isset( $translated_by_hash[ $hash ] ) ) {
+				$flush_result = $flush();
+				if ( is_wp_error( $flush_result ) ) {
+					return $flush_result;
+				}
+				$pieces[] = $translated_by_hash[ $hash ];
+				$reused++;
+				TranslationProgressTracker::advance_units( 'content', self::char_length( $serialized_block ) );
+				continue;
+			}
+
+			$pending[] = $block;
+		}
+
+		$flush_result = $flush();
+		if ( is_wp_error( $flush_result ) ) {
+			return $flush_result;
+		}
+
+		TimingLogger::log( 'diff_blocks_reused', array(
+			'reused' => $reused,
+			'total'  => count( $blocks ),
+		) );
+
+		return implode( '', $pieces );
 	}
 
 	private static function translate_title_with_empty_output_retry( string $title, string $target_language, string $source_language, string $additional_prompt ): mixed {

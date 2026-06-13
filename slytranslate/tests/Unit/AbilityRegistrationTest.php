@@ -53,7 +53,7 @@ class AbilityRegistrationTest extends TestCase {
 	public function test_register_abilities_registers_expected_ability_contracts(): void {
 		$registered_abilities = $this->capture_registered_abilities();
 
-		$this->assertCount( 17, $registered_abilities );
+		$this->assertCount( 19, $registered_abilities );
 		$this->assertSame( array_keys( $this->expected_ability_contracts() ), array_keys( $registered_abilities ) );
 		$this->assertArrayNotHasKey( 'ai-translate/translate-post', $registered_abilities );
 
@@ -601,7 +601,7 @@ class AbilityRegistrationTest extends TestCase {
 				'execute_callback' => array( AI_Translate::class, 'execute_translate_posts' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'post_ids', 'post_type', 'limit', 'source_language', 'target_language', 'post_status', 'translate_title', 'overwrite', 'additional_prompt', 'model_slug' ),
+					'property_keys' => array( 'post_ids', 'post_type', 'limit', 'source_language', 'target_language', 'post_status', 'translate_title', 'overwrite', 'additional_prompt', 'model_slug', 'background' ),
 					'required'      => array( 'target_language' ),
 					'properties'    => array(
 						'post_ids' => array(
@@ -653,11 +653,15 @@ class AbilityRegistrationTest extends TestCase {
 							'type'        => 'string',
 							'description' => 'Model slug/identifier to use for this translation batch. Overrides the site-wide default.',
 						),
+						'background' => array(
+							'type'    => 'boolean',
+							'default' => false,
+						),
 					),
 				),
 				'output_schema'    => array(
 					'type'          => 'object',
-					'property_keys' => array( 'results', 'total', 'succeeded', 'failed', 'skipped' ),
+					'property_keys' => array( 'results', 'total', 'succeeded', 'failed', 'skipped', 'queued', 'job_id' ),
 					'properties'    => array(
 						'results' => array(
 							'type'  => 'array',
@@ -677,12 +681,52 @@ class AbilityRegistrationTest extends TestCase {
 						'succeeded' => array( 'type' => 'integer' ),
 						'failed'    => array( 'type' => 'integer' ),
 						'skipped'   => array( 'type' => 'integer' ),
+						'queued'    => array( 'type' => 'boolean' ),
+						'job_id'    => array( 'type' => 'string' ),
 					),
 				),
 				'meta'             => $this->expected_public_mcp_meta(),
 			),
-			'ai-translate/get-progress' => array(
-				'execute_callback' => array( AI_Translate::class, 'execute_get_progress' ),
+			'ai-translate/translate-options' => array(
+				'description'      => 'Translates ACF fields on options pages (global content such as footer texts or CTAs) into one target language. Registered only when ACF options pages exist. With TranslatePress this returns not_required because its string table already covers option output. Use dry_run=true to preview which fields would be translated.',
+				'execute_callback' => array( AI_Translate::class, 'execute_translate_options' ),
+				'input_schema'     => array(
+					'type'          => 'object',
+					'property_keys' => array( 'target_language', 'source_language', 'page_slug', 'dry_run' ),
+					'required'      => array( 'target_language' ),
+					'properties'    => array(
+						'target_language' => array( 'type' => 'string' ),
+						'source_language' => array( 'type' => 'string' ),
+						'page_slug'       => array( 'type' => 'string' ),
+						'dry_run'         => array( 'type' => 'boolean', 'default' => false ),
+					),
+				),
+				'output_schema'    => array(
+					'type'          => 'object',
+					'property_keys' => array( 'status', 'message', 'target_language', 'source_language', 'dry_run', 'results', 'total', 'translated', 'skipped', 'failed' ),
+					'properties'    => array(
+						'status'          => array( 'type' => 'string' ),
+						'message'         => array( 'type' => 'string' ),
+						'target_language' => array( 'type' => 'string' ),
+						'source_language' => array( 'type' => 'string' ),
+						'dry_run'         => array( 'type' => 'boolean' ),
+						'results'         => array(
+							'type'  => 'array',
+							'items' => array(
+								'type'          => 'object',
+								'property_keys' => array( 'field', 'field_label', 'field_type', 'page', 'status', 'reason' ),
+							),
+						),
+						'total'           => array( 'type' => 'integer' ),
+						'translated'      => array( 'type' => 'integer' ),
+						'skipped'         => array( 'type' => 'integer' ),
+						'failed'          => array( 'type' => 'integer' ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta(),
+			),
+			'ai-translate/get-translatable-fields' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_get_translatable_fields' ),
 				'input_schema'     => array(
 					'type'          => 'object',
 					'property_keys' => array( 'post_id' ),
@@ -692,12 +736,58 @@ class AbilityRegistrationTest extends TestCase {
 				),
 				'output_schema'    => array(
 					'type'          => 'object',
-					'property_keys' => array( 'phase', 'percent', 'current_chunk', 'total_chunks' ),
+					'property_keys' => array( 'post_id', 'fields', 'seo_plugin', 'seo_plugin_label', 'active_resolvers' ),
+					'required'      => array( 'fields' ),
+					'properties'    => array(
+						'post_id'          => array( 'type' => 'integer' ),
+						'fields'           => array(
+							'type'  => 'array',
+							'items' => array(
+								'type'          => 'object',
+								'property_keys' => array( 'key', 'action', 'source', 'field_type', 'field_label', 'excluded' ),
+								'required'      => array( 'key', 'action', 'source' ),
+								'properties'    => array(
+									'key'         => array( 'type' => 'string' ),
+									'action'      => array( 'type' => 'string', 'enum' => array( 'translate', 'clear' ) ),
+									'source'      => array( 'type' => 'string', 'enum' => array( 'manual', 'seo', 'acf', 'default', 'filter' ) ),
+									'field_type'  => array( 'type' => 'string' ),
+									'field_label' => array( 'type' => 'string' ),
+									'excluded'    => array( 'type' => 'boolean' ),
+								),
+							),
+						),
+						'seo_plugin'       => array( 'type' => 'string' ),
+						'seo_plugin_label' => array( 'type' => 'string' ),
+						'active_resolvers' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+					),
+				),
+				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
+			),
+			'ai-translate/get-progress' => array(
+				'execute_callback' => array( AI_Translate::class, 'execute_get_progress' ),
+				'input_schema'     => array(
+					'type'          => 'object',
+					'property_keys' => array( 'post_id', 'job_id' ),
+					'properties'    => array(
+						'post_id' => array( 'type' => 'integer' ),
+						'job_id'  => array( 'type' => 'string' ),
+					),
+				),
+				'output_schema'    => array(
+					'type'          => 'object',
+					'property_keys' => array( 'phase', 'percent', 'current_chunk', 'total_chunks', 'job_id', 'status', 'total', 'processed', 'succeeded', 'failed', 'skipped' ),
 					'properties'    => array(
 						'phase'         => array( 'type' => 'string' ),
 						'percent'       => array( 'type' => 'integer' ),
 						'current_chunk' => array( 'type' => 'integer' ),
 						'total_chunks'  => array( 'type' => 'integer' ),
+						'job_id'        => array( 'type' => 'string' ),
+						'status'        => array( 'type' => 'string' ),
+						'total'         => array( 'type' => 'integer' ),
+						'processed'     => array( 'type' => 'integer' ),
+						'succeeded'     => array( 'type' => 'integer' ),
+						'failed'        => array( 'type' => 'integer' ),
+						'skipped'       => array( 'type' => 'integer' ),
 					),
 				),
 				'meta'             => $this->expected_public_mcp_meta( array( 'readonly' => true ) ),
@@ -706,17 +796,19 @@ class AbilityRegistrationTest extends TestCase {
 				'execute_callback' => array( AI_Translate::class, 'execute_cancel_translation' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'post_id' ),
+					'property_keys' => array( 'post_id', 'job_id' ),
 					'properties'    => array(
 						'post_id' => array( 'type' => 'integer' ),
+						'job_id'  => array( 'type' => 'string' ),
 					),
 				),
 				'output_schema'    => array(
 					'type'          => 'object',
-					'property_keys' => array( 'cancelled' ),
+					'property_keys' => array( 'cancelled', 'job_cancelled' ),
 					'required'      => array( 'cancelled' ),
 					'properties'    => array(
-						'cancelled' => array( 'type' => 'boolean' ),
+						'cancelled'     => array( 'type' => 'boolean' ),
+						'job_cancelled' => array( 'type' => 'boolean' ),
 					),
 				),
 				'meta'             => $this->expected_public_mcp_meta(),
@@ -767,7 +859,7 @@ class AbilityRegistrationTest extends TestCase {
 				'execute_callback' => array( AI_Translate::class, 'execute_configure' ),
 				'input_schema'     => array(
 					'type'          => 'object',
-					'property_keys' => array( 'prompt_template', 'prompt_addon', 'meta_keys_translate', 'meta_keys_clear', 'auto_translate_new', 'context_window_tokens', 'string_table_concurrency', 'model_slug', 'direct_api_url', 'force_direct_api' ),
+					'property_keys' => array( 'prompt_template', 'prompt_addon', 'meta_keys_translate', 'meta_keys_clear', 'meta_keys_exclude', 'auto_translate_new', 'translate_terms', 'translate_slugs', 'glossary', 'context_window_tokens', 'string_table_concurrency', 'model_slug', 'direct_api_url', 'force_direct_api' ),
 					'properties'    => array(
 						'prompt_template' => array(
 							'type'        => 'string',
@@ -785,9 +877,27 @@ class AbilityRegistrationTest extends TestCase {
 							'type'        => 'string',
 							'description' => 'Persistent setting: whitespace-separated list of meta keys to clear. Use a plain string, not an array.',
 						),
+						'meta_keys_exclude' => array(
+							'type'        => 'string',
+							'description' => 'Persistent setting: whitespace-separated list of meta keys to exclude from translation. Applies to manual, SEO-detected, and auto-resolved field-plugin keys alike.',
+						),
 						'auto_translate_new' => array(
 							'type'        => 'boolean',
-							'description' => 'Persistent setting: auto-translate new translation posts created by the active language plugin.',
+							'description' => 'Persistent setting: queue draft translations for all missing target languages when a source-language post is published. Requires a background transport (Action Scheduler or WP-Cron).',
+						),
+						'translate_terms' => array(
+							'type' => 'boolean',
+						),
+						'translate_slugs' => array(
+							'type' => 'boolean',
+						),
+						'glossary' => array(
+							'type' => 'array',
+							'items' => array(
+								'type'          => 'object',
+								'property_keys' => array( 'term', 'mode', 'to' ),
+								'required'      => array( 'term', 'mode' ),
+							),
 						),
 						'context_window_tokens' => array(
 							'type'        => 'integer',
@@ -822,7 +932,11 @@ class AbilityRegistrationTest extends TestCase {
 						'prompt_addon',
 						'meta_keys_translate',
 						'meta_keys_clear',
+						'meta_keys_exclude',
 						'auto_translate_new',
+						'translate_terms',
+						'translate_slugs',
+						'glossary',
 						'context_window_tokens',
 						'string_table_concurrency',
 						'string_table_concurrency_effective',
@@ -852,7 +966,11 @@ class AbilityRegistrationTest extends TestCase {
 						'prompt_addon'                 => array( 'type' => 'string' ),
 						'meta_keys_translate'          => array( 'type' => 'string' ),
 						'meta_keys_clear'              => array( 'type' => 'string' ),
+						'meta_keys_exclude'            => array( 'type' => 'string' ),
 						'auto_translate_new'           => array( 'type' => 'boolean' ),
+						'translate_terms'              => array( 'type' => 'boolean' ),
+						'translate_slugs'              => array( 'type' => 'boolean' ),
+						'glossary'                     => array( 'type' => 'array' ),
 						'context_window_tokens'        => array( 'type' => 'integer' ),
 						'string_table_concurrency'     => array( 'type' => 'integer' ),
 						'string_table_concurrency_effective' => array( 'type' => 'integer' ),

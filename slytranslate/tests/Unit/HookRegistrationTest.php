@@ -6,10 +6,15 @@ namespace SlyTranslate\Tests\Unit;
 
 use SlyTranslate\AI_Translate;
 use SlyTranslate\AbilityRegistrar;
+use SlyTranslate\AutoPublishTranslationService;
 use SlyTranslate\EditorBootstrap;
 use SlyTranslate\ListTableTranslation;
+use SlyTranslate\MediaTranslationService;
+use SlyTranslate\MetaTranslationService;
 use SlyTranslate\Settings;
+use SlyTranslate\SettingsPage;
 use SlyTranslate\TranslatePressEditorIntegration;
+use SlyTranslate\TranslationQueue;
 
 class HookRegistrationTest extends TestCase {
 
@@ -47,6 +52,13 @@ class HookRegistrationTest extends TestCase {
 		$this->assertSame(
 			array(
 				array(
+					'type'          => 'filter',
+					'hook'          => 'slytranslate_translate_meta_key',
+					'callback'      => array( MetaTranslationService::class, 'filter_excluded_meta_key' ),
+					'priority'      => 5,
+					'accepted_args' => 2,
+				),
+				array(
 					'type'          => 'action',
 					'hook'          => 'enqueue_block_editor_assets',
 					'callback'      => array( EditorBootstrap::class, 'enqueue_editor_plugin' ),
@@ -57,6 +69,20 @@ class HookRegistrationTest extends TestCase {
 					'type'          => 'action',
 					'hook'          => 'admin_init',
 					'callback'      => array( Settings::class, 'register' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'type'          => 'action',
+					'hook'          => 'admin_menu',
+					'callback'      => array( SettingsPage::class, 'register_settings_page' ),
+					'priority'      => 10,
+					'accepted_args' => 1,
+				),
+				array(
+					'type'          => 'action',
+					'hook'          => 'admin_enqueue_scripts',
+					'callback'      => array( SettingsPage::class, 'enqueue_assets' ),
 					'priority'      => 10,
 					'accepted_args' => 1,
 				),
@@ -143,6 +169,27 @@ class HookRegistrationTest extends TestCase {
 					'callback'      => array( ListTableTranslation::class, 'enqueue_global_background_bar' ),
 					'priority'      => 10,
 					'accepted_args' => 1,
+				),
+				array(
+					'type'          => 'action',
+					'hook'          => TranslationQueue::WORKER_HOOK,
+					'callback'      => array( TranslationQueue::class, 'process_queued_translation' ),
+					'priority'      => 10,
+					'accepted_args' => 2,
+				),
+				array(
+					'type'          => 'action',
+					'hook'          => 'transition_post_status',
+					'callback'      => array( AutoPublishTranslationService::class, 'handle_transition_post_status' ),
+					'priority'      => 10,
+					'accepted_args' => 3,
+				),
+				array(
+					'type'          => 'action',
+					'hook'          => 'pll_translate_media',
+					'callback'      => array( MediaTranslationService::class, 'handle_pll_translate_media' ),
+					'priority'      => 10,
+					'accepted_args' => 3,
 				),
 			),
 			$registered_hooks

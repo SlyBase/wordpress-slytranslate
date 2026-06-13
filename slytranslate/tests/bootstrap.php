@@ -96,6 +96,33 @@ if ( ! class_exists( 'WP_Post' ) ) {
 		public string $post_title = '';
 		public string $post_content = '';
 		public string $post_excerpt = '';
+		public int $post_author = 0;
+		public int $post_parent = 0;
+		public string $post_name = '';
+		public string $post_date = '';
+		public string $post_date_gmt = '';
+		public string $post_modified = '';
+		public string $post_modified_gmt = '';
+
+		/** @param array<string, mixed> $data */
+		public function __construct( array $data = [] ) {
+			foreach ( $data as $key => $value ) {
+				$this->$key = $value;
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// WP_Term stub class
+// ---------------------------------------------------------------------------
+if ( ! class_exists( 'WP_Term' ) ) {
+	class WP_Term {
+		public int $term_id = 0;
+		public string $name = '';
+		public string $slug = '';
+		public string $taxonomy = '';
+		public string $description = '';
 
 		/** @param array<string, mixed> $data */
 		public function __construct( array $data = [] ) {

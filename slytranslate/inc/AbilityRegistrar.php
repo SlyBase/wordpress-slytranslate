@@ -27,6 +27,13 @@ class AbilityRegistrar {
 		self::register_translate_blocks_ability();
 		self::register_translate_content_ability();
 		self::register_translate_content_bulk_ability();
+		if ( AcfOptionsTranslationService::is_available() ) {
+			self::register_translate_options_ability();
+		}
+		if ( TermTranslationService::is_term_translation_supported() ) {
+			self::register_translate_terms_ability();
+		}
+		self::register_get_translatable_fields_ability();
 		self::register_get_progress_ability();
 		self::register_cancel_translation_ability();
 		self::register_get_available_models_ability();
@@ -309,6 +316,7 @@ class AbilityRegistrar {
 					'overwrite'       => array( 'type' => 'boolean', 'description' => 'When true, update existing target translations instead of returning them as skipped.', 'default' => false ),
 					'additional_prompt' => array( 'type' => 'string', 'description' => 'Optional extra instructions appended after the global prompt template and the site-wide prompt add-on for every item in the batch.', 'maxLength' => 2000 ),
 					'model_slug'      => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this translation batch. Overrides the site-wide default.' ),
+					'background'      => array( 'type' => 'boolean', 'description' => 'When true and a background transport (Action Scheduler or WP-Cron) is available, the batch is queued with one action per post and the call returns immediately with a job_id. Poll get-progress with that job_id and cancel via cancel-translation. Falls back to synchronous processing when no transport exists.', 'default' => false ),
 				),
 				'required' => array( 'target_language' ),
 			),
@@ -332,11 +340,159 @@ class AbilityRegistrar {
 					'succeeded' => array( 'type' => 'integer' ),
 					'failed'    => array( 'type' => 'integer' ),
 					'skipped'   => array( 'type' => 'integer' ),
+					'queued'    => array( 'type' => 'boolean', 'description' => 'True when the batch was queued for background processing. Per-post results are then reported by get-progress with job_id instead of the results array.' ),
+					'job_id'    => array( 'type' => 'string', 'description' => 'Background job identifier. Present only when queued is true.' ),
 				),
 			),
 			'execute_callback'    => array( AI_Translate::class, 'execute_translate_posts' ),
 			'permission_callback' => array( static::class, 'permission_callback' ),
 			'meta'                => self::public_mcp_meta(),
+		) );
+	}
+
+	/* --- translate-options ---------------------------------------- */
+
+	private static function register_translate_options_ability(): void {
+		wp_register_ability( 'ai-translate/translate-options', array(
+			'label'               => __( 'Translate ACF Options', 'slytranslate' ),
+			'description'         => __( 'Translates ACF fields on options pages (global content such as footer texts or CTAs) into one target language. Registered only when ACF options pages exist. With TranslatePress this returns not_required because its string table already covers option output. Use dry_run=true to preview which fields would be translated.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'target_language' => array( 'type' => 'string', 'description' => 'Target language code.' ),
+					'source_language' => array( 'type' => 'string', 'description' => 'Source language code of the stored option values. Defaults to en.' ),
+					'page_slug'       => array( 'type' => 'string', 'description' => 'Optional menu slug of one options page. Omit to process all options pages.' ),
+					'dry_run'         => array( 'type' => 'boolean', 'description' => 'When true, only report which fields would be translated without calling the model or writing options.', 'default' => false ),
+				),
+				'required' => array( 'target_language' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'status'          => array( 'type' => 'string', 'description' => 'ok, or not_required when the active language plugin already covers option output.' ),
+					'message'         => array( 'type' => 'string' ),
+					'target_language' => array( 'type' => 'string' ),
+					'source_language' => array( 'type' => 'string' ),
+					'dry_run'         => array( 'type' => 'boolean' ),
+					'results'         => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'field'       => array( 'type' => 'string', 'description' => 'ACF field name.' ),
+								'field_label' => array( 'type' => 'string' ),
+								'field_type'  => array( 'type' => 'string' ),
+								'page'        => array( 'type' => 'string', 'description' => 'Options page menu slug.' ),
+								'status'      => array( 'type' => 'string', 'enum' => array( 'translated', 'pending', 'skipped', 'failed' ) ),
+								'reason'      => array( 'type' => 'string', 'description' => 'Machine-readable reason when skipped or failed. requires_options_post_id_filter means the active language plugin has no language-aware option storage; provide the slytranslate_acf_options_post_id filter to opt in.' ),
+							),
+						),
+					),
+					'total'           => array( 'type' => 'integer' ),
+					'translated'      => array( 'type' => 'integer' ),
+					'skipped'         => array( 'type' => 'integer' ),
+					'failed'          => array( 'type' => 'integer' ),
+				),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_translate_options' ),
+			'permission_callback' => static function ( $input = null ) {
+				return current_user_can( 'manage_options' );
+			},
+			'meta'                => self::public_mcp_meta(),
+		) );
+	}
+
+	/* --- translate-terms ------------------------------------------ */
+
+	private static function register_translate_terms_ability(): void {
+		wp_register_ability( 'ai-translate/translate-terms', array(
+			'label'               => __( 'Translate Taxonomy Terms', 'slytranslate' ),
+			'description'         => __( 'Bulk-translates taxonomy terms (categories, tags, custom taxonomies) into one target language and links them as translations. Registered only when the active language plugin (Polylang) supports term translation. Use dry_run=true to preview which terms would be translated. Terms that already have a translation are skipped.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'taxonomy'        => array( 'type' => 'string', 'description' => 'Taxonomy to process, for example category or post_tag.' ),
+					'target_language' => array( 'type' => 'string', 'description' => 'Target language code.' ),
+					'source_language' => array( 'type' => 'string', 'description' => 'Source language code. Defaults to the language plugin default language.' ),
+					'term_ids'        => array( 'type' => 'array', 'description' => 'Explicit term IDs to translate. Omit to process all terms of the taxonomy in the source language.', 'items' => array( 'type' => 'integer' ) ),
+					'dry_run'         => array( 'type' => 'boolean', 'description' => 'When true, only report which terms would be translated without calling the model or writing terms.', 'default' => false ),
+					'model_slug'      => array( 'type' => 'string', 'description' => 'Model slug/identifier to use for this batch. Overrides the site-wide default.' ),
+				),
+				'required' => array( 'taxonomy', 'target_language' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'results'   => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'term_id'            => array( 'type' => 'integer', 'description' => 'Source term ID.' ),
+								'translated_term_id' => array( 'type' => 'integer', 'description' => 'Target-language term ID. 0 when status is failed or would_translate.' ),
+								'status'             => array( 'type' => 'string', 'enum' => array( 'success', 'skipped', 'failed', 'would_translate' ) ),
+								'error'              => array( 'type' => 'string', 'description' => 'Human-readable reason when status is failed. Null otherwise.' ),
+							),
+						),
+					),
+					'total'     => array( 'type' => 'integer' ),
+					'succeeded' => array( 'type' => 'integer' ),
+					'failed'    => array( 'type' => 'integer' ),
+					'skipped'   => array( 'type' => 'integer' ),
+					'dry_run'   => array( 'type' => 'boolean' ),
+				),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_translate_terms' ),
+			'permission_callback' => static function ( $input = null ) {
+				return current_user_can( 'manage_categories' );
+			},
+			'meta'                => self::public_mcp_meta(),
+		) );
+	}
+
+	/* --- get-translatable-fields ----------------------------------- */
+
+	private static function register_get_translatable_fields_ability(): void {
+		wp_register_ability( 'ai-translate/get-translatable-fields', array(
+			'label'               => __( 'Get Translatable Fields', 'slytranslate' ),
+			'description'         => __( 'Introspects which meta fields a translate-content call would translate or clear, including where each key comes from (manual config, SEO plugin, ACF/field-plugin resolution, default, or filter). Pass post_id for the post-specific view including runtime-resolved ACF fields; omit it for the global view. Call this before translate-content when you need to know what will happen to custom fields.', 'slytranslate' ),
+			'category'            => 'ai-translation',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id' => array( 'type' => 'integer', 'description' => 'Optional post ID for the post-specific field resolution. 0 or omitted returns the global view without post context.' ),
+				),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id'          => array( 'type' => 'integer', 'description' => 'Echoed post context. 0 for the global view.' ),
+					'fields'           => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'key'         => array( 'type' => 'string', 'description' => 'Meta key.' ),
+								'action'      => array( 'type' => 'string', 'enum' => array( 'translate', 'clear' ), 'description' => 'What translate-content does with this key.' ),
+								'source'      => array( 'type' => 'string', 'enum' => array( 'manual', 'seo', 'acf', 'default', 'filter' ), 'description' => 'Where the key comes from: manual settings, the detected SEO plugin, ACF/field-plugin resolution, the plugin default list, or a third-party filter.' ),
+								'field_type'  => array( 'type' => 'string', 'description' => 'Field type when resolved from a field plugin (for example text, wysiwyg, link). Empty otherwise.' ),
+								'field_label' => array( 'type' => 'string', 'description' => 'Human-readable field label when resolved from a field plugin. Empty otherwise.' ),
+								'excluded'    => array( 'type' => 'boolean', 'description' => 'True when the key is on the exclusion list and therefore not processed despite being listed.' ),
+							),
+							'required' => array( 'key', 'action', 'source' ),
+						),
+					),
+					'seo_plugin'       => array( 'type' => 'string', 'description' => 'Slug of the detected SEO plugin. Empty string when none is active.' ),
+					'seo_plugin_label' => array( 'type' => 'string', 'description' => 'Human-readable name of the detected SEO plugin.' ),
+					'active_resolvers' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Active field-plugin resolvers: acf, metabox, pods.' ),
+				),
+				'required' => array( 'fields' ),
+			),
+			'execute_callback'    => array( AI_Translate::class, 'execute_get_translatable_fields' ),
+			'permission_callback' => array( static::class, 'permission_callback' ),
+			'meta'                => self::public_mcp_meta( array( 'readonly' => true ) ),
 		) );
 	}
 
@@ -384,6 +540,7 @@ class AbilityRegistrar {
 				'type'       => 'object',
 				'properties' => array(
 					'post_id' => array( 'type' => 'integer', 'description' => 'The post ID whose translation progress to retrieve.' ),
+					'job_id'  => array( 'type' => 'string', 'description' => 'Background queue job ID returned by translate-content-bulk with background=true. When given and known, the job status is returned instead of the per-post phase progress.' ),
 				),
 			),
 			'output_schema'       => array(
@@ -393,6 +550,13 @@ class AbilityRegistrar {
 					'percent'       => array( 'type' => 'integer', 'description' => 'Overall completion percentage, 0–100.', 'minimum' => 0, 'maximum' => 100 ),
 					'current_chunk' => array( 'type' => 'integer', 'description' => 'Number of character units processed in the current phase.' ),
 					'total_chunks'  => array( 'type' => 'integer', 'description' => 'Total character units in the current phase. When 0, progress within the phase is indeterminate.' ),
+					'job_id'        => array( 'type' => 'string', 'description' => 'Echoed background job ID. Present only for queue-job lookups.' ),
+					'status'        => array( 'type' => 'string', 'description' => 'Queue job status: queued, running, completed, or cancelled. Present only for queue-job lookups.' ),
+					'total'         => array( 'type' => 'integer', 'description' => 'Total posts in the queue job. Present only for queue-job lookups.' ),
+					'processed'     => array( 'type' => 'integer', 'description' => 'Posts processed so far in the queue job. Present only for queue-job lookups.' ),
+					'succeeded'     => array( 'type' => 'integer', 'description' => 'Successful posts in the queue job. Present only for queue-job lookups.' ),
+					'failed'        => array( 'type' => 'integer', 'description' => 'Failed posts in the queue job. Present only for queue-job lookups.' ),
+					'skipped'       => array( 'type' => 'integer', 'description' => 'Skipped posts in the queue job. Present only for queue-job lookups.' ),
 				),
 			),
 			'execute_callback'    => array( AI_Translate::class, 'execute_get_progress' ),
@@ -412,12 +576,14 @@ class AbilityRegistrar {
 				'type'       => 'object',
 				'properties' => array(
 					'post_id' => array( 'type' => 'integer', 'description' => 'Optional post ID whose progress transient should be cleared.' ),
+					'job_id'  => array( 'type' => 'string', 'description' => 'Optional background queue job ID to cancel. Pending scheduled actions of the job are unscheduled.' ),
 				),
 			),
 			'output_schema'       => array(
 				'type'       => 'object',
 				'properties' => array(
-					'cancelled' => array( 'type' => 'boolean' ),
+					'cancelled'     => array( 'type' => 'boolean' ),
+					'job_cancelled' => array( 'type' => 'boolean', 'description' => 'True when a known background queue job was cancelled.' ),
 				),
 				'required' => array( 'cancelled' ),
 			),
@@ -507,7 +673,23 @@ class AbilityRegistrar {
 					'prompt_addon'          => array( 'type' => 'string', 'description' => 'Persistent setting: optional site-wide instructions appended after the prompt template for every translation request.' ),
 					'meta_keys_translate'   => array( 'type' => 'string', 'description' => 'Persistent setting: whitespace-separated list of meta keys to translate. Use a plain string, not an array.' ),
 					'meta_keys_clear'       => array( 'type' => 'string', 'description' => 'Persistent setting: whitespace-separated list of meta keys to clear. Use a plain string, not an array.' ),
-					'auto_translate_new'    => array( 'type' => 'boolean', 'description' => 'Persistent setting: auto-translate new translation posts created by the active language plugin.' ),
+					'meta_keys_exclude'     => array( 'type' => 'string', 'description' => 'Persistent setting: whitespace-separated list of meta keys to exclude from translation. Applies to manual, SEO-detected, and auto-resolved field-plugin keys alike.' ),
+					'auto_translate_new'    => array( 'type' => 'boolean', 'description' => 'Persistent setting: queue draft translations for all missing target languages when a source-language post is published. Requires a background transport (Action Scheduler or WP-Cron).' ),
+					'translate_terms'       => array( 'type' => 'boolean', 'description' => 'Persistent setting: when a translated post references taxonomy terms without a target-language translation, create and link AI-translated terms instead of dropping them. Polylang only.' ),
+					'translate_slugs'       => array( 'type' => 'boolean', 'description' => 'Persistent setting: derive the slug of newly created translations from the translated title instead of keeping the source-language slug. Existing translation slugs are never changed.' ),
+					'glossary'              => array(
+						'type'        => 'array',
+						'description' => 'Persistent setting: glossary entries. mode=keep terms are never translated; mode=translate terms use the fixed translation from the per-language map.',
+						'items'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'term' => array( 'type' => 'string', 'description' => 'The source term.' ),
+								'mode' => array( 'type' => 'string', 'enum' => array( 'keep', 'translate' ), 'description' => 'keep = never translate; translate = always use the fixed translation.' ),
+								'to'   => array( 'type' => 'object', 'description' => 'Fixed translations keyed by target language code. Required for mode=translate.', 'additionalProperties' => array( 'type' => 'string' ) ),
+							),
+							'required' => array( 'term', 'mode' ),
+						),
+					),
 					'context_window_tokens' => array( 'type' => 'integer', 'description' => 'Persistent setting: manual model context-window override in tokens. Use 0 to fall back to auto-detection and learned values.', 'minimum' => 0, 'maximum' => 4000000 ),
 					'string_table_concurrency' => array( 'type' => 'integer', 'description' => 'Persistent setting: opt-in maximum concurrency for TranslatePress-style string-table batches. Values above 1 only activate when a successful concurrency probe recommends parallel execution for the active model.', 'minimum' => 1, 'maximum' => 4 ),
 					'model_slug'            => array( 'type' => 'string', 'description' => 'Persistent setting: site-wide default model slug/identifier passed to the AI connector. Leave empty to use the connector default.' ),
@@ -522,7 +704,22 @@ class AbilityRegistrar {
 					'prompt_addon'                     => array( 'type' => 'string', 'description' => 'Persistent setting: site-wide additional instructions appended after the prompt template for every request.' ),
 					'meta_keys_translate'              => array( 'type' => 'string', 'description' => 'Persistent setting: whitespace-separated list of custom meta keys to translate.' ),
 					'meta_keys_clear'                  => array( 'type' => 'string', 'description' => 'Persistent setting: whitespace-separated list of custom meta keys to clear on translation.' ),
-					'auto_translate_new'               => array( 'type' => 'boolean', 'description' => 'Persistent setting: whether new translation stubs created by the active language plugin are translated automatically.' ),
+					'meta_keys_exclude'                => array( 'type' => 'string', 'description' => 'Persistent setting: whitespace-separated list of meta keys excluded from translation.' ),
+					'auto_translate_new'               => array( 'type' => 'boolean', 'description' => 'Persistent setting: whether publishing a source-language post queues draft translations for all missing target languages.' ),
+					'translate_terms'                  => array( 'type' => 'boolean', 'description' => 'Persistent setting: whether missing taxonomy term translations are created automatically during post translation (Polylang only).' ),
+					'translate_slugs'                  => array( 'type' => 'boolean', 'description' => 'Persistent setting: whether slugs of newly created translations are derived from the translated title.' ),
+					'glossary'                         => array(
+						'type'        => 'array',
+						'description' => 'Persistent setting: glossary entries applied to every translation prompt.',
+						'items'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'term' => array( 'type' => 'string' ),
+								'mode' => array( 'type' => 'string', 'enum' => array( 'keep', 'translate' ) ),
+								'to'   => array( 'type' => 'object', 'additionalProperties' => array( 'type' => 'string' ) ),
+							),
+						),
+					),
 					'context_window_tokens'            => array( 'type' => 'integer', 'description' => 'Persistent setting: manual override for the model context window in tokens. 0 means auto-detection is active.' ),
 					'string_table_concurrency'         => array( 'type' => 'integer', 'description' => 'Persistent setting: configured opt-in maximum concurrency for string-table batch translation.' ),
 					'string_table_concurrency_effective' => array( 'type' => 'integer', 'description' => 'Inspect-only diagnostic: effective string-table concurrency after applying the probe recommendation and available transport.' ),

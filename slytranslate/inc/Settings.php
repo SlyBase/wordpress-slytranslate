@@ -22,7 +22,11 @@ class Settings {
 		register_setting( $g, 'slytranslate_prompt_addon',                     array( 'sanitize_callback' => 'sanitize_textarea_field', 'default' => '' ) );
 		register_setting( $g, 'slytranslate_meta_translate',                   array( 'sanitize_callback' => 'sanitize_textarea_field', 'default' => '' ) );
 		register_setting( $g, 'slytranslate_meta_clear',                       array( 'sanitize_callback' => 'sanitize_textarea_field', 'default' => '' ) );
+		register_setting( $g, 'slytranslate_meta_keys_exclude',                array( 'sanitize_callback' => 'sanitize_textarea_field', 'default' => '' ) );
 		register_setting( $g, 'slytranslate_new_post',                         array( 'sanitize_callback' => 'sanitize_key',            'default' => '0' ) );
+		register_setting( $g, 'slytranslate_translate_terms',                  array( 'sanitize_callback' => 'sanitize_key',            'default' => '0' ) );
+		register_setting( $g, 'slytranslate_translate_slugs',                  array( 'sanitize_callback' => 'sanitize_key',            'default' => '0' ) );
+		register_setting( $g, 'slytranslate_glossary',                         array( 'sanitize_callback' => array( GlossaryService::class, 'sanitize_entries' ), 'default' => array() ) );
 		register_setting( $g, 'slytranslate_context_window_tokens',            array( 'sanitize_callback' => 'absint',                  'default' => 0 ) );
 		register_setting( $g, 'slytranslate_model_slug',                       array( 'sanitize_callback' => 'sanitize_text_field',     'default' => '' ) );
 		register_setting( $g, 'slytranslate_direct_api_url',                   array( 'sanitize_callback' => 'esc_url_raw',             'default' => '' ) );

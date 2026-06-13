@@ -199,6 +199,12 @@ function register_setting( ...$args ): void {
 	} );
 }
 
+function add_options_page( ...$args ) {
+	return slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return 'settings_page_slytranslate';
+	} );
+}
+
 function wp_strip_all_tags( $string, bool $remove_breaks = false ): string {
 $string = preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $string );
 $string = strip_tags( $string );
@@ -684,4 +690,227 @@ function acf_get_field( $field ) {
 	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $field ) {
 		return false;
 	} );
+}
+
+function acf_render_field_setting( ...$args ): void {
+	slytranslate_test_call_override( __FUNCTION__, $args, static function () {
+		return null;
+	} );
+}
+
+function acf_get_options_pages() {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function acf_get_field_groups( $filter = array() ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function acf_get_fields( $group ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function get_field( $selector, $post_id = false, $format_value = true ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return null;
+	} );
+}
+
+function update_field( $selector, $value, $post_id = false ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+// -----------------------------------------------------------------------
+// Meta Box / Pods stubs
+// -----------------------------------------------------------------------
+
+function rwmb_get_field_settings( $field_id, $args = array(), $post_id = null ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return false;
+	} );
+}
+
+function pods_api() {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return null;
+	} );
+}
+
+// -----------------------------------------------------------------------
+// Term / taxonomy stubs
+// -----------------------------------------------------------------------
+
+function get_term( $term, $taxonomy = '' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return null;
+	} );
+}
+
+function get_terms( $args = array() ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function wp_insert_term( $term, $taxonomy, $args = array() ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return new WP_Error( 'wp_insert_term_not_mocked', 'wp_insert_term was not mocked in this test.' );
+	} );
+}
+
+function get_object_taxonomies( $object_type, $output = 'names' ): array {
+	$result = slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+	return is_array( $result ) ? $result : array();
+}
+
+function wp_get_object_terms( $object_ids, $taxonomies, $args = array() ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function wp_set_object_terms( $object_id, $terms, $taxonomy, $append = false ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function sanitize_title( $title, $fallback_title = '', $context = 'save' ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $title ) {
+		$slug = strtolower( trim( (string) $title ) );
+		$slug = preg_replace( '/[^a-z0-9]+/', '-', $slug );
+		return trim( (string) $slug, '-' );
+	} );
+}
+
+function wp_unique_post_slug( $slug, $post_id, $post_status, $post_type, $post_parent ): string {
+	return (string) slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function ( $slug ) {
+		return (string) $slug;
+	} );
+}
+
+function get_post_field( $field, $post = null, $context = 'display' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return '';
+	} );
+}
+
+function wp_insert_post( $postarr, $wp_error = false, $fire_after_hooks = true ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 0;
+	} );
+}
+
+function get_post_thumbnail_id( $post = null ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 0;
+	} );
+}
+
+// -----------------------------------------------------------------------
+// Cron / scheduling stubs (Action Scheduler functions are intentionally NOT
+// stubbed so function_exists() based transport detection stays realistic)
+// -----------------------------------------------------------------------
+
+function wp_schedule_single_event( $timestamp, $hook, $args = array(), $wp_error = false ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function wp_clear_scheduled_hook( $hook, $args = array(), $wp_error = false ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 0;
+	} );
+}
+
+function wp_set_current_user( $id, $name = '' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return null;
+	} );
+}
+
+// -----------------------------------------------------------------------
+// Polylang term / media stubs
+// -----------------------------------------------------------------------
+
+function pll_get_term( $term_id, $lang = '' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 0;
+	} );
+}
+
+function pll_set_term_language( $term_id, $lang ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function pll_save_term_translations( $translations ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function pll_get_term_translations( $term_id ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+}
+
+function pll_is_translated_taxonomy( $taxonomy ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function pll_default_language( $field = 'slug' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 'en';
+	} );
+}
+
+function pll_get_option( $option ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return true;
+	} );
+}
+
+function pll_get_post_language( $post_id, $field = 'slug' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return false;
+	} );
+}
+
+function pll_get_post( $post_id, $lang = '' ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 0;
+	} );
+}
+
+// -----------------------------------------------------------------------
+// Block parsing stubs
+// -----------------------------------------------------------------------
+
+function get_post_type( $post = null ) {
+	return slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return 'post';
+	} );
+}
+
+function parse_blocks( string $content ): array {
+	$result = slytranslate_test_call_override( __FUNCTION__, func_get_args(), static function () {
+		return array();
+	} );
+	return is_array( $result ) ? $result : array();
 }
