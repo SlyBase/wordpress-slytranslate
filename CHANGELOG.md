@@ -3,6 +3,11 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [1.11.1]
+### Changes
+- Compatibility: verified against WordPress 7.1 on the production site (Abilities API `public`-flag unification, iframed post editor, jQuery UI 1.14.2, REST attachment changes) — ability registration and execution (`ai-translate/*`) confirmed working, no code changes required; readme `Tested up to` bumped to 7.1.
+
 ## [1.11.0]
 ### Features
 - ACF blocks in Gutenberg: field data stored in the block-comment JSON of `acf/*` blocks (`attrs.data`) is now translated automatically, including repeater/group sub-keys (`slides_0_caption`). Short values are batched into a single AI call; the client translation workflow exposes ACF block fields as their own units (`acf_block:{path}:{key}`).
