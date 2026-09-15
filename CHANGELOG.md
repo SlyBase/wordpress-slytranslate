@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.11.2]
+### Fixes
+- ACF Clone fields: cloned `text`, `textarea`, and `wysiwyg` fields are now translated correctly. `AcfFieldIntrospector::get_field_for_ref()` previously passed the combined reference key ACF Clone fields store in the hidden `_{meta_key}` entry (`field_clonekey_field_originalkey`) straight to `acf_get_field()`, which only accepts a single field key, so the lookup failed and the fields were silently skipped. The original field key (the part starting at the final `_field_`) is now extracted and looked up as a fallback. ([#18](https://github.com/SlyBase/wordpress-slytranslate/issues/18))
+
 ## [1.11.1]
 ### Changes
 - Compatibility: verified against WordPress 7.1 on the production site (Abilities API `public`-flag unification, iframed post editor, jQuery UI 1.14.2, REST attachment changes) — ability registration and execution (`ai-translate/*`) confirmed working, no code changes required; readme `Tested up to` bumped to 7.1.
