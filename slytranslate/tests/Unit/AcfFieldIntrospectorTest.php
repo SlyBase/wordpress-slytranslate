@@ -78,4 +78,22 @@ class AcfFieldIntrospectorTest extends TestCase {
 		$this->assertSame( array( 'subkeys' => array( 'title' ) ), AcfFieldIntrospector::get_value_spec( 'link' ) );
 		$this->assertSame( array(), AcfFieldIntrospector::get_value_spec( 'text' ) );
 	}
+
+	/**
+	 * ACF Clone fields store a combined reference such as
+	 * 'field_clonekey_field_originalkey' in the hidden meta entry. Since
+	 * acf_get_field() only resolves single field keys, the resolver must
+	 * fall back to the original field key (the part starting at the final
+	 * '_field_') when the combined reference doesn't resolve directly.
+	 */
+	public function test_get_field_for_ref_resolves_clone_field_combined_ref(): void {
+		$field = AcfFieldIntrospector::get_field_for_ref( 'field_clonekey_field_text' );
+
+		$this->assertIsArray( $field );
+		$this->assertSame( 'text', $field['type'] );
+	}
+
+	public function test_get_field_for_ref_clone_ref_to_unknown_field_is_null(): void {
+		$this->assertNull( AcfFieldIntrospector::get_field_for_ref( 'field_clonekey_field_unknown' ) );
+	}
 }
