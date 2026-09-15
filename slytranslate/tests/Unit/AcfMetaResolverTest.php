@@ -385,6 +385,30 @@ class AcfMetaResolverTest extends TestCase {
 	}
 
 	/**
+	 * Test that ACF Clone field combined references (e.g.
+	 * 'field_clonekey_field_originalkey') are resolved via the original
+	 * field key, so cloned text/textarea/wysiwyg fields are still added to
+	 * the translate list. See issue #18.
+	 */
+	public function test_clone_field_combined_ref_is_resolved(): void {
+		$this->stubWpFunction( 'acf_get_field', static function ( $ref ) {
+			if ( 'field_originalkey' === $ref ) {
+				return array( 'type' => 'text' );
+			}
+			return false;
+		} );
+
+		$post_meta = array(
+			'cloned_text'  => array( 'some text' ),
+			'_cloned_text' => array( 'field_clonekey_field_originalkey' ),
+		);
+
+		$result = AcfMetaResolver::add_acf_translatable_keys( array(), 42, 'de', 'en', $post_meta );
+
+		$this->assertContains( 'cloned_text', $result );
+	}
+
+	/**
 	 * Test that existing keys in translate list are preserved.
 	 */
 	public function test_existing_translate_keys_are_preserved(): void {

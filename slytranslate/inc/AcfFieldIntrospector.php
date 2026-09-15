@@ -44,6 +44,12 @@ class AcfFieldIntrospector {
 	/**
 	 * Resolve a 'field_…' reference to its ACF field definition.
 	 *
+	 * Also handles ACF Clone field references, which combine the clone
+	 * field's own key with the key of the field it reuses (e.g.
+	 * 'field_clonekey_field_originalkey'). acf_get_field() only accepts a
+	 * single field key, so when the raw reference doesn't resolve, the
+	 * original field key is extracted and looked up instead.
+	 *
 	 * @return array|null Field array with at least a 'type' entry, or null.
 	 */
 	public static function get_field_for_ref( ?string $ref ): ?array {
@@ -53,10 +59,31 @@ class AcfFieldIntrospector {
 
 		$field = acf_get_field( $ref );
 		if ( ! is_array( $field ) || ! isset( $field['type'] ) ) {
+			$clone_ref = self::extract_clone_field_ref( $ref );
+			$field     = null !== $clone_ref ? acf_get_field( $clone_ref ) : false;
+		}
+
+		if ( ! is_array( $field ) || ! isset( $field['type'] ) ) {
 			return null;
 		}
 
 		return $field;
+	}
+
+	/**
+	 * Extract the original field key from an ACF Clone field's combined
+	 * reference, e.g. 'field_clonekey_field_originalkey' -> 'field_originalkey'.
+	 *
+	 * @return string|null The extracted key, or null when $ref does not
+	 *                      contain a nested '_field_' reference.
+	 */
+	private static function extract_clone_field_ref( string $ref ): ?string {
+		$pos = strrpos( $ref, '_field_' );
+		if ( false === $pos ) {
+			return null;
+		}
+
+		return substr( $ref, $pos + 1 );
 	}
 
 	/**

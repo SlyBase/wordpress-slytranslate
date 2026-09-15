@@ -1,3 +1,7 @@
+= 1.11.2 =
+Fixes:
+* ACF Clone fields: cloned text, textarea, and wysiwyg fields are now translated correctly. AcfFieldIntrospector::get_field_for_ref() previously failed to resolve the combined reference key ACF Clone fields store (field_clonekey_field_originalkey), causing the fields to be silently skipped; the original field key is now extracted and looked up as a fallback. (#18)
+
 = 1.11.0 =
 Features:
 * Admin settings page (Settings -> SlyTranslate): status overview (detected language/SEO/field plugins, AI client, model), model picker, site-wide prompt add-on, glossary editor, meta-field list with per-key exclusion checkboxes and per-post preview, automation toggles, and an Advanced section (prompt template, context-window override, direct-API URL with probe status, string-table concurrency test, transport diagnostics). Saves through the same backend as the MCP configure ability.
