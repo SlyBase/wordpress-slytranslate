@@ -103,7 +103,16 @@ class ListTableTranslation {
 			$missing_languages[] = array( 'code' => (string) $code, 'name' => (string) $name );
 		}
 
-		if ( empty( $missing_languages ) ) {
+		// Only drop the action when there is no target language to translate to
+		// OR update at all. For non single-entry adapters (e.g. Polylang) already
+		// translated languages land in $existing_languages, never in
+		// $missing_languages, so "every target already translated" used to
+		// empty $missing_languages and hide the action -- removing the only
+		// per-row entry point to the picker dialog (which is where the
+		// "Overwrite existing translation" control lives). The dialog reads
+		// data-all-langs / data-existing-langs for that case, so an empty
+		// data-langs is fine and the action must stay.
+		if ( empty( $missing_languages ) && empty( $existing_languages ) ) {
 			return $actions;
 		}
 
