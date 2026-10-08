@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.11.3]
+### Fixes
+- Translate row action: the **Translate** row action no longer disappears when every configured target language already has a translation. For multi-post adapters (Polylang, WPGlobus, WP Multilang) already-translated languages landed only in `$existing_languages`, never in `$missing_languages`, so the early `return` in `ListTableTranslation::add_row_actions()` fired and removed the action — the only per-row entry point to the picker dialog where the *Overwrite existing translation* control lives. The action now stays when at least one existing translation is present; the dialog reads `data-all-langs` / `data-existing-langs` for the overwrite gate, so an empty `data-langs` is fine. ([#20](https://github.com/SlyBase/wordpress-slytranslate/issues/20))
+
 ## [1.11.2]
 ### Fixes
 - ACF Clone fields: cloned `text`, `textarea`, and `wysiwyg` fields are now translated correctly. `AcfFieldIntrospector::get_field_for_ref()` previously passed the combined reference key ACF Clone fields store in the hidden `_{meta_key}` entry (`field_clonekey_field_originalkey`) straight to `acf_get_field()`, which only accepts a single field key, so the lookup failed and the fields were silently skipped. The original field key (the part starting at the final `_field_`) is now extracted and looked up as a fallback. ([#18](https://github.com/SlyBase/wordpress-slytranslate/issues/18))
