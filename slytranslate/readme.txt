@@ -4,7 +4,7 @@ Tags: ai, translation, abilities-api, polylang, wp-multilang
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.11.3-beta.1
+Stable tag: 1.11.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
